@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/main/schemas/neutralino.config.schema.json",
+  "applicationId": "dev.dannypsnl.scratch",
+  "version": "0.1.0",
+  "defaultMode": "window",
+  "port": 0,
+  "documentRoot": "/build/",
+  "url": "/",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "tokenSecurity": "one-time",
+  "nativeAllowList": [
+    "app.*",
+    "os.getPath",
+    "filesystem.*",
+    "window.*",
+    "debug.log",
+    "os.open"
+  ],
+  "modes": {
+    "window": {
+      "title": "scratch",
+      "width": 1240,
+      "height": 820,
+      "minWidth": 480,
+      "minHeight": 400,
+      "enableInspector": true,
+      "injectGlobals": true
+    }
+  },
+  "cli": {
+    "binaryName": "scratch",
+    "resourcesPath": "/build/",
+    "extensionsPath": "/extensions/",
+    "binaryVersion": "6.10.0",
+    "clientVersion": "6.10.0",
+    "frontendLibrary": {
+      "patchFile": "/index.html",
+      "devUrl": "http://localhost:5178",
+      "projectPath": "/",
+      "devCommand": "npm run dev:app",
+      "buildCommand": "npm run build"
+    }
+  }
+}

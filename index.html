@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>scratch</title>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">scratch</div>
+        <nav class="tabs">
+          <button data-tab="journal" data-i18n="tab.journal">Journal</button>
+          <button data-tab="agenda" data-i18n="tab.agenda">Agenda</button>
+          <button data-tab="tasks" data-i18n="tab.tasks">任務</button>
+          <button data-tab="pages" data-i18n="tab.pages">頁面</button>
+        </nav>
+        <div class="side-pages"></div>
+        <div class="side-foot">
+          <button class="sync-status" data-i18n-title="sync.button" title="同步設定">未同步</button>
+          <button class="help-btn" data-i18n-title="help.button" title="按鍵（⌘/）">?</button>
+        </div>
+      </aside>
+      <button class="side-toggle" aria-label="menu">☰</button>
+      <main id="app"></main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
