@@ -139,7 +139,7 @@ export function openValueEditor(anchor, field, value, onSave, onAddOption) {
       const raw = input.value.trim();
       if (!raw) return done(null);
       if (field.type === "date") {
-        const d = parseDate(raw);
+        const d = parseDate(raw, value || undefined);
         if (d) done(d);
       } else done(raw);
     });
