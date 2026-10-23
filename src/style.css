@@ -387,12 +387,8 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   border-radius: 3px;
   white-space: nowrap;
 }
-/* the formula being edited is drawn in red, so it never hides in the prose */
-.pm-math.pm-active {
-  color: var(--hot);
-  background: color-mix(in srgb, var(--hot) 10%, transparent);
-  box-shadow: inset 0 0 0 1.5px var(--hot);
-}
+/* the formula being edited keeps a quiet tint; the red caret marks it */
+.pm-math.pm-active { background: var(--slot); }
 .pm-math ::selection, .pm-math::selection { background: color-mix(in srgb, var(--hot) 30%, transparent); }
 .pm-upright, .pm-sym, .pm-deco { font-family: KaTeX_Main, serif; font-style: normal; }
 .pm-sym.pm-italic { font-family: KaTeX_Math, serif; font-style: italic; }
@@ -469,6 +465,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   pointer-events: none;
 }
 .pm-caret.in-math { border-left-color: var(--hot); }
+.pm-caret.in-code { border-left-color: var(--ok); }
 .pm-caret.blink { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { border-color: transparent; } }
 

@@ -3,6 +3,10 @@ import { Decoration, DecorationSet } from "prosemirror-view";
 import { isMathContainer } from "./schema.js";
 import { inMath } from "./nav.js";
 
+// caret inside a code block or between two characters of inline code
+const isCode = (n) => n?.marks.some((m) => m.type.name === "code");
+const inCode = ($p) => !!$p.parent.type.spec.code || $p.marks().some((m) => m.type.name === "code") || (isCode($p.nodeBefore) && isCode($p.nodeAfter));
+
 // Glyph classes for plain characters typed into a formula.
 const CHAR_CLASSES = [
   [/[0-9.]+/g, "pm-upright"],
@@ -132,6 +136,7 @@ function caretOverlay(view) {
     el.style.top = `${mid - h / 2 + window.scrollY}px`;
     el.style.height = `${h}px`;
     el.classList.toggle("in-math", inMath($h)); // formula mode at a glance
+    el.classList.toggle("in-code", inCode($h));
     if (key !== last) { el.classList.remove("blink"); void el.offsetWidth; el.classList.add("blink"); }
     last = key;
   };
