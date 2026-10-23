@@ -5,6 +5,8 @@
 // Measured once the box is in the page.
 // align: "start" (default) or "end" (right edges aligned, for buttons at
 // the right end of a bar).
+// A position: fixed box (anchored in the sticky sidebar) stays in viewport
+// coordinates; others get the page's scroll added.
 export function place(box, rect, { align = "start" } = {}) {
   queueMicrotask(() => {
     const w = box.offsetWidth, h = box.offsetHeight;
@@ -15,7 +17,8 @@ export function place(box, rect, { align = "start" } = {}) {
     const room = down ? below : above;
     if (h > room) Object.assign(box.style, { maxHeight: `${room}px`, overflowY: "auto" });
     const top = down ? rect.bottom + 4 : rect.top - 4 - Math.min(h, room);
-    box.style.left = `${Math.max(8, left) + window.scrollX}px`;
-    box.style.top = `${top + window.scrollY}px`;
+    const fixed = getComputedStyle(box).position === "fixed";
+    box.style.left = `${Math.max(8, left) + (fixed ? 0 : window.scrollX)}px`;
+    box.style.top = `${top + (fixed ? 0 : window.scrollY)}px`;
   });
 }

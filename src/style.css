@@ -168,7 +168,8 @@ button { font: 13px system-ui, sans-serif; color: var(--fg); }
 .ProseMirror { caret-color: transparent; } /* the caret is drawn (decorations.js) */
 
 .help-panel {
-  position: absolute;
+  position: fixed; /* its button sits in the sticky sidebar */
+  overscroll-behavior: contain;
   z-index: 40;
   width: 440px;
   max-width: calc(100vw - 32px);
@@ -662,7 +663,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .sync-status[data-state="unauthorized"] { color: var(--bad); }
 .sync-panel .warn { margin: 0 0 4px; max-width: 18em; color: var(--bad); font-size: 12px; line-height: 1.5; }
 .sync-panel {
-  position: absolute;
+  position: fixed; /* its button sits in the sticky sidebar */
   z-index: 40;
   display: grid;
   gap: 8px;
