@@ -8,7 +8,8 @@
     "build": "vite build",
     "app": "neu run",
     "app:build": "neu build",
-    "dev:app": "node scripts/dev-app.mjs"
+    "dev:app": "node scripts/dev-app.mjs",
+    "dist": "npm run build && neu build --release --embed-resources --clean && node scripts/bundle-mac.mjs"
   },
   "dependencies": {
     "@neutralinojs/lib": "^6.10.0",

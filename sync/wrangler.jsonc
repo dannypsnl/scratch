@@ -1,10 +1,31 @@
 {
-  "name": "scratch-sync",
-  "main": "src/index.js",
-  "compatibility_date": "2026-09-01",
-  "durable_objects": {
-    "bindings": [{ "name": "NOTEBOOK", "class_name": "Notebook" }]
-  },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Notebook"] }],
-  "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "scratch-images" }]
+	"name": "scratch-sync",
+	"main": "src/index.js",
+	"compatibility_date": "2026-09-01",
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "NOTEBOOK",
+				"class_name": "Notebook"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"Notebook"
+			]
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "IMAGES",
+			"bucket_name": "scratch-images"
+		},
+		{
+			"bucket_name": "scratch-images",
+			"binding": "scratch_images"
+		}
+	]
 }

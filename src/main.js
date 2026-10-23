@@ -1,15 +1,15 @@
 import "katex/dist/katex.min.css";
 import "./style.css";
-import { load, getPage, savePage, pageDates, namedPages, titleOf, findPage, createPage, getBlock, pageOfBlock, isDate, onRemote, fieldById, fieldByName } from "./store.js";
+import { load, getPage, titleOf, findPage, createPage, getBlock, pageOfBlock, isDate, onRemote, fieldById, fieldByName } from "./store.js";
 import { connect, config, configure, onStatus } from "./sync.js";
-import { parseOutline, resolver } from "./outline-io.js";
+import { resolver } from "./outline-io.js";
 import { lookup } from "./schema.js";
 import { hooks } from "./editor.js";
 import { renderJournal } from "./journal.js";
 import { renderPage, renderPages } from "./page.js";
 import { renderAgenda } from "./agenda.js";
 import { renderTasks } from "./views.js";
-import { today, addDays } from "./dates.js";
+import { today } from "./dates.js";
 import { place } from "./popover.js";
 import { applySettings, toggleSettings } from "./settings.js";
 import { renderSidebar } from "./sidebar.js";
@@ -80,23 +80,6 @@ document.querySelectorAll(".tabs [data-tab]").forEach((b) => {
   b.onclick = () => { state.tab = b.dataset.tab; render(); };
 });
 
-// First run: a couple of pages to play with.
-function seed() {
-  const t = today(), y = addDays(t, -1);
-  savePage(t, parseOutline([
-    "- 這是今天的 journal。⌘↵ 在 TODO → DOING → DONE 之間切換，⌘⇧D 設期限",
-    `- TODO 證明 AM–GM：$\\frac{a+b}{2}\\geq\\sqrt{ab}$ DEADLINE: <${addDays(t, 3)}>`,
-    "  - 先看 $n=2$ 的情況",
-    "  - 再用 *歸納法* 推到一般的 $n$",
-    "- DOING 讀 **Mac Lane** 第三章：$A\\overset{f}{\\to}B$",
-    "- 下標上標 $x_i^2$、求和 $\\sum_{k=0}^nk$、巢狀 $\\frac{1}{1+\\frac{1}{x}}$",
-  ].join("\n")));
-  savePage(y, parseOutline([
-    "- DONE 整理 quiver 嵌入的想法",
-    `- TODO 回信確認 seminar 時間 DEADLINE: <${y}>`,
-  ].join("\n")));
-}
-
 // ---------- sync status + settings ----------
 
 const statusBtn = document.querySelector(".sync-status");
@@ -110,13 +93,15 @@ statusBtn.onclick = () => {
   const cfg = config() ?? {};
   const box = document.createElement("form");
   box.className = "sync-panel";
+  const rejected = statusBtn.dataset.state === "unauthorized";
   box.innerHTML = `
+    ${rejected ? `<p class="warn">${t("sync.tokenRejected")}</p>` : ""}
     <label>Server<input name="url" placeholder="${t("sync.urlPlaceholder")}" spellcheck="false"></label>
     <label>Token<input name="token" type="password"></label>
     <label>Notebook<input name="notebook" placeholder="main" spellcheck="false"></label>
     <div class="row"><button type="submit">${t("sync.connect")}</button><button type="button" class="cancel">${t("cancel")}</button></div>`;
   box.url.value = cfg.url ?? "";
-  box.token.value = cfg.token ?? "";
+  box.token.value = rejected ? "" : cfg.token ?? "";
   box.notebook.value = cfg.notebook ?? "";
   box.onsubmit = (e) => {
     e.preventDefault();
@@ -127,7 +112,7 @@ statusBtn.onclick = () => {
   box.querySelector(".cancel").onclick = () => box.remove();
   document.body.append(box);
   place(box, statusBtn.getBoundingClientRect());
-  box.url.focus();
+  (rejected ? box.token : box.url).focus();
 };
 
 // Same for every text field (menus, titles, settings).
@@ -229,8 +214,6 @@ applySettings(() => {
   nativeMenu();
   statusBtn.textContent = t("sync." + (statusBtn.dataset.state ?? "off"));
 });
-// Demo pages only for a brand-new, unsynced notebook; a synced one fills from the server.
-if (!config() && pageDates().size === 0 && namedPages().length === 0) seed();
 render();
 nativeMenu();
 connect();

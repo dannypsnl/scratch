@@ -43,6 +43,14 @@ Then, in the app:
 - Server: `wss://scratch-sync.<account>.workers.dev/sync`
 - Token: the `SYNC_TOKEN` you just set
 
+## Rotating the token
+
+```bash
+npx wrangler secret put SYNC_TOKEN   # the new token
+```
+
+Devices still holding the old token are refused on their next connect (WebSocket close code 4001). The app then shows "Token rejected" at the bottom of the sidebar and stops retrying; click it, paste the new token, and connect.
+
 ## Not done yet
 
 - **Log compaction:** updates accumulate forever. A client could upload a snapshot to replace the old log.

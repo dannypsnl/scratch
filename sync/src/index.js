@@ -107,6 +107,15 @@ export default {
     const isBlob = BLOB.exec(url.pathname);
     if (url.pathname !== "/sync" && !isBlob) return new Response("scratch sync", { status: 404 });
     if (!env.SYNC_TOKEN || url.searchParams.get("token") !== env.SYNC_TOKEN) {
+      // A browser WebSocket never sees an HTTP status, so a refused upgrade
+      // looks like a dropped network. Accept it and close with 4001 instead,
+      // which the app reads as "the token is wrong" (e.g. after a rotation).
+      if (request.headers.get("Upgrade") === "websocket") {
+        const [client, server] = Object.values(new WebSocketPair());
+        server.accept();
+        server.close(4001, "unauthorized");
+        return new Response(null, { status: 101, webSocket: client });
+      }
       return new Response("unauthorized", { status: 401, headers: CORS });
     }
     const notebook = url.searchParams.get("notebook") || "main";

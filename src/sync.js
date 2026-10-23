@@ -14,7 +14,7 @@ import { flushUploads } from "./images.js";
 
 const statusListeners = new Set();
 export const onStatus = (fn) => { statusListeners.add(fn); fn(status); return () => statusListeners.delete(fn); };
-let status = { state: "off" }; // off | connecting | syncing | synced | offline | error
+let status = { state: "off" }; // off | connecting | syncing | synced | offline | unauthorized
 const setStatus = (s) => { status = s; for (const fn of statusListeners) fn(s); };
 
 let ws = null;
@@ -88,10 +88,19 @@ export function connect() {
     if (ws !== sock) return;
     ws = null;
     inflight.clear();
-    setStatus(ev.code === 1008 || ev.code === 4001 ? { state: "error" } : { state: "offline" });
+    // a wrong token stays wrong: wait for a new one instead of retrying
+    if (ev.code === 4001) return setStatus({ state: "unauthorized" });
+    setStatus({ state: "offline" });
     timer = setTimeout(connect, Math.min(30000, 1000 * 2 ** retry++));
   };
   sock.onerror = () => {}; // onclose follows
+}
+
+// The blob routes answer 401 for the same reason.
+export function unauthorized() {
+  clearTimeout(timer);
+  if (ws) { ws.onclose = null; ws.close(); ws = null; }
+  setStatus({ state: "unauthorized" });
 }
 
 function send(update) {

@@ -1,5 +1,6 @@
 import { persistence } from "./persist.js";
 import { getMeta, saveMeta } from "./store.js";
+import { config, unauthorized } from "./sync.js";
 
 // Images are named by the SHA-256 of their bytes ("<hash>.png"): the same
 // picture pasted twice is stored once, and a name never changes meaning.
@@ -15,7 +16,7 @@ const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart
 
 // https://host/blob/<name>?token=…&notebook=…, from the sync settings
 function blobURL(name) {
-  const cfg = getMeta().sync;
+  const cfg = config();
   if (!cfg?.url) return null;
   const url = new URL(cfg.url);
   url.protocol = url.protocol === "wss:" ? "https:" : "http:";
@@ -31,6 +32,7 @@ async function upload(name, bytes) {
   if (!url) return false;
   try {
     const res = await fetch(url, { method: "PUT", body: bytes, headers: { "Content-Type": TYPE[name.split(".").pop()] } });
+    if (res.status === 401) unauthorized();
     return res.ok;
   } catch {
     return false;
@@ -73,6 +75,7 @@ export function imageURL(name) {
         const url = blobURL(name);
         if (!url) return null;
         const res = await fetch(url);
+        if (res.status === 401) unauthorized();
         if (!res.ok) return null;
         bytes = new Uint8Array(await res.arrayBuffer());
         await persistence.saveImage(name, bytes);

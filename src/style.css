@@ -640,7 +640,9 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .sync-status::before { content: "●"; margin-right: 5px; color: var(--muted); }
 .sync-status[data-state="synced"]::before { color: var(--ok); }
 .sync-status[data-state="syncing"]::before, .sync-status[data-state="connecting"]::before { color: var(--warn); }
-.sync-status[data-state="offline"]::before, .sync-status[data-state="error"]::before { color: var(--bad); }
+.sync-status[data-state="offline"]::before, .sync-status[data-state="error"]::before, .sync-status[data-state="unauthorized"]::before { color: var(--bad); }
+.sync-status[data-state="unauthorized"] { color: var(--bad); }
+.sync-panel .warn { margin: 0 0 4px; max-width: 18em; color: var(--bad); font-size: 12px; line-height: 1.5; }
 .sync-panel {
   position: absolute;
   z-index: 40;
