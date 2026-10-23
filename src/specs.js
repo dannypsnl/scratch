@@ -7,7 +7,7 @@
 const sym = (char, cls = "ord", italic = false) => ({ char, cls, italic });
 // Blackboard shorthands (\Z, \R, …) are the user's macros, exported as written;
 // the publisher needs the same macro definitions.
-const opname = (name) => ({ char: name, cls: "opname", italic: false });
+const opname = (name) => ({ char: name, cls: "opname", italic: false, preview: `\\operatorname{${name}}` });
 const opnames = (...names) => Object.fromEntries(names.map((n) => [n, opname(n)]));
 const bb = (letter) => ({ char: letter, cls: "ord", italic: false, bb: true, preview: `\\mathbb{${letter}}` });
 
@@ -65,6 +65,7 @@ export const STRUCTS = {
   mathbb: { arity: 1, layout: "font-bb", rows: [[0]], example: "\\mathbb{R}", letter: true },
   mathcal: { arity: 1, layout: "font-cal", rows: [[0]], example: "\\mathcal{C}", letter: true },
   mathrm: { arity: 1, layout: "font-rm", rows: [[0]], example: "\\mathrm{d}x" },
+  operatorname: { arity: 1, layout: "opname", rows: [[0]], example: "\\operatorname{rank}" },
 };
 
 // ASCII shorthands typed inside a formula, turned into a symbol as soon as

@@ -425,7 +425,8 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-overline > .pm-slot { border-top: .06em solid currentColor; }
 .layout-font-bb > .pm-slot { font-family: KaTeX_AMS, serif; font-style: normal; }
 .layout-font-cal > .pm-slot { font-family: KaTeX_Caligraphic, serif; font-style: normal; }
-.layout-font-rm > .pm-slot { font-family: KaTeX_Main, serif; font-style: normal; }
+.layout-font-rm > .pm-slot, .layout-opname > .pm-slot { font-family: KaTeX_Main, serif; font-style: normal; }
+.layout-opname { margin: 0 .17em; }
 
 /* unknown command: label + boxed slots, still fully structural */
 .layout-generic > .pm-deco { font: .65em ui-monospace, Menlo, monospace; color: var(--muted); align-self: center; margin-right: .15em; }
