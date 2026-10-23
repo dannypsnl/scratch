@@ -13,6 +13,7 @@ rmSync(app, { recursive: true, force: true });
 mkdirSync(`${app}/Contents/MacOS`, { recursive: true });
 mkdirSync(`${app}/Contents/Resources`, { recursive: true });
 cpSync(bin, `${app}/Contents/MacOS/scratch`);
+cpSync("icon/scratch.icns", `${app}/Contents/Resources/scratch.icns`);
 
 writeFileSync(`${app}/Contents/Info.plist`, `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -24,6 +25,7 @@ writeFileSync(`${app}/Contents/Info.plist`, `<?xml version="1.0" encoding="UTF-8
   <key>CFBundleVersion</key><string>${config.version}</string>
   <key>CFBundleShortVersionString</key><string>${config.version}</string>
   <key>CFBundleExecutable</key><string>scratch</string>
+  <key>CFBundleIconFile</key><string>scratch</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSHighResolutionCapable</key><true/>

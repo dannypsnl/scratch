@@ -51,6 +51,7 @@ const outlineKeys = keymap({
   "Mod-Shift-d": (_state, _dispatch, view) => { if (view) openDeadlinePicker(view); return true; },
   "Mod-b": toggleMark(schema.marks.strong),
   "Mod-i": toggleMark(schema.marks.em),
+  "Mod-e": toggleMark(schema.marks.code),
   "Mod-z": undo,
   "Mod-Shift-z": redo,
   "Mod-y": redo,
@@ -112,6 +113,9 @@ function startLink(view, tag, initial = "") {
 // `rest` is what follows ch in the same input event; menus receive it.
 function typed(view, ch, rest = "") {
   const $head = view.state.selection.$head;
+  // code is plain text: no formulas, links or tags
+  if ($head.parent.type.spec.code || inCode($head)) return false;
+  if (ch === "`" && closeInlineCode(view)) return true;
   if (!inMath($head)) {
     if (ch === "$") return insertMath(view.state, view.dispatch);
     const before = $head.nodeBefore?.isText ? $head.nodeBefore.text.slice(-1) : "";
@@ -137,12 +141,30 @@ function typed(view, ch, rest = "") {
   return true;
 }
 
+const inCode = ($p) => $p.marks().some((m) => m.type === schema.marks.code) ||
+  ($p.nodeBefore?.marks.some((m) => m.type === schema.marks.code) && $p.nodeAfter?.marks.some((m) => m.type === schema.marks.code));
+
+// `…` closes into inline code: the text since the opening backtick (in the
+// same plain run, not empty) becomes code.
+function closeInlineCode(view) {
+  const { $head, empty } = view.state.selection;
+  const run = $head.nodeBefore;
+  if (!empty || !run?.isText || run.marks.length) return false;
+  const text = run.text; // nodeBefore is already cut at the caret
+  const open = text.lastIndexOf("`");
+  if (open < 0 || open === text.length - 1) return false;
+  const from = $head.pos - (text.length - open);
+  const tr = view.state.tr.replaceWith(from, $head.pos, schema.text(text.slice(open + 1), [schema.marks.code.create()]));
+  view.dispatch(tr.setStoredMarks([]).scrollIntoView());
+  return true;
+}
+
 // Copy writes the outline text format (lossless apart from block ids), and
 // paste reads it back, so structure, formulas and task states survive.
 function sliceToText(slice) {
   const first = slice.content.firstChild;
   if (!first) return "";
-  if (first.type === T.block || first.type === T.line) return serializeOutline(T.doc.create(null, slice.content));
+  if (first.type === T.block || first.type === T.line || first.type === T.codeblock) return serializeOutline(T.doc.create(null, slice.content));
   if (first.type.spec.group?.includes("mathinline") && !first.isText) return serializeMath(slice.content);
   return serializeInline(slice.content);
 }
@@ -220,7 +242,7 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
       beforeinput(view, ev) {
         if (ev.inputType !== "insertText" || !ev.data) return false;
         const $h = view.state.selection.$head;
-        if (!inMath($h) && !besideSpecial($h) && !/[$#[]/.test(ev.data)) return false;
+        if (!inMath($h) && !besideSpecial($h) && !/[$#[`]/.test(ev.data)) return false;
         ev.preventDefault();
         const chars = [...ev.data];
         for (let k = 0; k < chars.length; k++) {
@@ -240,11 +262,21 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
       const text = ev.clipboardData?.getData("text/plain");
       if (!text) return false;
       const { from, to, $head } = view.state.selection;
+      if ($head.parent.type === T.codeblock || inCode($head)) {
+        const plain = $head.parent.type === T.codeblock ? text.replace(/\r/g, "") : text.replace(/\s*\n\s*/g, " ");
+        view.dispatch(view.state.tr.insertText(plain, from, to).scrollIntoView());
+        return true;
+      }
       if (inMath($head)) {
         view.dispatch(view.state.tr.replaceWith(from, to, parseMath(text.replace(/^\$|\$$/g, ""))).scrollIntoView());
         return true;
       }
-      const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim());
+      // blank lines go, except inside a fenced code block
+      let inFence = false;
+      const lines = text.replace(/\r/g, "").split("\n").filter((l) => {
+        if (/^\s*(- (TODO |DOING |DONE )?)?```/.test(l)) inFence = !inFence;
+        return inFence || l.trim();
+      });
       if (lines.length === 1 && !/^\s*- /.test(lines[0])) {
         view.dispatch(view.state.tr.replaceWith(from, to, Fragment.fromArray(parseInline(lines[0]))).scrollIntoView());
         return true;

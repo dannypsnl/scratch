@@ -1,7 +1,7 @@
 import { Plugin, TextSelection, NodeSelection } from "prosemirror-state";
 import { Fragment } from "prosemirror-model";
 import { schema, isMathContainer } from "./schema.js";
-import { structSpec, SYMBOLS } from "./specs.js";
+import { structSpec, SYMBOLS, SHORTHANDS } from "./specs.js";
 import { scriptPartner } from "./stack.js";
 
 // Inside a formula every caret move is computed from the model, never left to
@@ -229,6 +229,13 @@ export const backspace = (state, dispatch) => {
   const sel = state.selection;
   if (!sel.empty) return false; // default deleteSelection
   const $p = sel.$head;
+  // right after a shorthand turned into a symbol: give back the typed text
+  if (lastShorthand && lastShorthand.doc === state.doc && lastShorthand.at === $p.pos) {
+    const { from, text } = lastShorthand;
+    lastShorthand = null;
+    if (dispatch) dispatch(state.tr.replaceWith(from, $p.pos, schema.text(text)).scrollIntoView());
+    return true;
+  }
   if (!isMathContainer($p.parent.type)) {
     if ($p.nodeBefore?.type === T.math) return selectNode(state, dispatch, $p.pos - $p.nodeBefore.nodeSize);
     // a tag / link / ref / image goes in one press
@@ -345,11 +352,51 @@ export function typeInMath(view, ch) {
     case "/": return insertFrac(state, dispatch);
     case "$": return exitMath(state, dispatch);
     case " ": return true;
-    default:
-      dispatch(state.tr.insertText(ch).scrollIntoView());
+    default: {
+      const tr = state.tr.insertText(ch);
+      const undo = shorthands(tr);
+      dispatch(tr.scrollIntoView());
+      lastShorthand = undo && { ...undo, doc: view.state.doc };
       return true;
+    }
   }
 }
+
+// Turn a completed shorthand ("->", "<=", …) before the caret into its symbol.
+// The tokens are the container's characters and symbols ("\\to") up to the
+// caret. Returns what Backspace needs to take the conversion back, or null.
+let lastShorthand = null; // { doc, from, at, text }
+function shorthands(tr) {
+  let undo = null;
+  for (;;) {
+    const $p = tr.selection.$head;
+    const toks = [];
+    let pos = $p.start();
+    $p.parent.forEach((child) => {
+      if (pos >= $p.pos) return;
+      if (child.isText) for (const c of child.text.slice(0, $p.pos - pos)) toks.push({ tok: c, pos: pos++, text: c });
+      else {
+        const name = child.type === T.sym ? child.attrs.name : null;
+        toks.push({ tok: name && "\\" + name, pos, text: name && lastText(name) });
+        pos += child.nodeSize;
+      }
+    });
+    const hit = SHORTHANDS.find(([seq]) => seq.length <= toks.length && seq.every((t, i) => toks[toks.length - seq.length + i].tok === t));
+    if (!hit) break;
+    const [seq, name] = hit;
+    const run = toks.slice(-seq.length);
+    if (run.some((t) => !t.text)) break; // a symbol picked from the palette, not typed
+    const from = run[0].pos, text = run.map((t) => t.text).join("");
+    tr.replaceWith(from, $p.pos, T.sym.create({ name }));
+    tr.setSelection(TextSelection.create(tr.doc, from + 1));
+    shorthandText.set(name, text);
+    undo = { from, at: from + 1, text };
+  }
+  return undo;
+}
+// the ASCII a shorthand symbol was typed as, for chained shorthands and undo
+const shorthandText = new Map();
+const lastText = (name) => shorthandText.get(name) ?? null;
 
 export function insertMath(state, dispatch) {
   return insertNode(state, dispatch, T.math.create(), 1);

@@ -783,3 +783,11 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .prop.empty { border-style: dashed; }
 .prop.empty .pval { color: var(--muted); }
 .prop:hover { border-color: var(--accent); }
+
+/* code: `inline` and ``` blocks */
+:root { --mono: ui-monospace, "SF Mono", Menlo, monospace; }
+.pm-icode { font-family: var(--mono); font-size: 0.88em; background: var(--slot); border-radius: 4px; padding: 1px 4px; }
+.pm-code { position: relative; margin: 2px 0; padding: 8px 12px; background: var(--slot); border-radius: 6px; font-family: var(--mono); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
+.pm-code code { font: inherit; }
+.pm-code[data-lang]:not([data-lang=""]) { padding-right: 3.5em; }
+.pm-code[data-lang]:not([data-lang=""])::after { content: attr(data-lang); position: absolute; top: 4px; right: 8px; font: 11px system-ui, sans-serif; color: var(--muted); pointer-events: none; }

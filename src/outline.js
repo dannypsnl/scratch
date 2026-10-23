@@ -30,6 +30,7 @@ export const splitBlock = (state, dispatch) => split(state, dispatch, false);
 // a first child instead of a sibling the list would not show.
 export const splitRootAsChild = (state, dispatch) => {
   const { $from } = state.selection;
+  if ($from.parent.type === T.codeblock && $from.depth === 2) return split(state, dispatch, true);
   if ($from.parent.type !== T.line || $from.depth !== 2) return false;
   if ($from.parentOffset === 0 && $from.parent.content.size > 0) return true;
   return split(state, dispatch, true);
@@ -37,7 +38,17 @@ export const splitRootAsChild = (state, dispatch) => {
 
 function split(state, dispatch, asChild) {
   const { $from, $to } = state.selection;
+  if ($from.parent.type === T.codeblock) return codeEnter(state, dispatch, asChild);
   if ($from.parent.type !== T.line || !$from.sameParent($to)) return false;
+  // a line that is just ```lang turns into a code block
+  const fence = /^```(\S*)$/.exec($from.parent.textContent);
+  if (fence && $from.parent.childCount === 1 && $from.parent.firstChild.isText) {
+    if (dispatch) {
+      const tr = state.tr.replaceWith($from.before(), $from.after(), T.codeblock.create({ lang: fence[1] }));
+      dispatch(tr.setSelection(TextSelection.create(tr.doc, $from.before() + 1)).scrollIntoView());
+    }
+    return true;
+  }
   const d = $from.depth - 1;
   const block = $from.node(d);
   if (!asChild && $from.parent.content.size === 0 && block.childCount === 1 && d > 1) return outdent(state, dispatch);
@@ -57,6 +68,27 @@ function split(state, dispatch, asChild) {
   const at = (intoChildren ? $p.after() : $p.after(d)) - cut;
   tr.delete($p.pos, $p.end());
   tr.insert(at, T.block.create({ id: newId() }, T.line.create(null, rest)));
+  dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView());
+  return true;
+}
+
+// Enter in a code block is a line break; on an empty last line it leaves the
+// block (dropping that line) and opens the next one.
+function codeEnter(state, dispatch, asChild) {
+  const { $from, $to } = state.selection;
+  const atEnd = $to.pos === $from.end() && $from.parent.textContent.endsWith("\n") && $from.sameParent($to) && $from.pos === $to.pos;
+  if (!atEnd) {
+    if (dispatch) dispatch(state.tr.insertText("\n").scrollIntoView());
+    return true;
+  }
+  if (!dispatch) return true;
+  const d = $from.depth - 1;
+  const tr = state.tr.delete($from.pos - 1, $from.pos);
+  const $p = tr.doc.resolve($from.pos - 1);
+  const block = $p.node(d);
+  const intoChildren = asChild || (block.childCount > 1 && !block.attrs.folded);
+  const at = intoChildren ? $p.after() : $p.after(d);
+  tr.insert(at, T.block.create({ id: newId() }, T.line.create()));
   dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView());
   return true;
 }
@@ -98,6 +130,16 @@ export const outdent = (state, dispatch) => {
 // children take its place.
 export const joinBackward = (state, dispatch) => {
   const sel = state.selection;
+  // at the start of a code block: an empty one turns back into a line,
+  // anything else stays put
+  if (sel.empty && sel.$from.parent.type === T.codeblock && sel.$from.parentOffset === 0) {
+    if (dispatch && !sel.$from.parent.content.size) {
+      const $p = sel.$from;
+      const tr = state.tr.replaceWith($p.before(), $p.after(), T.line.create());
+      dispatch(tr.setSelection(TextSelection.create(tr.doc, $p.before() + 1)));
+    }
+    return true;
+  }
   if (!sel.empty || sel.$from.parent.type !== T.line || sel.$from.parentOffset !== 0) return false;
   const $p = sel.$from;
   const d = $p.depth - 1;
@@ -142,7 +184,7 @@ export function toggleFoldAt(view, pos) {
 export const selectAll = (state, dispatch) => {
   const { $from, from, to } = state.selection;
   let d = $from.depth; // in a formula the line is further up
-  while (d > 0 && $from.node(d).type !== T.line) d--;
+  while (d > 0 && $from.node(d).type !== T.line && $from.node(d).type !== T.codeblock) d--;
   if (d > 0) {
     const start = $from.start(d), end = $from.end(d);
     if (from !== start || to !== end) {

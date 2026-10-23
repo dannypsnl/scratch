@@ -12,7 +12,9 @@ export const lookup = {
 let refDepth = 0;
 
 // A page is an outline: every block is one line (no line breaks, no headings)
-// plus nested child blocks. Indentation is the only structure on offer.
+// plus nested child blocks. Indentation is the only structure on offer. The
+// one exception is a code block, which takes the line's place and keeps its
+// line breaks.
 //
 // Everything inside a formula is structure: text runs, symbol atoms,
 // struct (any \cmd{..}{..}), sup and sub. There is no "raw LaTeX" node.
@@ -20,7 +22,7 @@ export const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
     block: {
-      content: "line block*",
+      content: "(line | codeblock) block*",
       attrs: {
         id: { default: null },
         task: { default: null }, // null | "todo" | "doing" | "done"
@@ -38,8 +40,17 @@ export const schema = new Schema({
     },
     line: {
       content: "inline*",
-      marks: "strong em",
+      marks: "strong em code",
       toDOM: () => ["div", { class: "pm-line" }, 0],
+    },
+    // ```lang: plain text with line breaks, no formulas, links or marks
+    codeblock: {
+      content: "text*",
+      marks: "",
+      code: true,
+      defining: true,
+      attrs: { lang: { default: "" } },
+      toDOM: (node) => ["pre", { class: "pm-code", "data-lang": node.attrs.lang }, ["code", 0]],
     },
     text: { group: "inline mathinline" },
     // [[page]] or #page (same thing, different look); page is a page id
@@ -149,6 +160,8 @@ export const schema = new Schema({
   marks: {
     strong: { toDOM: () => ["strong", 0], parseDOM: [{ tag: "strong" }, { tag: "b" }] },
     em: { toDOM: () => ["em", 0], parseDOM: [{ tag: "em" }, { tag: "i" }] },
+    // `inline code`: typing past its end leaves it
+    code: { excludes: "_", inclusive: false, toDOM: () => ["code", { class: "pm-icode" }, 0], parseDOM: [{ tag: "code" }] },
   },
 });
 

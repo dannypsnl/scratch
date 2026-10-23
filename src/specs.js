@@ -31,13 +31,13 @@ export const SYMBOLS = {
   sim: sym("∼", "rel"), approx: sym("≈", "rel"), in: sym("∈", "rel"), notin: sym("∉", "rel"),
   subset: sym("⊂", "rel"), subseteq: sym("⊆", "rel"), supseteq: sym("⊇", "rel"),
   to: sym("→", "rel"), rightarrow: sym("→", "rel"), leftarrow: sym("←", "rel"),
-  mapsto: sym("↦", "rel"), Rightarrow: sym("⇒", "rel"), iff: sym("⟺", "rel"),
+  leftrightarrow: sym("↔", "rel"), mapsto: sym("↦", "rel"), Rightarrow: sym("⇒", "rel"), iff: sym("⟺", "rel"),
   hookrightarrow: sym("↪", "rel"), twoheadrightarrow: sym("↠", "rel"), vdash: sym("⊢", "rel"),
   // number systems
   N: bb("N"), Z: bb("Z"), Q: bb("Q"), R: bb("R"), C: bb("C"), F: bb("F"), P: bb("P"),
   // misc
   infty: sym("∞"), partial: sym("∂"), nabla: sym("∇"), forall: sym("∀"), exists: sym("∃"),
-  emptyset: sym("∅"), ell: sym("ℓ", "ord", true), top: sym("⊤"), bot: sym("⊥"),
+  ldots: sym("…"), cdots: sym("⋯"), emptyset: sym("∅"), ell: sym("ℓ", "ord", true), top: sym("⊤"), bot: sym("⊥"),
   // large operators
   sum: sym("∑", "op"), prod: sym("∏", "op"), int: sym("∫", "op"), coprod: sym("∐", "op"),
   bigcup: sym("⋃", "op"), bigcap: sym("⋂", "op"), bigoplus: sym("⨁", "op"), bigotimes: sym("⨂", "op"),
@@ -59,6 +59,27 @@ export const STRUCTS = {
   mathcal: { arity: 1, layout: "font-cal", rows: [[0]], example: "\\mathcal{C}", letter: true },
   mathrm: { arity: 1, layout: "font-rm", rows: [[0]], example: "\\mathrm{d}x" },
 };
+
+// ASCII shorthands typed inside a formula, turned into a symbol as soon as
+// they are complete. A sequence may continue a symbol made by a shorter one:
+// "<=" is ≤ once "=" lands, and a following ">" makes it ⟺.
+// Backspace right after a conversion gives back what was typed.
+export const SHORTHANDS = [
+  [["-", ">"], "to"],
+  [["|", "\\to"], "mapsto"],
+  [["<", "-"], "leftarrow"],
+  [["\\leftarrow", ">"], "leftrightarrow"],
+  [["=", ">"], "Rightarrow"],
+  [["\\le", ">"], "iff"],
+  [["<", "="], "le"],
+  [[">", "="], "ge"],
+  [["!", "="], "neq"],
+  [["=", "="], "equiv"],
+  [["~", "="], "cong"],
+  [["~", "~"], "approx"],
+  [["+", "-"], "pm"],
+  [[".", ".", "."], "ldots"],
+];
 
 export function structSpec(name, arity) {
   return STRUCTS[name] ?? { arity, layout: "generic", rows: [[...Array(arity).keys()]] };

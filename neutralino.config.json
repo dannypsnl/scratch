@@ -25,7 +25,8 @@
       "minWidth": 480,
       "minHeight": 400,
       "enableInspector": true,
-      "injectGlobals": true
+      "injectGlobals": true,
+      "icon": "/build/icon.png"
     }
   },
   "cli": {
@@ -41,5 +42,9 @@
       "devCommand": "npm run dev:app",
       "buildCommand": "npm run build"
     }
+  },
+  "logging": {
+    "enabled": false,
+    "writeToLogFile": false
   }
 }

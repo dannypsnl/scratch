@@ -58,6 +58,15 @@ const outlineSrc = [
   "  difficulty:: medium",
   "  paper:: 15 cm square",
   "  - a child after the properties",
+  "- run `npm test` before $a$, not `$x$` or `#tag`",
+  "- ```js",
+  "  let x = 1",
+  "",
+  "    indented();",
+  "  ```",
+  "  - a child of the code block",
+  "  - TODO ```",
+  "    ```",
 ].join("\n");
 const outlineOut = serializeOutline(parseOutline(outlineSrc));
 if (outlineOut !== outlineSrc) { fail++; console.log("FAIL outline\n" + outlineOut); }

@@ -8,6 +8,11 @@ import { parseMath, serializeMath } from "./latex.js";
 //     - child block
 //
 // Property lines (`name:: value`) sit under their block, one level deeper.
+// A code block is a fence whose body is indented one level deeper:
+//
+//   - ```js
+//     let x = 1
+//     ```
 //
 // Block ids and the task log are database-only; they are not exported.
 
@@ -38,6 +43,7 @@ export function serializeInline(fragment) {
   fragment.forEach((n) => {
     if (n.isText) {
       let t = n.text;
+      if (n.marks.some((m) => m.type === schema.marks.code)) t = "`" + t + "`";
       if (n.marks.some((m) => m.type === schema.marks.em)) t = `*${t}*`;
       if (n.marks.some((m) => m.type === schema.marks.strong)) t = `**${t}**`;
       s += t;
@@ -54,11 +60,22 @@ export function serializeInline(fragment) {
   return s;
 }
 
+const fenced = (code, depth) => {
+  const pad = "  ".repeat(depth + 1);
+  return ["```" + code.attrs.lang, ...(code.textContent ? code.textContent.split("\n") : []).map((l) => (l ? pad + l : "")), pad + "```"].join("\n");
+};
+
 export function blockLine(block, depth) {
   const { task, deadline } = block.attrs;
+  const first = block.firstChild;
   let line = "  ".repeat(depth) + "- ";
   if (task) line += task.toUpperCase() + " ";
-  line += serializeInline(block.firstChild.content);
+  if (first.type === T.codeblock) {
+    // the deadline stays on the fence line, where the parser looks for it
+    const [fence, ...body] = fenced(first, depth).split("\n");
+    return [line + fence + (deadline ? ` DEADLINE: <${deadline}>` : ""), ...body].join("\n");
+  }
+  line += serializeInline(first.content);
   if (deadline) line += ` DEADLINE: <${deadline}>`;
   return line;
 }
@@ -69,7 +86,8 @@ export function serializeOutline(doc) {
   const lines = [];
   const walk = (fragment, depth) => fragment.forEach((n) => {
     if (n.type === T.line) lines.push("  ".repeat(depth) + "- " + serializeInline(n.content));
-    else if (n.type === T.block && n.firstChild?.type === T.line) {
+    else if (n.type === T.codeblock) lines.push("  ".repeat(depth) + "- " + fenced(n, depth));
+    else if (n.type === T.block && (n.firstChild?.type === T.line || n.firstChild?.type === T.codeblock)) {
       lines.push(blockLine(n, depth));
       for (const [field, value] of Object.entries(n.attrs.props ?? {})) {
         lines.push("  ".repeat(depth + 1) + `${resolver.fieldName(field)}:: ${value}`);
@@ -81,21 +99,22 @@ export function serializeOutline(doc) {
   return lines.join("\n");
 }
 
-// $..$ formulas, **bold**, *italic* (no nesting of marks),
+// `code`, $..$ formulas, **bold**, *italic* (no nesting of marks),
 // [[page]], #page, #[[page with spaces]], ((block-id)), ![alt](images/<file>)
 export function parseInline(text) {
   const out = [];
-  const re = new RegExp(String.raw`!\[([^\]]*)\]\(images\/([^)\s]+)\)|\$([^$]*)\$|\*\*([^*]+)\*\*|\*([^*]+)\*|(#)?\[\[([^\]]+)\]\]|#([^${TAG_STOP}]+)|\(\(([a-z0-9]+)\)\)`, "g");
+  const re = new RegExp(String.raw`\x60([^\x60]+)\x60|!\[([^\]]*)\]\(images\/([^)\s]+)\)|\$([^$]*)\$|\*\*([^*]+)\*\*|\*([^*]+)\*|(#)?\[\[([^\]]+)\]\]|#([^${TAG_STOP}]+)|\(\(([a-z0-9]+)\)\)`, "g");
   let last = 0, m;
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(schema.text(text.slice(last, m.index)));
-    if (m[2] !== undefined) out.push(T.image.create({ alt: m[1], src: m[2] }));
-    else if (m[3] !== undefined) out.push(T.math.create(null, parseMath(m[3])));
-    else if (m[4] !== undefined) out.push(schema.text(m[4], [schema.marks.strong.create()]));
-    else if (m[5] !== undefined) out.push(schema.text(m[5], [schema.marks.em.create()]));
-    else if (m[7] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[7]), tag: !!m[6] }));
-    else if (m[8] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[8]), tag: true }));
-    else out.push(T.ref.create({ block: m[9] }));
+    if (m[1] !== undefined) out.push(schema.text(m[1], [schema.marks.code.create()]));
+    else if (m[3] !== undefined) out.push(T.image.create({ alt: m[2], src: m[3] }));
+    else if (m[4] !== undefined) out.push(T.math.create(null, parseMath(m[4])));
+    else if (m[5] !== undefined) out.push(schema.text(m[5], [schema.marks.strong.create()]));
+    else if (m[6] !== undefined) out.push(schema.text(m[6], [schema.marks.em.create()]));
+    else if (m[8] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[8]), tag: !!m[7] }));
+    else if (m[9] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[9]), tag: true }));
+    else out.push(T.ref.create({ block: m[10] }));
     last = re.lastIndex;
   }
   if (last < text.length) out.push(schema.text(text.slice(last)));
@@ -109,7 +128,13 @@ export function parseOutline(src) {
   const root = { children: [] };
   const stack = [{ depth: -1, item: root }];
   let last = null;
+  let fence = null; // { item, pad }: inside a code block's body
   for (const raw of src.split("\n")) {
+    if (fence) {
+      if (raw.trim() === "```") fence = null;
+      else fence.item.code.push(raw.startsWith(fence.pad) ? raw.slice(fence.pad.length) : raw.trimStart());
+      continue;
+    }
     const p = !raw.trimStart().startsWith("- ") && PROP.exec(raw);
     if (p) {
       if (last) last.props[resolver.fieldId(p[1])] = p[2];
@@ -120,6 +145,12 @@ export function parseOutline(src) {
     const depth = m[1].length >> 1;
     const item = { task: m[2]?.toLowerCase() ?? null, text: m[3], deadline: m[4] ?? null, props: {}, children: [] };
     last = item;
+    const open = /^```(\S*)$/.exec(item.text);
+    if (open) {
+      item.lang = open[1];
+      item.code = [];
+      fence = { item, pad: "  ".repeat(depth + 1) };
+    }
     while (stack[stack.length - 1].depth >= depth) stack.pop();
     stack[stack.length - 1].item.children.push(item);
     stack.push({ depth, item });
@@ -127,7 +158,12 @@ export function parseOutline(src) {
   const build = (it) =>
     T.block.create(
       { id: newId(), task: it.task, deadline: it.deadline, props: it.props },
-      [T.line.create(null, parseInline(it.text)), ...it.children.map(build)],
+      [
+        it.code
+          ? T.codeblock.create({ lang: it.lang }, it.code.length ? schema.text(it.code.join("\n")) : null)
+          : T.line.create(null, parseInline(it.text)),
+        ...it.children.map(build),
+      ],
     );
   if (root.children.length === 0) return emptyDoc();
   return T.doc.create(null, root.children.map(build));
