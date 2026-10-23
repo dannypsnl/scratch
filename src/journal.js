@@ -9,19 +9,22 @@ import { t } from "./i18n.js";
 // week, Today plus a calendar dropdown.
 //
 // A dot on a day means something is still open there: a TODO / DOING task
-// written that day, or one due that day. A red ring when that due date has
-// passed. The week strip and both calendars mark days the same way.
+// written that day, or one due that day. A hollow ring once that day has
+// passed with the task still open, red when it was the deadline that passed.
+// The week strip and both calendars mark days the same way.
 
 const dow = (d) => new Date(d + "T00:00").getDay();
 
 export function renderJournal(root, ctx) {
   const date = ctx.state.date ?? today();
   const now = today();
-  const open = new Map(); // day -> "open" | "overdue"
+  const open = new Map(); // day -> "open" | "stale" | "overdue"
+  const rank = { open: 0, stale: 1, overdue: 2 };
+  const put = (day, m) => { if (!(rank[open.get(day)] >= rank[m])) open.set(day, m); };
   for (const t of allTasks()) {
     if (t.task === "done") continue;
-    if (t.date) open.set(t.date, open.get(t.date) ?? "open");
-    if (t.deadline) open.set(t.deadline, t.deadline < now ? "overdue" : open.get(t.deadline) ?? "open");
+    if (t.date) put(t.date, t.date < now ? "stale" : "open");
+    if (t.deadline) put(t.deadline, t.deadline < now ? "overdue" : "open");
   }
   const start = weekStart(date);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -34,7 +37,7 @@ export function renderJournal(root, ctx) {
       <button class="wk-prev" title="${t("week.prev")}">‹</button>
       <div class="week">
         ${days.map((day) => `
-          <button data-day="${day}" class="${[day === date && "selected", day === now && "is-today", open.has(day) && "has", open.get(day) === "overdue" && "overdue"].filter(Boolean).join(" ")}">
+          <button data-day="${day}" class="${[day === date && "selected", day === now && "is-today", open.has(day) && "has", open.get(day) === "stale" && "stale", open.get(day) === "overdue" && "overdue"].filter(Boolean).join(" ")}">
             <span class="dot"></span><span class="wd">${t("weekday.short")[dow(day)]}</span><span class="dn">${Number(day.slice(8))}</span>
           </button>`).join("")}
       </div>
