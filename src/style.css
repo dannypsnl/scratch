@@ -11,6 +11,8 @@
   --ok: #4f8a68;
   --bad: #b04a40;
   --warn: #b8902f;
+  --mark: #ffe066a6;
+  --hot: #d93025;
 }
 [data-theme="paper"] {
   /* paper: warm off-white, printed-matter accent */
@@ -24,6 +26,8 @@
   --ok: #5a7a4a;
   --bad: #9a3b2e;
   --warn: #a8812f;
+  --mark: #f2c94c80;
+  --hot: #c62828;
 }
 [data-theme="dark"] {
   --bg: #1c1c1e;
@@ -36,6 +40,8 @@
   --ok: #7fb594;
   --bad: #d98479;
   --warn: #d4b05c;
+  --mark: #d4b05c4d;
+  --hot: #ff6b5e;
 }
 @media (prefers-color-scheme: dark) {
   [data-theme="auto"] {
@@ -49,6 +55,8 @@
     --ok: #7fb594;
     --bad: #d98479;
     --warn: #d4b05c;
+    --mark: #d4b05c4d;
+    --hot: #ff6b5e;
   }
 }
 
@@ -379,7 +387,13 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   border-radius: 3px;
   white-space: nowrap;
 }
-.pm-math.pm-active { background: var(--slot); }
+/* the formula being edited is drawn in red, so it never hides in the prose */
+.pm-math.pm-active {
+  color: var(--hot);
+  background: color-mix(in srgb, var(--hot) 10%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--hot);
+}
+.pm-math ::selection, .pm-math::selection { background: color-mix(in srgb, var(--hot) 30%, transparent); }
 .pm-upright, .pm-sym, .pm-deco { font-family: KaTeX_Main, serif; font-style: normal; }
 .pm-sym.pm-italic { font-family: KaTeX_Math, serif; font-style: italic; }
 .pm-sym.pm-bb { font-family: KaTeX_AMS, serif; }
@@ -454,7 +468,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   border-left: 2px solid var(--fg);
   pointer-events: none;
 }
-.pm-caret.in-math { border-left-color: var(--accent); }
+.pm-caret.in-math { border-left-color: var(--hot); }
 .pm-caret.blink { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { border-color: transparent; } }
 
@@ -791,6 +805,12 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 
 /* code: `inline` and ``` blocks */
 :root { --mono: ui-monospace, "SF Mono", Menlo, monospace; }
+/* Songti's bold barely differs from its regular at text sizes, so bold
+   CJK falls through to PingFang's semibold */
+.ProseMirror strong { font-family: "Iowan Old Style", "PingFang TC", sans-serif; font-weight: 600; }
+.ProseMirror mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+.ProseMirror u { text-underline-offset: 0.18em; }
+.ProseMirror s { text-decoration-color: var(--muted); }
 .pm-icode { font-family: var(--mono); font-size: 0.88em; background: var(--slot); border-radius: 4px; padding: 1px 4px; }
 .pm-code { position: relative; margin: 2px 0; padding: 8px 12px; background: var(--slot); border-radius: 6px; font-family: var(--mono); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
 .pm-code code { font: inherit; }

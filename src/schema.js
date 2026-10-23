@@ -40,7 +40,7 @@ export const schema = new Schema({
     },
     line: {
       content: "inline*",
-      marks: "strong em code",
+      marks: "strong em underline strike highlight code",
       toDOM: () => ["div", { class: "pm-line" }, 0],
     },
     // ```lang: plain text with line breaks, no formulas, links or marks
@@ -160,6 +160,9 @@ export const schema = new Schema({
   marks: {
     strong: { toDOM: () => ["strong", 0], parseDOM: [{ tag: "strong" }, { tag: "b" }] },
     em: { toDOM: () => ["em", 0], parseDOM: [{ tag: "em" }, { tag: "i" }] },
+    underline: { toDOM: () => ["u", 0], parseDOM: [{ tag: "u" }, { tag: "ins" }] },
+    strike: { toDOM: () => ["s", 0], parseDOM: [{ tag: "s" }, { tag: "del" }, { tag: "strike" }] },
+    highlight: { toDOM: () => ["mark", 0], parseDOM: [{ tag: "mark" }] },
     // `inline code`: typing past its end leaves it
     code: { excludes: "_", inclusive: false, toDOM: () => ["code", { class: "pm-icode" }, 0], parseDOM: [{ tag: "code" }] },
   },

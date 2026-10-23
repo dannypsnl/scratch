@@ -51,6 +51,9 @@ const outlineKeys = keymap({
   "Mod-Shift-d": (_state, _dispatch, view) => { if (view) openDeadlinePicker(view); return true; },
   "Mod-b": toggleMark(schema.marks.strong),
   "Mod-i": toggleMark(schema.marks.em),
+  "Mod-u": toggleMark(schema.marks.underline),
+  "Mod-Shift-x": toggleMark(schema.marks.strike),
+  "Mod-Shift-h": toggleMark(schema.marks.highlight),
   "Mod-e": toggleMark(schema.marks.code),
   "Mod-z": undo,
   "Mod-Shift-z": redo,
@@ -133,6 +136,7 @@ function typed(view, ch, rest = "") {
   const $head = view.state.selection.$head;
   // code is plain text: no formulas, links or tags
   if ($head.parent.type.spec.code || inCode($head)) return false;
+  if ((ch === "$" || ch === "`") && wrapSelection(view, ch)) return true;
   if (ch === "`" && closeInlineCode(view)) return true;
   if (!inMath($head)) {
     if (ch === "$") return insertMath(view.state, view.dispatch);
@@ -161,6 +165,24 @@ function typed(view, ch, rest = "") {
 
 const inCode = ($p) => $p.marks().some((m) => m.type === schema.marks.code) ||
   ($p.nodeBefore?.marks.some((m) => m.type === schema.marks.code) && $p.nodeAfter?.marks.some((m) => m.type === schema.marks.code));
+
+// $ or ` over a plain-text selection (within one line) turns it into a
+// formula (the text read as LaTeX) or inline code, caret after it.
+function wrapSelection(view, ch) {
+  const { from, to, $from, $to, empty } = view.state.selection;
+  if (empty || inMath($from) || $from.parent !== $to.parent || !$from.parent.inlineContent) return false;
+  let plain = true;
+  view.state.doc.nodesBetween(from, to, (n) => { if (n.isInline && !n.isText) plain = false; });
+  if (!plain) return false;
+  const text = view.state.doc.textBetween(from, to);
+  const node = ch === "$"
+    ? T.math.create(null, parseMath(text))
+    : schema.text(text, [schema.marks.code.create()]);
+  const tr = view.state.tr.replaceWith(from, to, node);
+  tr.setSelection(TextSelection.create(tr.doc, from + node.nodeSize));
+  view.dispatch(tr.setStoredMarks([]).scrollIntoView());
+  return true;
+}
 
 // `…` closes into inline code: the text since the opening backtick (in the
 // same plain run, not empty) becomes code.

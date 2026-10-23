@@ -45,6 +45,9 @@ export function serializeInline(fragment) {
       let t = n.text;
       if (n.marks.some((m) => m.type === schema.marks.code)) t = "`" + t + "`";
       if (n.marks.some((m) => m.type === schema.marks.em)) t = `*${t}*`;
+      if (n.marks.some((m) => m.type === schema.marks.underline)) t = `<u>${t}</u>`;
+      if (n.marks.some((m) => m.type === schema.marks.strike)) t = `~~${t}~~`;
+      if (n.marks.some((m) => m.type === schema.marks.highlight)) t = `==${t}==`;
       if (n.marks.some((m) => m.type === schema.marks.strong)) t = `**${t}**`;
       s += t;
     } else if (n.type === T.math) {
@@ -99,11 +102,12 @@ export function serializeOutline(doc) {
   return lines.join("\n");
 }
 
-// `code`, $..$ formulas, **bold**, *italic* (no nesting of marks),
+// `code`, $..$ formulas, **bold**, *italic*, <u>underline</u>, ~~strike~~,
+// ==highlight== (no nesting of marks),
 // [[page]], #page, #[[page with spaces]], ((block-id)), ![alt](images/<file>)
 export function parseInline(text) {
   const out = [];
-  const re = new RegExp(String.raw`\x60([^\x60]+)\x60|!\[([^\]]*)\]\(images\/([^)\s]+)\)|\$([^$]*)\$|\*\*([^*]+)\*\*|\*([^*]+)\*|(#)?\[\[([^\]]+)\]\]|#([^${TAG_STOP}]+)|\(\(([a-z0-9]+)\)\)`, "g");
+  const re = new RegExp(String.raw`\x60([^\x60]+)\x60|!\[([^\]]*)\]\(images\/([^)\s]+)\)|\$([^$]*)\$|\*\*([^*]+)\*\*|\*([^*]+)\*|<u>(.+?)<\/u>|~~([^~]+)~~|==([^=]+)==|(#)?\[\[([^\]]+)\]\]|#([^${TAG_STOP}]+)|\(\(([a-z0-9]+)\)\)`, "g");
   let last = 0, m;
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(schema.text(text.slice(last, m.index)));
@@ -112,9 +116,12 @@ export function parseInline(text) {
     else if (m[4] !== undefined) out.push(T.math.create(null, parseMath(m[4])));
     else if (m[5] !== undefined) out.push(schema.text(m[5], [schema.marks.strong.create()]));
     else if (m[6] !== undefined) out.push(schema.text(m[6], [schema.marks.em.create()]));
-    else if (m[8] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[8]), tag: !!m[7] }));
-    else if (m[9] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[9]), tag: true }));
-    else out.push(T.ref.create({ block: m[10] }));
+    else if (m[7] !== undefined) out.push(schema.text(m[7], [schema.marks.underline.create()]));
+    else if (m[8] !== undefined) out.push(schema.text(m[8], [schema.marks.strike.create()]));
+    else if (m[9] !== undefined) out.push(schema.text(m[9], [schema.marks.highlight.create()]));
+    else if (m[11] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[11]), tag: !!m[10] }));
+    else if (m[12] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[12]), tag: true }));
+    else out.push(T.ref.create({ block: m[13] }));
     last = re.lastIndex;
   }
   if (last < text.length) out.push(schema.text(text.slice(last)));
