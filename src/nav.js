@@ -351,7 +351,13 @@ export function typeInMath(view, ch) {
     case "_": return insertNode(state, dispatch, T.sub.create(), 1);
     case "/": return insertFrac(state, dispatch);
     case "$": return exitMath(state, dispatch);
-    case " ": return true;
+    case " ": {
+      // at the end of a slot or script, Space finishes it: on to the next
+      // slot, or out after the box, so the rest is not typed into the base
+      const $p = state.selection.$head;
+      if (state.selection.empty && $p.parent.type !== T.math && !$p.nodeAfter) caret(state, dispatch, stepRight($p));
+      return true;
+    }
     default: {
       const tr = state.tr.insertText(ch);
       const undo = shorthands(tr);
