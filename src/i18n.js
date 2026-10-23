@@ -62,6 +62,7 @@ const zh = {
   "table.page": "頁面",
   "table.status": "狀態",
   "table.deadline": "期限",
+  "table.completed": "完成",
   "table.filter": "篩選",
   "fields.add": "新增欄位",
   "fields.edit": "編輯欄位",
@@ -107,6 +108,7 @@ const zh = {
   "views.deadlineGroup": (md, wd) => `期限 ${md} ${wd}`,
   "views.noDeadline": "無期限",
   "views.overdue": "逾期",
+  "views.completedOn": (d) => `${d} 完成`,
 
   "menu.settings": "設定…",
   "menu.help": "按鍵說明",
@@ -227,6 +229,7 @@ const en = {
   "table.page": "Page",
   "table.status": "Status",
   "table.deadline": "Deadline",
+  "table.completed": "Done",
   "table.filter": "Filter",
   "fields.add": "Add field",
   "fields.edit": "Edit field",
@@ -272,6 +275,7 @@ const en = {
   "views.deadlineGroup": (md, wd) => `Due ${wd} ${md}`,
   "views.noDeadline": "No deadline",
   "views.overdue": "Overdue",
+  "views.completedOn": (d) => `Done ${d}`,
 
   "menu.settings": "Settings…",
   "menu.help": "Keyboard shortcuts",

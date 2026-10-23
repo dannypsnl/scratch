@@ -295,6 +295,13 @@ export function updateBlockAttrs(id, fn) {
 
 // Every block with a task state. `date` is set for journal pages only;
 // `links` are the titles of the pages its line links to (for link: filters).
+// The local day a done task was last marked done, from its log; null otherwise.
+export function completedAt(attrs) {
+  if (attrs.task !== "done") return null;
+  const last = [...(attrs.log ?? [])].reverse().find((e) => e.state === "done");
+  return last ? new Date(last.at).toLocaleDateString("sv") : null;
+}
+
 export function allTasks() {
   const out = [];
   for (const b of blocks()) {
@@ -303,6 +310,7 @@ export function allTasks() {
       ...b,
       ...b.node.attrs,
       date: isDate(b.page) ? b.page : null,
+      completed: completedAt(b.node.attrs),
       links: linksIn(b.node.firstChild).map(titleOf),
     });
   }

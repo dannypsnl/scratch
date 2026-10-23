@@ -1,5 +1,5 @@
 import { DOMSerializer } from "prosemirror-model";
-import { backlinks, isDate, titleOf, getFields, savePageFields, setBlockProp } from "./store.js";
+import { backlinks, completedAt, isDate, titleOf, getFields, savePageFields, setBlockProp } from "./store.js";
 import { openFieldEditor, openValueEditor, displayValue } from "./fields.js";
 import { place } from "./popover.js";
 import { schema } from "./schema.js";
@@ -30,6 +30,8 @@ const COLUMNS = [
   },
   { key: "task", label: () => t("table.status"), cmp: (a, b) => (STATUS_ORDER[a.task] ?? 3) - (STATUS_ORDER[b.task] ?? 3) },
   { key: "deadline", label: () => t("table.deadline"), cmp: (a, b) => (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999") },
+  // derived from the task log, read-only; most recent first
+  { key: "completed", label: () => t("table.completed"), cmp: (a, b) => (b.completed ?? "").localeCompare(a.completed ?? "") },
 ];
 
 function rowsFor(page) {
@@ -38,7 +40,7 @@ function rowsFor(page) {
     .map((b) => {
       const links = [];
       b.node.firstChild.forEach((n) => { if (n.type.name === "link") links.push(titleOf(n.attrs.page)); });
-      return { ...b, ...b.node.attrs, date: isDate(b.page) ? b.page : null, links };
+      return { ...b, ...b.node.attrs, date: isDate(b.page) ? b.page : null, completed: completedAt(b.node.attrs), links };
     });
 }
 
@@ -70,7 +72,7 @@ export function renderPageTable(el, page, ctx) {
     label: () => f.name,
     cmp: (a, b) => String(a.props?.[f.id] ?? "\uffff").localeCompare(String(b.props?.[f.id] ?? "\uffff")),
   }));
-  const columns = [COLUMNS[0], COLUMNS[1], ...fieldColumns, COLUMNS[2], COLUMNS[3]];
+  const columns = [COLUMNS[0], COLUMNS[1], ...fieldColumns, COLUMNS[2], COLUMNS[3], COLUMNS[4]];
 
   const draw = () => {
     const sort = sortState.get(page) ?? { key: "page", dir: 1 };
@@ -125,6 +127,9 @@ export function renderPageTable(el, page, ctx) {
       const due = document.createElement("td");
       due.className = "cell-due" + (r.deadline && r.deadline < new Date().toLocaleDateString("sv") && r.task !== "done" ? " overdue" : "");
       due.textContent = r.deadline ? md(r.deadline) : "";
+      const done = document.createElement("td");
+      done.className = "cell-due";
+      done.textContent = r.completed ? md(r.completed) : "";
       const cells = fieldColumns.map(({ field }) => {
         const td = document.createElement("td");
         td.className = "cell-field";
@@ -135,7 +140,7 @@ export function renderPageTable(el, page, ctx) {
         });
         return td;
       });
-      row.append(content, where, ...cells, document.createElement("td"), status, due);
+      row.append(content, where, ...cells, document.createElement("td"), status, due, done);
       tbody.append(row);
     }
     if (!rows.length) tbody.innerHTML = `<tr><td colspan="${columns.length + 1}" class="empty">${all.length ? t("views.empty") : t("table.none")}</td></tr>`;

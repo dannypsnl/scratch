@@ -269,6 +269,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   display: inline-block;
 }
 .deadline.overdue, .tag.overdue { color: var(--bad); border-color: var(--bad); }
+.tag.completed { color: var(--muted); }
 .tag.due { color: var(--warn); border-color: var(--warn); }
 
 /* ---------- task lists ---------- */

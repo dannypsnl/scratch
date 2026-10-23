@@ -48,6 +48,7 @@ function groups(tasks, group) {
 
 function labelsFor(t) {
   if (t.deadline && t.deadline < today() && t.task !== "done") return [{ text: tr("views.overdue"), cls: "overdue" }];
+  if (t.completed) return [{ text: tr("views.completedOn", md(t.completed)), cls: "completed" }];
   return [];
 }
 
