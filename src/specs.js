@@ -1,11 +1,14 @@
 // Declarative tables. Adding a command = adding a row here.
 
 // Zero-argument commands: rendered as one glyph.
-// cls: "ord" (ordinary), "bin" (binary op), "rel" (relation), "op" (large operator)
+// cls: "ord" (ordinary), "bin" (binary op), "rel" (relation), "op" (large operator),
+//      "opname" (an operator written as a word: \ker, \sin)
 // italic: rendered in KaTeX_Math italic (Latin-like variables, lowercase Greek)
 const sym = (char, cls = "ord", italic = false) => ({ char, cls, italic });
 // Blackboard shorthands (\Z, \R, …) are the user's macros, exported as written;
 // the publisher needs the same macro definitions.
+const opname = (name) => ({ char: name, cls: "opname", italic: false });
+const opnames = (...names) => Object.fromEntries(names.map((n) => [n, opname(n)]));
 const bb = (letter) => ({ char: letter, cls: "ord", italic: false, bb: true, preview: `\\mathbb{${letter}}` });
 
 export const SYMBOLS = {
@@ -40,6 +43,10 @@ export const SYMBOLS = {
   ldots: sym("…"), cdots: sym("⋯"), emptyset: sym("∅"), ell: sym("ℓ", "ord", true), top: sym("⊤"), bot: sym("⊥"),
   // large operators
   sum: sym("∑", "op"), prod: sym("∏", "op"), int: sym("∫", "op"), coprod: sym("∐", "op"),
+  // operator names; rank, Hom, End, Aut, id, im, coker, lcm, tr are not
+  // LaTeX built-ins, so like \Z the publisher needs them defined (\operatorname)
+  ...opnames("ker", "dim", "deg", "det", "rank", "hom", "Hom", "End", "Aut", "id", "im", "coker",
+    "sin", "cos", "tan", "log", "ln", "exp", "lim", "sup", "inf", "max", "min", "arg", "gcd", "lcm", "mod", "Pr", "tr"),
   bigcup: sym("⋃", "op"), bigcap: sym("⋂", "op"), bigoplus: sym("⨁", "op"), bigotimes: sym("⨂", "op"),
 };
 

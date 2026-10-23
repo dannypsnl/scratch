@@ -382,6 +382,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .pm-sym.pm-bb { font-family: KaTeX_AMS, serif; }
 .pm-sym.pm-op { font-family: KaTeX_Size1, KaTeX_Main, serif; }
 .pm-unknown { color: var(--muted); font-size: .8em; }
+.pm-sym.pm-opname { margin: 0 .17em; }
 .pm-bin { margin: 0 .22em; }
 .pm-rel { margin: 0 .28em; }
 .pm-punct { margin-right: .17em; }
