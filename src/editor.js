@@ -1,4 +1,4 @@
-import { EditorState, TextSelection } from "prosemirror-state";
+import { EditorState, TextSelection, Plugin } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { Fragment } from "prosemirror-model";
 import { keymap } from "prosemirror-keymap";
@@ -55,6 +55,24 @@ const outlineKeys = keymap({
   "Mod-z": undo,
   "Mod-Shift-z": redo,
   "Mod-y": redo,
+});
+
+// ProseMirror turns a DOM change that looks like a line split into a
+// synthesized Enter (meant for iOS). WebKit commits a composition by first
+// deleting it and then inserting the result; when the composition is all the
+// line holds, that deletion removes the block's whole DOM, which ProseMirror
+// reads as Enter: it splits the block and the committed text lands in both.
+// No real Enter happens mid-composition, so do what WebKit did instead: empty
+// the line (keeping the block), and let the insertion that follows fill it.
+const compositionCommit = new Plugin({
+  props: {
+    handleKeyDown(view, ev) {
+      if (ev.isTrusted || ev.keyCode !== 13 || !view.composing) return false;
+      const { $head } = view.state.selection;
+      if ($head.parent.isTextblock && $head.parent.content.size) view.dispatch(view.state.tr.delete($head.start(), $head.end()));
+      return true;
+    },
+  },
 });
 
 // Web pages open in the system browser (Neutralino) or a new tab.
@@ -212,7 +230,7 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   const state = EditorState.create({
     doc,
-    plugins: [history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, mathDecorations, scriptStacking, outlineDecorations],
+    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, mathDecorations, scriptStacking, outlineDecorations],
   });
   const view = new EditorView(mount, {
     state,
@@ -238,22 +256,8 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
         toggleFoldAt(view, view.posAtDOM(body, 0) - 1);
         return true;
       },
-      // Enter belongs to the keymap (new block, code line break), always.
-      // ProseMirror skips an Enter that comes right after a composition ends
-      // (in Safari it may be the key that confirmed it), and WebKit then
-      // splits the line natively: the copied DOM parses back as a second block
-      // holding the same text. An Enter the input method did not take
-      // (keyCode 229) is a real one, so run the keymap for it here.
-      keydown(view, ev) {
-        if (ev.key !== "Enter" || ev.isComposing || ev.keyCode === 229 || view.composing) return false;
-        if (!view.someProp("handleKeyDown", (f) => f(view, ev))) return false;
-        ev.preventDefault();
-        return true;
-      },
       // fallback for input that bypasses keypress (autocorrect, dictation)
       beforeinput(view, ev) {
-        // and never a native line split (see keydown)
-        if (ev.inputType === "insertParagraph" || ev.inputType === "insertLineBreak") { ev.preventDefault(); return true; }
         if (ev.inputType !== "insertText" || !ev.data) return false;
         const $h = view.state.selection.$head;
         if (!inMath($h) && !besideSpecial($h) && !/[$#[`]/.test(ev.data)) return false;
