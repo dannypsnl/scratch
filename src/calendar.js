@@ -3,10 +3,12 @@ import { place } from "./popover.js";
 import { t } from "./i18n.js";
 
 // A month grid (Monday first, ISO dates), drawn into `el`.
-// opts: { selected, mark(day) -> "open" | "overdue" | null, onPick(day) }.
+// opts: { selected, base, mark(day) -> "open" | "overdue" | null, onPick(day) }.
+// Opens on the month of `selected`, else of `base` (default today), the day
+// relative dates count from, outlined when it is not today.
 // Returns { show(day) }.
-export function monthGrid(el, { selected, mark = () => false, onPick }) {
-  let month = (selected ?? today()).slice(0, 7); // YYYY-MM
+export function monthGrid(el, { selected, base = today(), mark = () => false, onPick }) {
+  let month = (selected ?? base).slice(0, 7); // YYYY-MM
 
   const shift = (n) => {
     const d = new Date(month + "-01T00:00");
@@ -23,6 +25,7 @@ export function monthGrid(el, { selected, mark = () => false, onPick }) {
       const cls = [
         day.slice(0, 7) !== month && "other",
         day === today() && "today",
+        day === base && day !== today() && "base",
         day === selected && "selected",
         mark(day) && "has",
         mark(day) === "overdue" && "overdue",

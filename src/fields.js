@@ -1,5 +1,5 @@
 import { place } from "./popover.js";
-import { parseDate } from "./deadline.js";
+import { parseDate, baseDate } from "./deadline.js";
 import { newId } from "./outline-io.js";
 import { longDate, md } from "./dates.js";
 import { t } from "./i18n.js";
@@ -139,7 +139,7 @@ export function openValueEditor(anchor, field, value, onSave, onAddOption) {
       const raw = input.value.trim();
       if (!raw) return done(null);
       if (field.type === "date") {
-        const d = parseDate(raw, value || undefined);
+        const d = parseDate(raw, baseDate(anchor));
         if (d) done(d);
       } else done(raw);
     });

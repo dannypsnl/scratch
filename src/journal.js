@@ -44,7 +44,7 @@ export function renderJournal(root, ctx) {
       </div>
     </div>
     <div class="journal">
-      <section class="page">
+      <section class="page" data-date="${date}">
         <div class="day-head">
           <div class="day-name">${t("weekday.long")[dow(date)]}</div>
           <h1>${longDate(date)}</h1>

@@ -12,17 +12,16 @@ const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "
 // weekday -> offset from Monday
 const WEEKDAY = { 一: 0, 二: 1, 三: 2, 四: 3, 五: 4, 六: 5, 日: 6, 天: 6, mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 };
 
-// 今天/明天/後天 and 10/30 count from today; +3 and 週五 count from `from`
-// (the date being changed, so +3 pushes a deadline back three days).
-export function parseDate(text, from = today()) {
+// Relative dates (今天, 明天, +3, 週五, 10/30 without a year) count from
+// `now`: the day of the journal being looked at, or today elsewhere.
+export function parseDate(text, now = today()) {
   const t = text.trim().toLowerCase();
   if (!t) return null;
-  const now = today();
   if (t === "今天" || t === "today") return now;
   if (t === "明天" || t === "tomorrow") return addDays(now, 1);
   if (t === "後天") return addDays(now, 2);
   let m;
-  if ((m = /^\+(\d+)$/.exec(t))) return addDays(from, Number(m[1]));
+  if ((m = /^\+(\d+)$/.exec(t))) return addDays(now, Number(m[1]));
   if ((m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(t))) return iso(m[1], m[2], m[3]);
   // the long format the field shows: 2026 年 10 月 26 日, Oct 26, 2026 (or without the year)
   if ((m = /^(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?$/.exec(t))) return iso(m[1], m[2], m[3]);
@@ -38,11 +37,11 @@ export function parseDate(text, from = today()) {
     return d && d < now ? iso(Number(now.slice(0, 4)) + 1, m[1], m[2]) : d;
   }
   if ((m = /^(下|next )?(?:週|周|星期)?([一二三四五六日天]|mon|tue|wed|thu|fri|sat|sun)[a-z]*$/.exec(t))) {
-    // 週五 = the coming Friday (`from` counts); 下週五 = Friday next week
+    // 週五 = the coming Friday (that day counts); 下週五 = Friday next week
     const target = WEEKDAY[m[2]];
-    if (m[1]) return addDays(weekStart(from), 7 + target);
-    const d = addDays(weekStart(from), target);
-    return d < from ? addDays(d, 7) : d;
+    if (m[1]) return addDays(weekStart(now), 7 + target);
+    const d = addDays(weekStart(now), target);
+    return d < now ? addDays(d, 7) : d;
   }
   return null;
 }
@@ -53,12 +52,18 @@ function iso(y, mo, d) {
   return !isNaN(date) && date.toLocaleDateString("sv") === s ? s : null;
 }
 
+// The day relative dates count from for an element: its journal's day, or today.
+export function baseDate(el) {
+  return el?.closest("[data-date]")?.dataset.date ?? today();
+}
+
 export function openDeadlinePicker(view, positions) {
   positions ??= selectedBlocks(view.state).map(([pos]) => pos);
   if (!positions.length) return;
   const first = view.state.doc.nodeAt(positions[0]);
   const coords = view.coordsAtPos(positions[0] + first.firstChild.nodeSize);
   const current = first.attrs.deadline;
+  const base = baseDate(view.dom);
 
   const box = document.createElement("div");
   box.className = "palette deadline-picker";
@@ -75,12 +80,12 @@ export function openDeadlinePicker(view, positions) {
 
   const close = () => { box.remove(); view.focus(); };
   const apply = (value) => { close(); setDeadline(view, positions, value); };
-  const grid = monthGrid(box.querySelector(".grid"), { selected: current, onPick: apply });
+  const grid = monthGrid(box.querySelector(".grid"), { selected: current, base, onPick: apply });
 
   const preview = () => {
-    const d = parseDate(input.value, current ?? undefined);
+    const d = parseDate(input.value, base);
     const shown = d && longDate(d);
-    hint.textContent = input.value.trim() && !d ? t("deadline.unkfromn") : d && shown !== input.value.trim() ? `→ ${shown}` : "";
+    hint.textContent = input.value.trim() && !d ? t("deadline.unknown") : d && shown !== input.value.trim() ? `→ ${shown}` : "";
     if (d) grid.show(d);
   };
   input.addEventListener("input", preview);
@@ -89,7 +94,7 @@ export function openDeadlinePicker(view, positions) {
     if (e.isComposing) return;
     if (e.key === "Enter") {
       e.preventDefault();
-      const d = parseDate(input.value, current ?? undefined);
+      const d = parseDate(input.value, base);
       if (d) apply(d);
       else if (!input.value.trim()) apply(null);
     } else if (e.key === "Escape") { e.preventDefault(); close(); }

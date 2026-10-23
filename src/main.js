@@ -145,11 +145,15 @@ function toggleHelp() {
       k.className = "keys";
       alts.forEach((keys, i) => {
         if (i) k.insertAdjacentHTML("beforeend", `<span class="or">/</span>`);
+        // keys pressed together stay on one line when the row wraps
+        const alt = document.createElement("span");
+        alt.className = "alt";
         for (const key of keys) {
           const kbd = document.createElement("kbd");
           kbd.textContent = key;
-          k.append(kbd);
+          alt.append(kbd);
         }
+        k.append(alt);
       });
       box.append(d, k);
     }
