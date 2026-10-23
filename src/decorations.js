@@ -4,7 +4,8 @@ import { isMathContainer } from "./schema.js";
 import { inMath } from "./nav.js";
 
 // caret inside a code block or between two characters of inline code
-const isCode = (n) => n?.marks.some((m) => m.type.name === "code");
+// (always a boolean: classList.toggle(name, undefined) flips instead)
+const isCode = (n) => !!n?.marks.some((m) => m.type.name === "code");
 const inCode = ($p) => !!$p.parent.type.spec.code || $p.marks().some((m) => m.type.name === "code") || (isCode($p.nodeBefore) && isCode($p.nodeAfter));
 
 // Glyph classes for plain characters typed into a formula.
