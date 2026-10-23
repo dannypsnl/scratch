@@ -20,7 +20,6 @@ import { openDeadlinePicker } from "./deadline.js";
 import { mathDecorations } from "./decorations.js";
 import { scriptStacking } from "./stack.js";
 import { t } from "./i18n.js";
-import { imeLog } from "./imelog.js"; // TEMPORARY
 
 const T = schema.nodes;
 
@@ -170,23 +169,6 @@ function sliceToText(slice) {
   return serializeInline(slice.content);
 }
 
-// WebKit commits a composition by deleting it and inserting the result. When
-// that empties the line for a moment, ProseMirror redraws the line while
-// WebKit still inserts into the old one, which then stays on screen: the text
-// appears twice although the document has it once. After a composition, if
-// the page shows a different number of blocks than the document has, redraw
-// everything (a changed node view makes ProseMirror rebuild its DOM).
-function repairAfterComposition(view, ime) {
-  if (view.isDestroyed || view.composing) return;
-  let blocks = 0;
-  view.state.doc.descendants((n) => { if (n.type === T.block) blocks++; });
-  const shown = view.dom.querySelectorAll(".pm-block").length;
-  ime?.note(`repair check: model blocks=${blocks} dom blocks=${shown} dom text=${JSON.stringify(view.dom.textContent.slice(-120))}`); // TEMPORARY
-  if (shown === blocks) return;
-  view.setProps({ nodeViews: { image: (node) => imageView(node) } });
-  ime?.note(`repaired: dom blocks now ${view.dom.querySelectorAll(".pm-block").length}`); // TEMPORARY
-}
-
 // Pasted or dropped image files: each becomes its own block.
 async function insertImages(view, files) {
   const names = await Promise.all(files.map(addImage));
@@ -232,7 +214,6 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
     doc,
     plugins: [history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, mathDecorations, scriptStacking, outlineDecorations],
   });
-  let ime = null; // TEMPORARY
   const view = new EditorView(mount, {
     state,
     // no macOS autocorrect / capitalisation bubbles or spell squiggles:
@@ -241,7 +222,6 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
     dispatchTransaction(tr) {
       const prev = view.state;
       view.updateState(prev.apply(tr));
-      ime?.tr(tr, prev, view.state); // TEMPORARY
       onUpdate?.(view, prev, tr);
     },
     handleKeyPress(view, ev) {
@@ -258,8 +238,22 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
         toggleFoldAt(view, view.posAtDOM(body, 0) - 1);
         return true;
       },
+      // Enter belongs to the keymap (new block, code line break), always.
+      // ProseMirror skips an Enter that comes right after a composition ends
+      // (in Safari it may be the key that confirmed it), and WebKit then
+      // splits the line natively: the copied DOM parses back as a second block
+      // holding the same text. An Enter the input method did not take
+      // (keyCode 229) is a real one, so run the keymap for it here.
+      keydown(view, ev) {
+        if (ev.key !== "Enter" || ev.isComposing || ev.keyCode === 229 || view.composing) return false;
+        if (!view.someProp("handleKeyDown", (f) => f(view, ev))) return false;
+        ev.preventDefault();
+        return true;
+      },
       // fallback for input that bypasses keypress (autocorrect, dictation)
       beforeinput(view, ev) {
+        // and never a native line split (see keydown)
+        if (ev.inputType === "insertParagraph" || ev.inputType === "insertLineBreak") { ev.preventDefault(); return true; }
         if (ev.inputType !== "insertText" || !ev.data) return false;
         const $h = view.state.selection.$head;
         if (!inMath($h) && !besideSpecial($h) && !/[$#[`]/.test(ev.data)) return false;
@@ -328,7 +322,5 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
       return false;
     },
   });
-  ime = imeLog(view); // TEMPORARY
-  view.dom.addEventListener("compositionend", () => setTimeout(() => repairAfterComposition(view, ime)));
   return view;
 }
