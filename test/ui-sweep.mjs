@@ -95,7 +95,8 @@ async function fresh(f) {
       },
       atEdge: (pos, dir) => { const $x = v.state.doc.resolve(pos); let d = $x.depth; while ($x.node(d).type.name !== "math") d--; return dir < 0 ? pos === $x.start(d) : pos === $x.end(d); },
       actions: () => N.notationActions(v.state).map((a) => a.id),
-      hint: () => { const h = document.querySelector(".notation-hint"); return h && !h.hidden ? h.textContent : null; },
+      // what is on screen, not the hidden flag: a class's display can override it
+      hint: () => { const h = document.querySelector(".notation-hint"); return h && h.checkVisibility() && h.getBoundingClientRect().width > 0 ? h.textContent : null; },
       close: () => v.dispatch(Hi.closeHistory(v.state.tr)),
       reset: (tex) => { const p = math(), n = v.state.doc.nodeAt(p); v.dispatch(v.state.tr.replaceWith(p + 1, p + n.nodeSize - 1, L.parseMath(tex)).setMeta("addToHistory", false)); },
       apply: (id) => N.applyNotation(v, N.notationActions(v.state).find((x) => x.id === id)),
@@ -158,6 +159,8 @@ for (const [fi, f] of FORMULAS.entries()) {
         if (before.parent !== "line" && s.empty && !(await H("atEdge", pos, key.endsWith("Left") ? -1 : 1))) await fail("shift selected nothing", f, { key, pos });
       }
       if (s.empty) {
+        const shown = await H("hint");
+        if (shown) await fail("hint still on screen with no selection", f, { key, pos, shown });
         const c = await H("caret"), box = await H("box", s.head);
         if (!c) await fail("no caret drawn", f, { key, pos, head: s.head });
         else if (box && ((c.top + c.bottom) / 2 < box.top - 2 || (c.top + c.bottom) / 2 > box.bottom + 2)) await fail("caret outside its container", f, { key, pos, head: s.head, caret: c, box });

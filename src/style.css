@@ -67,6 +67,10 @@ body {
   font: 18px/1.7 "Iowan Old Style", "Songti TC", serif;
 }
 
+/* hidden means hidden, whatever display a class sets (a .notation-hint with
+   display: flex stayed on screen with hidden set) */
+[hidden] { display: none !important; }
+
 /* ---------- shell: sidebar + main column ---------- */
 
 .app { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
