@@ -599,10 +599,17 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 
 /* ---------- journal week strip ---------- */
 
+/* stays at the top while the day scrolls, so days are a click away */
 .weekbar {
+  position: sticky;
+  top: 0;
+  z-index: 6; /* above the formula caret */
+  background: var(--bg);
   display: flex;
   align-items: center;
   gap: 6px;
+  padding-top: 10px;
+  margin-top: -10px;
   padding-bottom: 10px;
   margin-bottom: 18px;
   border-bottom: 1px solid var(--line);

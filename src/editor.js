@@ -261,6 +261,9 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
     // no macOS autocorrect / capitalisation bubbles or spell squiggles:
     // notes are full of math, names and half-sentences
     attributes: { spellcheck: "false", autocorrect: "off", autocapitalize: "off", autocomplete: "off" },
+    // keep the caret clear of the journal's sticky week strip
+    scrollMargin: { top: 70, bottom: 5, left: 5, right: 5 },
+    scrollThreshold: { top: 70, bottom: 0, left: 0, right: 0 },
     dispatchTransaction(tr) {
       const prev = view.state;
       view.updateState(prev.apply(tr));
