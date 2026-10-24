@@ -14,7 +14,9 @@ let url = URL(string: CommandLine.arguments[1])!
 // keys: arrow names, "click" (the mouse at the right of the line, past its
 // end), "type:<text>" (each character a key event), or "wait:<ms>"
 // at: "start" or "end" of the line, or inside its first formula, "math-start" or "math-end"
-struct Case: Decodable { let text: String; let line: Int; let at: String?; let keys: [String] }
+// source: an input source for the page's text input (as "com.apple.inputmethod.TCIM.Zhuyin"),
+// for this window alone
+struct Case: Decodable { let text: String; let line: Int; let at: String?; let source: String?; let keys: [String] }
 let cases = try! JSONDecoder().decode([Case].self, from: CommandLine.arguments[2].data(using: .utf8)!)
 
 let app = NSApplication.shared
@@ -99,12 +101,20 @@ Task { @MainActor in
       v.focus(); v.dispatch(tr.setSelection(v.state.selection.constructor.create(tr.doc, at === "math-end" ? mathEnds[line] : at === "math-start" ? mathStarts[line] : at === "start" ? starts[line] : ends[line])));
       """, ["text": c.text, "line": c.line, "at": c.at ?? "end"])
     await sleep(300)
+    if let source = c.source {
+      web.inputContext?.activate()
+      web.inputContext?.selectedKeyboardInputSource = source
+      await sleep(300)
+      if ProcessInfo.processInfo.environment["KEYS_EVENTS"] != nil { FileHandle.standardError.write("source: \(web.inputContext?.selectedKeyboardInputSource ?? "none")\n".data(using: .utf8)!) }
+    }
+    _ = await js("window.__keys = []; document.addEventListener('keydown', (e) => window.__keys.push(`${e.key}/${e.keyCode}${e.isComposing ? '/composing' : ''}`), true);")
     var out = [await js(WHERE) as? String ?? "?"]
     for k in c.keys {
       if k.hasPrefix("wait:") { await sleep(UInt64(k.dropFirst(5)) ?? 0) } else if k == "click" { await click(line: c.line) } else if k == "click:math-left" { await click(line: c.line, "math-left") } else if k.hasPrefix("type:") { await type(String(k.dropFirst(5))) } else { press(k) }
       await sleep(250)
       out.append(await js(WHERE) as? String ?? "?")
     }
+    if ProcessInfo.processInfo.environment["KEYS_EVENTS"] != nil { out.append("events: " + ((await js("return window.__keys.join(' ')") as? String) ?? "")) }
     print(out.joined(separator: " ; "))
   }
   exit(0)
