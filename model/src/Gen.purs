@@ -78,6 +78,7 @@ genStruct depth = frequency $ NEA.cons'
   , Tuple 0.7 (two "underset")
   , Tuple 0.5 (one "overline"), Tuple 0.5 (one "underline"), Tuple 0.5 (one "boxed")
   , Tuple 0.5 (one "hat"), Tuple 0.5 (one "vec"), Tuple 0.5 (one "widehat"), Tuple 0.5 (one "overrightarrow")
+  , Tuple 0.7 (one "left("), Tuple 0.3 (one "left|") -- \left( … \right)
   , Tuple 0.5 (one "mathbf"), Tuple 0.5 (one "mathrm")
   , Tuple 0.5 ((\l -> struct "mathbb" [ [ l ] ]) <$> elements (NEA.cons' (ch 'R') [ ch 'Z', ch 'N' ]))
   , Tuple 0.7 ((\t -> struct "text" [ chars t ]) <$> elements (NEA.cons' "if" [ "for all", " a b ", "", "x y" ]))

@@ -38,6 +38,28 @@ function pairs(doc) {
   return out;
 }
 
+// A script on a structure taller than a letter (a fraction, parentheses that
+// grow, a root) goes to its corner, as TeX puts it: a superscript up to the
+// structure's top, a subscript down to its bottom. Never further in than on a
+// letter. [script position, its base's position] for each script on one.
+function onStructures(doc) {
+  const out = [];
+  doc.descendants((node, pos) => {
+    if (!node.inlineContent) return true;
+    const starts = [];
+    let offset = pos + 1;
+    node.forEach((c) => { starts.push(offset); offset += c.nodeSize; });
+    for (let i = 0; i < node.childCount; i++) {
+      if (!isScript(node.child(i))) continue;
+      // the base: before the script, or before the pair it is the second of
+      const b = scriptPartner(node, i) === i - 1 ? i - 2 : i - 1;
+      if (b >= 0 && node.child(b).type.name === "struct") out.push([starts[i], starts[b]]);
+    }
+    return true;
+  });
+  return out;
+}
+
 // Widths are measured after render and fed back as node decorations, so
 // ProseMirror owns every DOM change (writing styles directly would trip its
 // mutation observer and re-render in a loop). Converges in one extra pass:
@@ -53,6 +75,22 @@ function measure(view) {
     decos.push(Decoration.node(p1, p1 + n1.nodeSize, { class: "pm-stack-first", style: `margin-right:${-w}px` }));
     decos.push(Decoration.node(p2, p2 + n2.nodeSize, { class: "pm-stack-second", style: `min-width:${w}px` }));
     sig += `${p1}:${w};`;
+  }
+  // how far a script on a structure moves out (--shift, px): from where it is
+  // drawn now, so that it converges
+  for (const [p, b] of onStructures(view.state.doc)) {
+    const el = view.nodeDOM(p), base = view.nodeDOM(b);
+    if (!(el instanceof HTMLElement && base instanceof HTMLElement)) continue;
+    const node = view.state.doc.nodeAt(p), up = node.type.name === "sup";
+    const r = el.getBoundingClientRect(), rb = base.getBoundingClientRect();
+    const now = parseFloat(el.style.getPropertyValue("--shift")) || 0;
+    const em = parseFloat(getComputedStyle(base).fontSize) || 16;
+    // a superscript's top a little above the structure's, a subscript's bottom a little below
+    const off = up ? r.top - (rb.top - 0.12 * em) : rb.bottom + 0.12 * em - r.bottom;
+    const shift = Math.max(0, Math.round((now + off) * 2) / 2);
+    if (!shift) continue;
+    decos.push(Decoration.node(p, p + node.nodeSize, { style: `--shift:${shift}px` }));
+    sig += `${p}^${shift};`;
   }
   return { set: DecorationSet.create(view.state.doc, decos), sig };
 }

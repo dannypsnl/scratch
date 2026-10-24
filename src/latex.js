@@ -21,6 +21,19 @@ export function parseMath(src) {
     }
     let name = "";
     while (i < src.length && /[a-zA-Z]/.test(src[i])) name += src[i++];
+    // \left( … \right): the delimiters that grow, when they pair up as one of
+    // them (else \left and \right stay the symbols they were)
+    if (name === "left") {
+      const save = i, open = readDelim(), spec = STRUCTS[`left${open}`];
+      if (spec) {
+        const body = parseSeq(false, true);
+        if (src.startsWith("\\right", i)) {
+          i += 6;
+          if (readDelim() === spec.delim[1]) return [schema.nodes.struct.create({ name: `left${open}` }, [schema.nodes.slot.create(null, body)])];
+        }
+      }
+      i = save;
+    }
     if (SYMBOLS[name]) return [schema.nodes.sym.create({ name })];
     const S = schema.nodes, slot = (c) => S.slot.create(null, c);
     // \sqrt[n]{x}: the index a slot of its own
@@ -58,6 +71,16 @@ export function parseMath(src) {
       if (slots.length === 0) return [schema.nodes.sym.create({ name })];
     }
     return [schema.nodes.struct.create({ name }, slots.map((c) => schema.nodes.slot.create(null, c)))];
+  }
+
+  // the delimiter after \left or \right: ( [ | . or \| \{ \langle …
+  function readDelim() {
+    ws();
+    if (src[i] !== "\\") return src[i++] ?? "";
+    let d = src[i + 1] ?? "";
+    if (/[a-zA-Z]/.test(d)) { let k = i + 1; d = ""; while (/[a-zA-Z]/.test(src[k] ?? "")) d += src[k++]; i = k; return "\\" + d; }
+    i += 2;
+    return "\\" + d;
   }
 
   // [ … ] after a command: its optional argument, or null
@@ -107,10 +130,12 @@ export function parseMath(src) {
     return [];
   }
 
-  function parseSeq(inGroup) {
+  // untilRight: stop at the \right that closes a \left
+  function parseSeq(inGroup, untilRight = false) {
     const out = [];
     while (i < src.length) {
       const c = src[i];
+      if (untilRight && src.startsWith("\\right", i) && !/[a-zA-Z]/.test(src[i + 6] ?? "")) break;
       if (c === "}") { if (inGroup) break; i++; continue; }
       if (c === "{") { i++; out.push(...parseSeq(true)); if (src[i] === "}") i++; continue; }
       if (c === "^" || c === "_") {
@@ -190,6 +215,10 @@ function writeFragment(fragment, out) {
         const x = xArrow(node);
         if (x) out.emit(`\\${x.name}` + (x.below ? `[${serializeMath(x.below)}]` : "") + `{${serializeMath(x.above)}}`);
         else if (node.attrs.name === "root") out.emit(`\\sqrt[${serializeMath(node.child(0).content)}]{${serializeMath(node.child(1).content)}}`);
+        else if (STRUCTS[node.attrs.name]?.delim) {
+          const [open, close] = STRUCTS[node.attrs.name].delim;
+          out.emit(`\\left${open}`); out.emit(serializeMath(node.firstChild.content)); out.emit(`\\right${close}`);
+        }
         else if (STRUCTS[node.attrs.name]?.label && node.childCount === 2) {
           const mark = STRUCTS[node.attrs.name].label, over = mark === "^";
           const [label, content] = over ? [node.child(0), node.child(1)] : [node.child(1), node.child(0)];

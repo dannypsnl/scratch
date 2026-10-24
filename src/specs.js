@@ -119,6 +119,10 @@ export const STRUCTS = {
   texttt: { arity: 1, layout: "font-tt", rows: [[0]], example: "\\texttt{if}", text: true },
   // \sqrt[n]{x}: the index is a slot of its own
   root: { arity: 2, layout: "root", rows: [[0], [1]], wrap: 1, example: "\\sqrt[n]{x}" },
+  // \left( … \right) and kin: delimiters as tall as what they hold (named by
+  // how they start; the LaTeX is written by latex.js)
+  ...Object.fromEntries([["(", ")", "paren"], ["[", "]", "bracket"], ["|", "|", "vert"], ["\\|", "\\|", "Vert"]].map(([open, close, shape]) =>
+    [`left${open}`, { arity: 1, layout: "delim", rows: [[0]], delim: [open, close], shape, example: `\\left${open}x\\right${close}` }])),
 };
 
 function stretchy(layout, ...names) {

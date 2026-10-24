@@ -17,6 +17,7 @@ const FORMULAS = [
   "\\underset{n\\to\\infty}{\\lim}a_n",
   "(a+b)^3",
   "\\mathbb{R}\\times\\mathcal{C}",
+  "f\\left(\\frac{a}{b}\\right)^2-\\left|x\\right|",
 ];
 const KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Alt+ArrowLeft", "Alt+ArrowRight", "ControlOrMeta+ArrowLeft", "ControlOrMeta+ArrowRight", "Shift+Alt+ArrowLeft", "Shift+Alt+ArrowRight", "Shift+ArrowLeft", "Shift+ArrowRight", "Shift+ControlOrMeta+ArrowLeft", "Shift+ControlOrMeta+ArrowRight", "Space"];
 // Option + arrow from one end of the formula: the LaTeX left of the caret at

@@ -27,6 +27,11 @@ const CASES = [
   ["x|", "⁻¹", "x^{-1}", ""],
   ["x|", "₁₀", "x_{10}", ""],
   ["x|", "₁²", "x_1^2", ""],
+  // a power on a fraction: the fraction in parentheses that grow with it
+  ["\\frac{x+1}{x-1}|", "^2", "\\left(\\frac{x+1}{x-1}\\right)^2", ""],
+  ["a+\\frac{1}{2}|", "^", "a+\\left(\\frac{1}{2}\\right)^{}", ""],
+  ["\\sqrt{x}|", "^2", "\\sqrt{x}^2", ""],
+  ["x|", "^2", "x^2", ""],
 ];
 
 // "[a+b]" -> its LaTeX without marks, and the marks' offsets in the

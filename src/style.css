@@ -426,8 +426,9 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .pm-punct { margin-right: .17em; }
 
 .pm-sup, .pm-sub { font-size: .7em; display: inline-block; }
-.pm-sup { vertical-align: .55em; }
-.pm-sub { vertical-align: -.3em; }
+/* --shift: further out, on a structure taller than a letter (stack.js) */
+.pm-sup { vertical-align: calc(.55em + var(--shift, 0px)); }
+.pm-sub { vertical-align: calc(-.3em - var(--shift, 0px)); }
 
 .pm-struct, .pm-sup, .pm-sub { line-height: 1.15; }
 .pm-struct { display: inline-flex; align-items: baseline; }
@@ -446,6 +447,21 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .layout-fraction > .pm-slot:first-child { border-bottom: .06em solid currentColor; padding-bottom: .08em; }
 .layout-fraction > .pm-slot:last-child { padding-top: .05em; }
 
+/* \left( … \right): the delimiters are borders as tall as the content, a (
+   the left half of an ellipse whose border thins to nothing at its ends */
+/* (an inner atom: a thin space before it, as after f in f\left(x\right); none in small type) */
+.layout-delim { position: relative; display: inline-block; padding: 0 .42em; margin-left: .167em; }
+:is(.pm-sup, .pm-sub) .layout-delim { margin-left: 0; }
+.layout-delim > .pm-deco { position: absolute; top: .08em; bottom: .02em; width: .3em; box-sizing: border-box; border: 0 solid currentColor; }
+.layout-delim > .pm-deco:first-child { left: .06em; }
+.layout-delim > .pm-deco:last-child { right: .06em; }
+.pm-delim-paren > .pm-deco:first-child { border-left-width: .085em; border-radius: 100% 0 0 100% / 50% 0 0 50%; }
+.pm-delim-paren > .pm-deco:last-child { border-right-width: .085em; border-radius: 0 100% 100% 0 / 0 50% 50% 0; }
+.pm-delim-bracket > .pm-deco { width: .22em; border-width: .055em 0; }
+.pm-delim-bracket > .pm-deco:first-child { border-left-width: .06em; }
+.pm-delim-bracket > .pm-deco:last-child { border-right-width: .06em; }
+.pm-delim-vert > .pm-deco { width: 0; border-left-width: .06em; }
+.pm-delim-Vert > .pm-deco { width: .17em; border-width: 0 .06em; }
 .layout-binom > .pm-args { flex-direction: column; font-size: .92em; }
 .layout-binom > .pm-deco { font-size: 1.8em; line-height: 1; align-self: center; }
 

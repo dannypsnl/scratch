@@ -496,6 +496,7 @@ function insertFrac(state, dispatch, undo = {}) {
 }
 
 const BRACKETS = { "(": ")", "[": "]", "{": "}", "|": "|" };
+const GROUPED_FOR_POWER = new Set(["frac", "dfrac", "tfrac", "cfrac"]);
 
 // Handle one typed character while the caret is inside a formula.
 // Returns false only when the character should open the command palette
@@ -517,7 +518,19 @@ export function typeInMath(view, ch) {
   }
   switch (ch) {
     case "\\": return false;
-    case "^": return insertNode(state, dispatch, T.sup.create(), 1);
+    case "^": {
+      // a fraction takes a power as a whole, in parentheses that grow with
+      // it: \left(\frac{a}{b}\right)^2, not a fraction with a 2 at its corner
+      const $p = state.selection.$from, before = $p.nodeBefore;
+      if (state.selection.empty && before?.type === T.struct && GROUPED_FOR_POWER.has(before.attrs.name)) {
+        const from = $p.pos - before.nodeSize;
+        const group = T.struct.create({ name: "left(" }, T.slot.create(null, before));
+        const tr = state.tr.replaceWith(from, $p.pos, [group, T.sup.create()]);
+        dispatch(tr.setSelection(TextSelection.create(tr.doc, from + group.nodeSize + 1)).scrollIntoView());
+        return true;
+      }
+      return insertNode(state, dispatch, T.sup.create(), 1);
+    }
     case "_": return insertNode(state, dispatch, T.sub.create(), 1);
     case "/": {
       const undo = {};

@@ -128,6 +128,9 @@ export const schema = new Schema({
         switch (layout) {
           case "radical":
             return ["span", { class: cls }, deco("√"), ["span", { class: "pm-args" }, 0]];
+          case "delim":
+            // drawn by CSS as tall as what they hold (style.css)
+            return ["span", { class: `${cls} pm-delim-${spec.shape}` }, deco(""), ["span", { class: "pm-args" }, 0], deco("")];
           case "binom":
             return ["span", { class: cls }, deco("("), ["span", { class: "pm-args" }, 0], deco(")")];
           case "accent":
