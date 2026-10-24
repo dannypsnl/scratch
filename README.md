@@ -1,6 +1,6 @@
 # 隨筆 (scratch)
 
-An outliner notebook with math: a journal day for every date, named pages, tasks and deadlines, and formulas you type as structure rather than as LaTeX source. A desktop app built on [Neutralino](https://neutralino.js.org), with optional sync between devices.
+An outliner notebook with math: a journal day for every date, named pages, tasks and deadlines, and formulas you type as structure. The desktop app built on [Neutralino](https://neutralino.js.org), with optional sync between devices.
 
 - **Outline:** blocks nest with ⇥ / ⇧⇥, fold with ⌘↑ / ⌘↓; bold, italic, underline, strikethrough, highlight, inline code and code blocks.
 - **Journal and pages:** one page per day, with a week strip and a calendar that marks days written, with an open task, or overdue; named pages linked with `[[page]]` or `#tag`, with backlinks.
@@ -8,8 +8,8 @@ An outliner notebook with math: a journal day for every date, named pages, tasks
 - **Formulas:** `$` starts one. `^`, `_`, `/` build scripts and fractions in place, `\` opens a command menu, brackets grow around tall structures, and a selection can be simplified, factored or expanded (through [Nerdamer](https://nerdamer.com)). Rendered with KaTeX.
 - **Search:** ⌘K across every page and journal day.
 - **Sync:** the notebook is a [Loro](https://loro.dev) CRDT, so edits from several devices merge. The relay is a Cloudflare Worker or a small self-hosted Node server, see [`sync/`](sync/README.md).
-- **MCP:** an MCP server lets an agent such as Claude Code read, search and write the notebook, see [`mcp/`](mcp/README.md).
-- The interface is in 繁體中文 or English (⌘, for settings); ⌘/ lists every key.
+- **MCP:** an MCP server lets an agent read, search and write the notebook, see [`mcp/`](mcp/README.md).
+- ⌘, for settings; ⌘/ lists every key.
 
 ## Download
 
