@@ -429,13 +429,17 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-radical .pm-args { border-top: .06em solid currentColor; padding: .05em .1em 0; }
 .layout-radical > .pm-deco { font-size: 1.1em; }
 
-.layout-overset, .layout-underset { position: relative; margin: 0 .15em; }
-/* the small slot floats above/below so the base keeps the text baseline */
-.layout-overset > .pm-slot:first-child, .layout-underset > .pm-slot:first-child {
-  position: absolute; left: -.5em; right: -.5em; font-size: .7em;
-}
-.layout-overset > .pm-slot:first-child { bottom: 75%; }
-.layout-underset > .pm-slot:first-child { top: 80%; }
+/* the small slot stays in flow and as wide as its content: absolutely
+   positioned, WebKit put the caret at its stretched left edge. The base keeps
+   the text baseline: an inline-block takes its last line's, a flex column its
+   first item's in `order` */
+.layout-overset, .layout-underset { margin: 0 .15em; text-align: center; }
+.layout-overset { display: inline-block; }
+.layout-overset > .pm-slot { display: block; width: fit-content; margin: 0 auto; }
+.layout-underset { flex-direction: column; align-items: center; }
+.layout-overset > .pm-slot:first-child, .layout-underset > .pm-slot:first-child { font-size: .7em; line-height: 1; }
+.layout-overset > .pm-slot:first-child { margin-bottom: -.3em; }
+.layout-underset > .pm-slot:first-child { order: 1; margin-top: -.15em; }
 
 .layout-overline > .pm-slot { border-top: .06em solid currentColor; }
 .layout-font-bb > .pm-slot { font-family: KaTeX_AMS, serif; font-style: normal; }
