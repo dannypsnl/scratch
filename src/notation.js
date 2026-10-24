@@ -3,6 +3,7 @@ import { Fragment } from "prosemirror-model";
 import { schema } from "./schema.js";
 import { inMath } from "./nav.js";
 import { t } from "./i18n.js";
+import { toCas, runCas } from "./cas.js";
 
 const T = schema.nodes;
 
@@ -87,6 +88,9 @@ export function notationActions(state) {
     const half = T.sup.create(null, struct("frac", Fragment.from(text("1")), Fragment.from(text("2"))));
     out.push({ id: "power", tex: "x^{\\frac{1}{2}}", label: t("notation.power"), hint: true, replace: paren(node.child(0).content).append(Fragment.from(half)) });
   }
+  // computed by Nerdamer when picked (the \ menu only)
+  const input = toCas(content);
+  if (input) for (const op of ["simplify", "factor", "expand"]) out.push({ id: op, tex: "", label: t(`notation.${op}`), input, op });
   if (isScript(node)) {
     out.push({ id: "unscript", tex: "x", label: t("notation.unscript"), replace: node.content });
   } else {
@@ -97,9 +101,16 @@ export function notationActions(state) {
 }
 
 // Replace the selection; what replaced it stays selected, so the hint offers
-// the way back.
-export function applyNotation(view, action) {
-  const replace = action.replace;
+// the way back. A Nerdamer action replaces it once the answer is in, unless
+// the formula changed meanwhile.
+export async function applyNotation(view, action) {
+  let replace = action.replace;
+  if (action.op) {
+    const doc = view.state.doc;
+    const nodes = await runCas(action.op, action.input);
+    if (!nodes || view.state.doc !== doc) return;
+    replace = Fragment.from(nodes);
+  }
   const { from, to } = view.state.selection;
   const tr = view.state.tr.replaceWith(from, to, replace);
   tr.setSelection(TextSelection.create(tr.doc, from, from + replace.size));

@@ -15,6 +15,7 @@
     "@neutralinojs/lib": "^6.10.0",
     "katex": "^0.19.0",
     "loro-crdt": "^1.17.1",
+    "nerdamer": "2.0.0",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-history": "^1.5.1",
     "prosemirror-keymap": "^1.2.3",
