@@ -1,13 +1,16 @@
 // The outline UI in WebKit (the engine the app runs in): a block dragged by
 // its bullet to every place in a small outline, and every piece of a line cut
-// and pasted into another, each checked against what should happen. Starts
-// its own Vite server; needs the WebKit build: npx playwright-core install webkit
+// and pasted into another, and the key for a new top-level block, each
+// checked against what should happen. Starts its own Vite server; needs
+// the WebKit build: npx playwright-core install webkit
 //
 //   npm run test:ui
 import { createServer } from "vite";
 import { webkit } from "playwright-core";
 
 const OUTLINE = "- A\n  - A1\n  - A2\n- B\n  - B1\n    - B1a\n- C\n- D";
+// deep, with blocks after each level and a formula deep down
+const DEEP = "- R\n  - L1\n    - L2\n      - L3\n        - L4\n          - L5\n            - k\n          - F $a+b$\n        - L4b\n      - L3b\n    - L2b\n  - L1b\n- S";
 // a line with marks, a formula and something that looks like a block ("- f")
 const LINES = "- ab **cd** $x^2$ e - f\n- target line\n  - child\n- end";
 
@@ -78,6 +81,20 @@ await pg.evaluate(async () => {
       const tr = v.state.tr.insert(0, IO.parseOutline("- Z").content);
       tr.doc.descendants((n, p) => { if (n.type.name === "block" && n.firstChild.textContent === name) tr.setNodeMarkup(p, null, { ...n.attrs, deadline: "2030-01-01" }); });
       v.dispatch(tr.setMeta("addToHistory", false));
+    },
+    // the caret o characters into the line of the block named `name` (in its
+    // formula when inMath), and where the caret is: its block's name and depth
+    caretAt: (name, o, inMath = false) => {
+      let at = null;
+      v.state.doc.descendants((n, p) => { if (at === null && n.type.name === "block" && n.firstChild.textContent === name) at = p; return at === null; });
+      let x = at + 2 + o;
+      if (inMath) v.state.doc.nodeAt(at + 1).forEach((c, off) => { if (c.type.name === "math") x = at + 2 + off + 1; });
+      window.__h.setRange(x, x);
+    },
+    head: () => {
+      const $h = v.state.selection.$head;
+      let d = $h.depth; while (v.state.doc.resolve($h.pos).node(d).type.name !== "block") d--;
+      return { name: $h.node(d).firstChild.textContent, depth: d };
     },
     caretIn: (i, o) => { const [p] = nth(i); window.__h.setRange(p + 2 + o, p + 2 + o); },
   };
@@ -317,6 +334,29 @@ async function dragCase(x, y, where, gesture, expectShape) {
     if (left.includes("child") || JSON.stringify(got2) !== JSON.stringify(want)) fail("a block with its child cut and pasted", { left, want, got: got2 });
   }
   console.log("clipboard: by hand, across blocks");
+}
+
+// ---- Mod-Shift-Enter: a new block at the top level
+
+{
+  // [block, caret offset, in its formula]: the new block right after the
+  // top-level ancestor's whole subtree, caret in it
+  for (const [name, o, inMath] of [["R", 1, false], ["S", 1, false], ["L2", 1, false], ["L5", 2, false], ["F a+b", 0, true]]) {
+    await H("load", DEEP);
+    const before = await H("tree"), json = await H("json");
+    const top = before.find((n) => find([n], name)).name;
+    const expect = structuredClone(before);
+    expect.splice(expect.findIndex((n) => n.name === top) + 1, 0, { name: "", children: [] });
+    await H("caretAt", name, o, inMath);
+    await pg.keyboard.press("ControlOrMeta+Shift+Enter"); await pause(30);
+    const got = await H("tree"), head = await H("head");
+    const label = { name, inMath };
+    if (shape(got) !== shape(expect)) fail("new top-level block somewhere else", { ...label, expect: shape(expect), got: shape(got) });
+    if (head.name !== "" || head.depth !== 1) fail("the caret is not in the new top-level block", { ...label, head });
+    await pg.keyboard.press("ControlOrMeta+z"); await pause(30);
+    if ((await H("json")) !== json) fail("one undo does not take the new top-level block back", label);
+  }
+  console.log("top level: Mod-Shift-Enter");
 }
 
 console.log(`\n${fails.length} failures`);

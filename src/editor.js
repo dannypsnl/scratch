@@ -8,7 +8,7 @@ import { schema } from "./schema.js";
 import { parseMath, serializeMath } from "./latex.js";
 import { parseInline, parseOutline, serializeInline, serializeOutline } from "./outline-io.js";
 import { horizontal, vertical, term, selectTerm, selectStep, selectEdge, formula, selectionShape, xArrowsToOverset, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
-import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, blockIds, outlineDecorations } from "./outline.js";
+import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, newTopBlock, blockIds, outlineDecorations } from "./outline.js";
 import { blockDrag } from "./drag.js";
 import { openPalette } from "./palette.js";
 import { openPicker } from "./picker.js";
@@ -51,6 +51,7 @@ const outlineKeys = keymap({
   Enter: splitBlock,
   Tab: indent,
   "Shift-Tab": outdent,
+  "Mod-Shift-Enter": newTopBlock,
   Backspace: joinBackward,
   "Mod-Enter": cycleTask,
   "Mod-a": selectAll,

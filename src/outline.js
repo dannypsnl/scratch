@@ -126,6 +126,19 @@ export const outdent = (state, dispatch) => {
   return true;
 };
 
+// Mod-Shift-Enter: a new empty top-level block after the current one's
+// top-level ancestor (and all of its children), from any depth.
+export const newTopBlock = (state, dispatch) => {
+  const { $from } = state.selection;
+  if (blockDepth($from) < 1) return false;
+  if (dispatch) {
+    const at = $from.after(1);
+    const tr = state.tr.insert(at, T.block.create({ id: newId() }, T.line.create()));
+    dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView());
+  }
+  return true;
+};
+
 // Backspace at the start of a line: append it to the previous line; its
 // children take its place.
 export const joinBackward = (state, dispatch) => {
