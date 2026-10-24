@@ -2,9 +2,10 @@
 // t(key, ...args): a string, or a function of args for strings with values.
 
 const zh = {
+  "app.name": "隨筆",
   "tab.journal": "Journal",
   "tab.agenda": "Agenda",
-  "tab.tasks": "任務",
+  "tab.tasks": "待辦事項",
   "tab.pages": "頁面",
   "help.button": "按鍵（⌘/）",
   "sync.button": "同步設定",
@@ -121,7 +122,7 @@ const zh = {
   "views.deleteTitle": "刪除這個 view",
   "views.add": "新增 view",
   "views.copy": (name) => `${name} 副本`,
-  "views.empty": "沒有符合的任務",
+  "views.empty": "沒有符合的待辦事項",
   "views.deadlineGroup": (md, wd) => `期限 ${md} ${wd}`,
   "views.noDeadline": "無期限",
   "views.overdue": "逾期",
@@ -129,8 +130,8 @@ const zh = {
 
   "menu.settings": "設定…",
   "menu.help": "按鍵說明",
-  "menu.hide": "隱藏 scratch",
-  "menu.quit": "結束 scratch",
+  "menu.hide": "隱藏隨筆",
+  "menu.quit": "結束隨筆",
   "menu.edit": "編輯",
   "menu.cut": "剪下",
   "menu.copy": "拷貝",
@@ -192,6 +193,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const en = {
+  "app.name": "scratch",
   "tab.journal": "Journal",
   "tab.agenda": "Agenda",
   "tab.tasks": "Tasks",
@@ -391,6 +393,7 @@ export function setLang(id) {
   lang = found.id;
   strings = found.strings;
   document.documentElement.lang = lang;
+  document.title = t("app.name");
   // static labels in index.html
   for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);

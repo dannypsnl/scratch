@@ -199,8 +199,9 @@ onRemote(() => {
 function nativeMenu() {
   if (!inNeutralino) return;
   const sep = { text: "-" };
+  Neutralino.window.setTitle(t("app.name"));
   Neutralino.window.setMainMenu([
-    { id: "app", text: "scratch", menuItems: [
+    { id: "app", text: t("app.name"), menuItems: [
       { id: "settings", text: t("menu.settings"), shortcut: "," },
       { id: "help", text: t("menu.help"), shortcut: "/" },
       sep,
