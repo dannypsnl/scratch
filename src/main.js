@@ -1,5 +1,6 @@
 import "katex/dist/katex.min.css";
 import "./style.css";
+import "./katex-stretchy.css";
 import { load, getPage, titleOf, findPage, createPage, getBlock, pageOfBlock, isDate, onRemote, fieldById, fieldByName } from "./store.js";
 import { connect, config, configure, onStatus } from "./sync.js";
 import { resolver } from "./outline-io.js";

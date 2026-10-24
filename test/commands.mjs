@@ -11,7 +11,9 @@ const write = (tex) => serializeMath(schema.nodes.math.create(null, parseMath(te
 
 const cases = [
   ...Object.keys(SYMBOLS).map((name) => [name, `a\\${name} b`]),
-  ...Object.entries(STRUCTS).filter(([name]) => name !== "root").map(([name, s]) => [name, `\\${name}` + ["{x}", "{y}", "{z}"].slice(0, s.arity).join("")]),
+  ...Object.entries(STRUCTS).filter(([name, s]) => name !== "root" && !s.label).map(([name, s]) => [name, `\\${name}` + ["{x}", "{y}", "{z}"].slice(0, s.arity).join("")]),
+  // a label after the argument, as a script: \overbrace{x}^{y}, \underbrace{x}_{y}
+  ...Object.entries(STRUCTS).filter(([, s]) => s.label).flatMap(([name, s]) => [[name, `\\${name}{x}${s.label}{y}`], [name, `\\${name}{x}`]]),
   ["root", "\\sqrt[x]{y}"],
   // labelled arrows, with and without a label below
   ...Object.keys(X_ARROWS).flatMap((name) => [[name, `\\${name}{x}`], [name, `\\${name}[y]{x}`]]),

@@ -45,19 +45,20 @@ function atomClasses(container, start, decos) {
   });
 }
 
-// A label over (or under) a lone arrow: the arrow stretches to the label's
-// width, as the \xrightarrow it is written as does (draw in specs.js); one over
-// an \underset of an arrow lets that \underset take its whole width.
-function arrowDraw(slot) {
+// A label over (or under) a lone arrow: the arrow is drawn stretched to the
+// label with KaTeX's own shape for the \xrightarrow it is written as
+// (katex-stretchy.css); one over an \underset of an arrow lets that
+// \underset take its whole width.
+function xArrowOf(slot) {
   const n = slot.childCount === 1 ? slot.firstChild : null;
-  return n?.type.name === "sym" ? X_ARROWS[ARROW_X[n.attrs.name]]?.draw ?? null : null;
+  return n?.type.name === "sym" && ARROW_X[n.attrs.name] ? ARROW_X[n.attrs.name] : null;
 }
 function labelledArrow(node) {
   if (node.type.name !== "struct" || !["overset", "underset", "stackrel"].includes(node.attrs.name) || node.childCount !== 2) return null;
-  const base = node.child(1), draw = arrowDraw(base);
-  if (draw) return `pm-xarrow pm-xarrow-${draw}`;
-  const under = base.childCount === 1 ? base.firstChild : null;
-  if (node.attrs.name === "overset" && under?.type.name === "struct" && under.attrs.name === "underset" && under.childCount === 2 && arrowDraw(under.child(1))) return "pm-xarrow pm-xarrow-over";
+  const x = xArrowOf(node.child(1));
+  if (x) return `pm-xarrow pm-st-${x}`;
+  const under = node.child(1).childCount === 1 ? node.child(1).firstChild : null;
+  if (node.attrs.name === "overset" && under?.type.name === "struct" && under.attrs.name === "underset" && under.childCount === 2 && xArrowOf(under.child(1))) return "pm-xarrow-over";
   return null;
 }
 
@@ -232,7 +233,8 @@ export const mathDecorations = new Plugin({
         // slot, a script) a dashed frame, as TeXmacs does, so the end of a box
         // and the place just after it look different
         const decos = [Decoration.node($h.before(d), $h.after(d), { class: "pm-active" })];
-        if ($h.depth > d) decos.push(Decoration.node($h.before(), $h.after(), { class: "pm-here" }));
+        // (an empty box shows itself already, as a dashed placeholder)
+        if ($h.depth > d && $h.parent.content.size) decos.push(Decoration.node($h.before(), $h.after(), { class: "pm-here" }));
         return set.add(state.doc, decos);
       }
       return set;

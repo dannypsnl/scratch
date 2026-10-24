@@ -87,11 +87,19 @@ export const STRUCTS = {
   stackrel: { arity: 2, layout: "overset", rows: [[0], [1]], wrap: 1, example: "\\stackrel{f}{=}" },
   underline: { arity: 1, layout: "underline", rows: [[0]], example: "\\underline{x}" },
   boxed: { arity: 1, layout: "boxed", rows: [[0]], example: "\\boxed{x}" },
-  // accents: a mark over the argument; an arrow one stretches to it
+  // accents: a mark over the argument
   ...accents({ hat: "ˆ", bar: "ˉ", vec: "→", tilde: "˜", dot: "˙", ddot: "¨", acute: "ˊ", grave: "ˋ", breve: "˘",
-    check: "ˇ", mathring: "˚", widehat: "ˆ", widetilde: "˜", widecheck: "ˇ", overleftrightarrow: "↔" }),
-  overrightarrow: { arity: 1, layout: "accent", rows: [[0]], example: "\\overrightarrow{AB}", accent: "→", stretch: "right" },
-  overleftarrow: { arity: 1, layout: "accent", rows: [[0]], example: "\\overleftarrow{AB}", accent: "←", stretch: "left" },
+    check: "ˇ", mathring: "˚" }),
+  // stretching over or under the argument, drawn with KaTeX's own shapes
+  // (katex-stretchy.css, generated)
+  ...stretchy("accent", "widehat", "widetilde", "widecheck", "overrightarrow", "overleftarrow", "overleftrightarrow",
+    "Overrightarrow", "overleftharpoon", "overrightharpoon", "overlinesegment", "overgroup"),
+  ...stretchy("accent-under", "underrightarrow", "underleftarrow", "underleftrightarrow", "underlinesegment", "undergroup", "utilde"),
+  // a brace with a label: \overbrace{x+y}^{n} (label first, on top), \underbrace{x+y}_{n}
+  overbrace: { arity: 2, layout: "overbrace", rows: [[0], [1]], wrap: 1, example: "\\overbrace{x+y}^{n}", stretchy: true, label: "^" },
+  overbracket: { arity: 2, layout: "overbrace", rows: [[0], [1]], wrap: 1, example: "\\overbracket{x+y}^{n}", stretchy: true, label: "^" },
+  underbrace: { arity: 2, layout: "underbrace", rows: [[0], [1]], example: "\\underbrace{x+y}_{n}", stretchy: true, label: "_" },
+  underbracket: { arity: 2, layout: "underbrace", rows: [[0], [1]], example: "\\underbracket{x+y}_{n}", stretchy: true, label: "_" },
   // fonts
   mathbf: { arity: 1, layout: "font-bf", rows: [[0]], example: "\\mathbf{v}" },
   mathit: { arity: 1, layout: "font-it", rows: [[0]], example: "\\mathit{diff}" },
@@ -113,6 +121,10 @@ export const STRUCTS = {
   root: { arity: 2, layout: "root", rows: [[0], [1]], wrap: 1, example: "\\sqrt[n]{x}" },
 };
 
+function stretchy(layout, ...names) {
+  return Object.fromEntries(names.map((name) => [name, { arity: 1, layout, rows: [[0]], example: `\\${name}{AB}`, stretchy: true }]));
+}
+
 function accents(marks) {
   return Object.fromEntries(Object.entries(marks).map(([name, accent]) =>
     [name, { arity: 1, layout: "accent", rows: [[0]], example: `\\${name}{x}`, accent }]));
@@ -121,18 +133,17 @@ function accents(marks) {
 // \xrightarrow{f} and kin are how an \overset over a lone arrow is written in
 // LaTeX (latex.js), \xrightarrow[g]{f} one over an \underset{g}{\to}: in the
 // document it is that \overset, every label and the arrow a slot of its own.
-// draw: how the editor stretches the arrow to its labels (decorations.js;
-// one shaft, or two for a double arrow); without it the glyph is drawn as is.
-export const X_ARROWS = {
-  xrightarrow: { sym: "to", draw: "right" }, xleftarrow: { sym: "leftarrow", draw: "left" },
-  xRightarrow: { sym: "Rightarrow", draw: "right2" }, xLeftarrow: { sym: "Leftarrow", draw: "left2" },
-  xleftrightarrow: { sym: "leftrightarrow" }, xLeftrightarrow: { sym: "Leftrightarrow" },
-  xhookleftarrow: { sym: "hookleftarrow" }, xhookrightarrow: { sym: "hookrightarrow" }, xmapsto: { sym: "mapsto" },
-  xtwoheadrightarrow: { sym: "twoheadrightarrow", draw: "right" }, xtwoheadleftarrow: { sym: "twoheadleftarrow", draw: "left" },
-  xrightharpoonup: { sym: "rightharpoonup", draw: "right" }, xrightharpoondown: { sym: "rightharpoondown", draw: "right" },
-  xleftharpoonup: { sym: "leftharpoonup", draw: "left" }, xleftharpoondown: { sym: "leftharpoondown", draw: "left" },
-  xrightleftharpoons: { sym: "rightleftharpoons" }, xleftrightharpoons: { sym: "leftrightharpoons" },
-};
+// The editor draws the arrow stretched with KaTeX's own shape for the x-arrow
+// (katex-stretchy.css). \xtofrom (\rightleftarrows too) and \xlongequal, the
+// equilibria: no single symbol to stand for them, so they stay commands.
+export const X_ARROWS = Object.fromEntries(Object.entries({
+  xrightarrow: "to", xleftarrow: "leftarrow", xRightarrow: "Rightarrow", xLeftarrow: "Leftarrow",
+  xleftrightarrow: "leftrightarrow", xLeftrightarrow: "Leftrightarrow", xhookleftarrow: "hookleftarrow",
+  xhookrightarrow: "hookrightarrow", xmapsto: "mapsto", xtwoheadrightarrow: "twoheadrightarrow",
+  xtwoheadleftarrow: "twoheadleftarrow", xrightharpoonup: "rightharpoonup", xrightharpoondown: "rightharpoondown",
+  xleftharpoonup: "leftharpoonup", xleftharpoondown: "leftharpoondown", xrightleftharpoons: "rightleftharpoons",
+  xleftrightharpoons: "leftrightharpoons", xrightleftarrows: "rightleftarrows",
+}).map(([x, sym]) => [x, { sym }]));
 // the arrow symbol -> its x-arrow (\rightarrow is written as \to's)
 export const ARROW_X = { rightarrow: "xrightarrow", ...Object.fromEntries(Object.entries(X_ARROWS).map(([x, a]) => [a.sym, x])) };
 

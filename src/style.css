@@ -409,6 +409,14 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
    a minus's .778em (the LaTeX stays -) */
 .pm-minus { display: inline-block; transform: scaleX(2.33); margin: 0 .222em; }
 .pm-minus.pm-bin { margin: 0 .442em; }
+/* in small type (scripts, labels, a root's index) TeX puts no space around
+   relations, operators or commas: n\mapsto(n,0), not n ↦ (n, 0) */
+:is(.pm-sup, .pm-sub, .layout-overset > .pm-slot:first-child, .layout-underset > .pm-slot:first-child,
+  .layout-overbrace > .pm-slot:first-child, .layout-underbrace > .pm-slot:last-child, .layout-root > .pm-slot:first-child)
+  :is(.pm-rel, .pm-bin, .pm-punct) { margin-left: 0; margin-right: 0; }
+:is(.pm-sup, .pm-sub, .layout-overset > .pm-slot:first-child, .layout-underset > .pm-slot:first-child,
+  .layout-overbrace > .pm-slot:first-child, .layout-underbrace > .pm-slot:last-child, .layout-root > .pm-slot:first-child)
+  .pm-minus { margin: 0 .222em; }
 .pm-rel { margin: 0 .28em; }
 .pm-punct { margin-right: .17em; }
 
@@ -451,29 +459,49 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-overset > .pm-slot:first-child { margin-bottom: -.3em; }
 .layout-underset > .pm-slot:first-child { order: 1; margin-top: -.15em; }
 
-/* a label over (or under) a lone arrow: the arrow as wide as the label, as
-   the \xrightarrow it is written as (decorations.js). The glyph draws the head,
-   a drawn shaft the rest, at KaTeX_Main's own shafts (measured above the
-   baseline: one .235em to .275em; a double one .14 to .175 and .33 to .365) */
-.pm-xarrow { margin: 0 .28em; } /* a relation's spacing, which the arrow gives up */
-.pm-xarrow > .pm-slot:first-child { padding: 0 .3em; }
-.pm-xarrow > .pm-slot:last-child { width: auto; align-self: stretch; }
-.pm-xarrow > .pm-slot:last-child > .pm-sym { display: flex; align-items: baseline; margin: 0; }
-.pm-xarrow-right > .pm-slot:last-child > .pm-sym::before, .pm-xarrow-right2 > .pm-slot:last-child > .pm-sym::before,
-.pm-xarrow-left > .pm-slot:last-child > .pm-sym::after, .pm-xarrow-left2 > .pm-slot:last-child > .pm-sym::after {
-  content: ""; flex: 1; min-width: .4em; height: .4em; position: relative; top: -.055em;
-  background: linear-gradient(currentColor, currentColor) 0 50% / 100% .04em no-repeat;
+/* stretchy shapes: KaTeX's own SVG pieces as mask layers (katex-stretchy.css,
+   generated), filled with the text colour.
+   A label over (or under) a lone arrow: the arrow as wide as its label. The
+   arrow symbol stays in the box (to be selected, retyped), unpainted; the
+   shape is drawn across the whole box, centred on the axis as KaTeX does. */
+.pm-xarrow, .pm-xarrow-over { margin: 0 .28em; } /* a relation's spacing, which the arrow gives up */
+.pm-xarrow-over .pm-xarrow { margin: 0; }
+/* KaTeX's label padding (.5em of the label's size) and nearness: its
+   baseline .62em above the main one, a label below .61em under it */
+.pm-xarrow > .pm-slot:first-child, .pm-xarrow-over > .pm-slot:first-child { padding: 0 .5em; }
+.layout-overset.pm-xarrow > .pm-slot:first-child, .pm-xarrow-over > .pm-slot:first-child { margin-bottom: -.62em; }
+.layout-underset.pm-xarrow > .pm-slot:first-child { margin-top: -.4em; }
+.pm-xarrow > .pm-slot:last-child, .pm-xarrow-over > .pm-slot:last-child { width: auto; align-self: stretch; }
+/* (left-aligned: the shape and the symbol overlap, so the line is as wide as
+   the symbol alone, and centring would push the shape to the right) */
+.pm-xarrow > .pm-slot:last-child > .pm-sym { display: block; margin: 0; min-width: var(--st-min); -webkit-text-fill-color: transparent; white-space: nowrap; text-align: left; }
+.pm-xarrow > .pm-slot:last-child > .pm-sym::before {
+  content: ""; display: inline-block; width: 100%; margin-right: -100%; height: var(--st-h); vertical-align: var(--st-y);
+  background-color: currentColor; -webkit-mask: var(--st-mask); mask: var(--st-mask);
 }
-.pm-xarrow-right2 > .pm-slot:last-child > .pm-sym::before, .pm-xarrow-left2 > .pm-slot:last-child > .pm-sym::after {
-  background:
-    linear-gradient(currentColor, currentColor) 0 calc(100% - .085em) / 100% .035em no-repeat,
-    linear-gradient(currentColor, currentColor) 0 calc(100% - .275em) / 100% .035em no-repeat;
-}
-/* the shaft runs into the glyph's own; its min-width cancels that overlap */
-.pm-xarrow-right > .pm-slot:last-child > .pm-sym::before, .pm-xarrow-right2 > .pm-slot:last-child > .pm-sym::before { margin-right: -.4em; }
-.pm-xarrow-left > .pm-slot:last-child > .pm-sym::after, .pm-xarrow-left2 > .pm-slot:last-child > .pm-sym::after { margin-left: -.4em; }
 /* \xrightarrow[below]{above}: the \underset of the arrow fills the \overset */
 .pm-xarrow-over > .pm-slot:last-child > .layout-underset { display: flex; margin: 0; }
+
+/* stretchy accents over the argument, and under it */
+.layout-accent.pm-st, .layout-accent-under, .layout-overbrace, .layout-underbrace { min-width: var(--st-min); }
+.layout-accent.pm-st > .pm-deco, .layout-accent-under > .pm-deco {
+  height: var(--st-h); line-height: 0; background-color: currentColor; -webkit-mask: var(--st-mask); mask: var(--st-mask);
+}
+.layout-accent.pm-st > .pm-deco { margin-bottom: -.2em; }
+.layout-accent-under { flex-direction: column; align-items: stretch; } /* the argument first: its baseline */
+.layout-accent-under > .pm-args { display: block; text-align: center; }
+.layout-accent-under > .pm-deco { display: block; margin-top: -.12em; }
+
+/* \overbrace{x+y}^{n}: the label, the brace, the argument; \underbrace the other way */
+.layout-overbrace { display: inline-block; text-align: center; }
+.layout-overbrace > .pm-slot { display: block; }
+.layout-overbrace > .pm-slot:first-child, .layout-underbrace > .pm-slot:last-child { width: fit-content; margin: 0 auto; font-size: .7em; line-height: 1; }
+.layout-overbrace > .pm-slot:last-child::before, .layout-underbrace > .pm-slot:first-child::after {
+  content: ""; display: block; height: var(--st-h); background-color: currentColor; -webkit-mask: var(--st-mask); mask: var(--st-mask);
+}
+.layout-overbrace > .pm-slot:last-child::before { margin: .05em 0 .1em; }
+.layout-underbrace { flex-direction: column; align-items: stretch; text-align: center; }
+.layout-underbrace > .pm-slot:first-child::after { margin: .1em 0 .05em; }
 
 /* \sqrt[n]{x}: the index small and raised before the radical */
 .layout-root { align-items: baseline; margin: 0 .1em; }
@@ -508,16 +536,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
    high over lowercase (KaTeX fits it to each letter; this does not measure) */
 .layout-accent > .pm-deco { display: block; height: .4em; line-height: .8; margin-bottom: -.31em; }
 .pm-accent-vec > .pm-deco { font-size: .65em; margin-bottom: -.3em; }
-/* wide marks stretch over the argument: a shape drawn as a mask in the text colour */
-.pm-accent-widehat > .pm-deco, .pm-accent-widetilde > .pm-deco, .pm-accent-widecheck > .pm-deco {
-  color: transparent; height: .2em; margin: 0 .05em .04em; background: currentColor;
-  -webkit-mask: var(--shape) 0 0 / 100% 100% no-repeat; mask: var(--shape) 0 0 / 100% 100% no-repeat;
-}
-.pm-accent-widehat > .pm-deco, .pm-accent-widetilde > .pm-deco, .pm-accent-widecheck > .pm-deco { background-color: var(--fg); }
-.pm-accent-widehat > .pm-deco { --shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 20' preserveAspectRatio='none'%3E%3Cpath d='M0 19 L50 1 L100 19' fill='none' stroke='black' stroke-width='5'/%3E%3C/svg%3E"); }
-.pm-accent-widecheck > .pm-deco { --shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 20' preserveAspectRatio='none'%3E%3Cpath d='M0 1 L50 19 L100 1' fill='none' stroke='black' stroke-width='5'/%3E%3C/svg%3E"); }
-.pm-accent-widetilde > .pm-deco { --shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 20' preserveAspectRatio='none'%3E%3Cpath d='M0 16 C25 0 40 0 50 10 S75 20 100 4' fill='none' stroke='black' stroke-width='5'/%3E%3C/svg%3E"); }
-.layout-accent.pm-xarrow-right > .pm-deco, .layout-accent.pm-xarrow-left > .pm-deco { display: flex; align-items: baseline; font-size: .7em; line-height: 1; height: auto; margin-bottom: -.35em; }
 .layout-opname { margin: 0 .17em; }
 
 /* unknown command: label + boxed slots, still fully structural */

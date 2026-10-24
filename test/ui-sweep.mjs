@@ -62,6 +62,14 @@ const BOXES = [
   ["\\xrightarrow{ab}", "ab", ["ArrowDown"], "\\to"],
   ["\\xrightarrow[cd]{ab}", "ab", ["ArrowDown", "ArrowDown"], "cd"],
 ];
+// Every stretchy shape the editor draws has KaTeX's geometry behind it
+// (katex-stretchy.css): one formula with each of them.
+const STRETCHY = [
+  "\\xrightarrow{a}\\xleftarrow{a}\\xRightarrow{a}\\xLeftarrow{a}\\xleftrightarrow{a}\\xLeftrightarrow{a}\\xhookleftarrow{a}\\xhookrightarrow{a}\\xmapsto{a}",
+  "\\xtwoheadrightarrow{a}\\xtwoheadleftarrow{a}\\xrightharpoonup{a}\\xrightharpoondown{a}\\xleftharpoonup{a}\\xleftharpoondown{a}\\xrightleftharpoons{a}\\xleftrightharpoons{a}\\xrightleftarrows{a}\\xrightarrow[b]{a}",
+  "\\widehat{ab}\\widetilde{ab}\\widecheck{ab}\\overrightarrow{ab}\\overleftarrow{ab}\\overleftrightarrow{ab}\\Overrightarrow{ab}\\overleftharpoon{ab}\\overrightharpoon{ab}\\overlinesegment{ab}\\overgroup{ab}",
+  "\\underrightarrow{ab}\\underleftarrow{ab}\\underleftrightarrow{ab}\\underlinesegment{ab}\\undergroup{ab}\\utilde{ab}\\overbrace{ab}^{n}\\underbrace{ab}_{n}\\overbracket{ab}^{n}\\underbracket{ab}_{n}",
+];
 const HINTED = ["slash", "frac", "power"]; // the actions the hint under a selection offers
 const ONLY = process.argv[2] ? process.argv[2].split(",").map(Number) : null;
 
@@ -160,6 +168,8 @@ async function fresh(f) {
       },
       // the caret one character into the box (slot or script) holding exactly `text`
       caretIn: (text) => { let at = null; v.state.doc.descendants((n, p) => { if (at === null && ["slot", "sup", "sub"].includes(n.type.name) && n.textContent === text) at = p + 2; }); window.__h.setCaret(at); },
+      // stretchy things drawn without a shape behind them
+      shapeless: () => [...document.querySelectorAll(".pm-st, .pm-xarrow")].filter((e) => !getComputedStyle(e).getPropertyValue("--st-mask").trim()).map((e) => e.className),
       caretAfter: (prefix) => { const p = math(), n = v.state.doc.nodeAt(p); for (let x = p + 1; x < p + n.nodeSize; x++) if (v.state.doc.resolve(x).parent === n && L.serializeMath(v.state.doc.slice(p + 1, x).content) === prefix) return window.__h.setCaret(x); throw new Error("no caret after " + prefix); },
       edge: (end) => { const p = math(); return end ? p + v.state.doc.nodeAt(p).nodeSize - 1 : p + 1; },
       reparse: () => { const s = window.__h.ser(); const again = L.serializeMath(v.state.schema.nodes.math.create(null, L.parseMath(s)).content); return s === again ? null : [s, again]; },
@@ -195,6 +205,12 @@ if (!ONLY) for (const [f, latex, expect] of XARROWS) {
     : m && m.bare !== null && Math.abs(m.arrow - m.bare) <= 1);
   if (!ok) fails.push({ kind: "label over an arrow", f, latex, got, expect, m });
   console.log(`arrow: ${f}`);
+}
+if (!ONLY) for (const f of STRETCHY) {
+  await fresh(f);
+  const none = await H("shapeless");
+  if (none.length) fails.push({ kind: "stretchy without KaTeX's shape", f, none });
+  console.log(`stretchy: ${f.slice(0, 40)}…`);
 }
 if (!ONLY) for (const [f, from, keys, expect] of BOXES) {
   await fresh(f);

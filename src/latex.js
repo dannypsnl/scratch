@@ -28,6 +28,15 @@ export function parseMath(src) {
       const index = parseOptional();
       if (index) return [S.struct.create({ name: "root" }, [slot(index), slot(parseArg())])];
     }
+    // \overbrace{x+y}^{n}: the label a slot of its own (first on top, last below)
+    if (STRUCTS[name]?.label) {
+      const content = parseArg();
+      const save = i;
+      ws();
+      const label = src[i] === STRUCTS[name].label ? (i++, parseArg()) : ((i = save), []);
+      const slots = STRUCTS[name].label === "^" ? [label, content] : [content, label];
+      return [S.struct.create({ name }, slots.map(slot))];
+    }
     // \xrightarrow[g]{f}: the \overset it stands for, \overset{f}{\underset{g}{\to}}
     if (X_ARROWS[name]) {
       const below = parseOptional(), above = parseArg(), arrow = S.sym.create({ name: X_ARROWS[name].sym });
@@ -165,6 +174,11 @@ function writeFragment(fragment, out) {
         const x = xArrow(node);
         if (x) out.emit(`\\${x.name}` + (x.below ? `[${serializeMath(x.below)}]` : "") + `{${serializeMath(x.above)}}`);
         else if (node.attrs.name === "root") out.emit(`\\sqrt[${serializeMath(node.child(0).content)}]{${serializeMath(node.child(1).content)}}`);
+        else if (STRUCTS[node.attrs.name]?.label && node.childCount === 2) {
+          const mark = STRUCTS[node.attrs.name].label, over = mark === "^";
+          const [label, content] = over ? [node.child(0), node.child(1)] : [node.child(1), node.child(0)];
+          out.emit(`\\${node.attrs.name}{${serializeMath(content.content)}}` + (label.content.size ? `${mark}{${serializeMath(label.content)}}` : ""));
+        }
         else {
           out.emit("\\" + node.attrs.name);
           node.forEach((slot) => out.emit("{" + serializeMath(slot.content) + "}"));
