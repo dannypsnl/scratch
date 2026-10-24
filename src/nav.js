@@ -610,6 +610,14 @@ export function typeInMath(view, ch) {
     dispatch(tr.setSelection(TextSelection.create(tr.doc, from + 1, to + 1)).scrollIntoView());
     return true;
   }
+  // ^ or _ typed on a selection within one box moves it into a superscript
+  // or subscript (still selected there)
+  if ((ch === "^" || ch === "_") && !empty && $from.sameParent(state.selection.$to) && isMathContainer($from.parent.type)) {
+    const inside = state.doc.slice(from, to).content;
+    const tr = state.tr.replaceWith(from, to, (ch === "^" ? T.sup : T.sub).create(null, inside));
+    dispatch(tr.setSelection(TextSelection.create(tr.doc, from + 1, from + 1 + inside.size)).scrollIntoView());
+    return true;
+  }
   switch (ch) {
     case "\\": return false;
     case "^": {

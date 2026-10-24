@@ -110,8 +110,8 @@ export function notationActions(state) {
   if (isScript(node)) {
     out.push({ id: "unscript", tex: "x", label: t("notation.unscript"), replace: node.content });
   } else {
-    out.push({ id: "sup", tex: "x^{\\square}", label: t("notation.sup"), replace: Fragment.from(T.sup.create(null, content)) });
-    out.push({ id: "sub", tex: "x_{\\square}", label: t("notation.sub"), replace: Fragment.from(T.sub.create(null, content)) });
+    out.push({ id: "sup", key: "^", tex: "x^{\\square}", label: t("notation.sup"), replace: Fragment.from(T.sup.create(null, content)) });
+    out.push({ id: "sub", key: "_", tex: "x_{\\square}", label: t("notation.sub"), replace: Fragment.from(T.sub.create(null, content)) });
   }
   return out;
 }
@@ -166,7 +166,7 @@ export async function applyNotation(view, action) {
   const { from, to } = view.state.selection;
   const tr = view.state.tr.replaceWith(from, to, replace);
   tr.setSelection(TextSelection.create(tr.doc, from, from + replace.size));
-  view.dispatch(tr.scrollIntoView());
+  view.dispatch(tr.setMeta("notTyped", true).scrollIntoView());
   view.focus();
 }
 
@@ -211,7 +211,7 @@ export function applyEquals(view, action) {
   const pre = action.space ? Fragment.from(text(" ")) : Fragment.empty;
   const tr = view.state.tr.insert(action.at, pre.append(action.replace));
   tr.setSelection(TextSelection.create(tr.doc, action.at + pre.size + action.replace.size));
-  view.dispatch(tr.scrollIntoView());
+  view.dispatch(tr.setMeta("notTyped", true).scrollIntoView());
   view.focus();
 }
 

@@ -1,7 +1,8 @@
 // After "=" in a formula, the hint offers what the left side comes to
 // (notation.js equalsActions, through Nerdamer): typed as a person types it
 // in WebKit, (a+b)^2 = offers its expansion, a click puts it after the "=",
-// and a left side with nothing to work out offers nothing. Starts its own
+// and a left side with nothing to work out offers nothing. And ^ or _ on a
+// selection moves it into a script, typed or in the menu Space opens. Starts its own
 // Vite server.
 //
 //   npm run test:ui
@@ -23,7 +24,8 @@ const hint = () => pg.evaluate(() => {
   const b = document.querySelector(".notation-hint");
   return !b || b.hidden ? null : [...b.querySelectorAll("button.equals")].map((x) => ({ op: x.querySelector(".op").textContent, tex: x.querySelector("annotation")?.textContent ?? "" }));
 });
-const line = (has) => pg.evaluate(async (has) => (await import("/src/outline-io.js")).serializeOutline(window.view.state.doc).split("\n").find((l) => l.includes(has)) ?? "", has);
+// the last line holding `has`
+const line = (has) => pg.evaluate(async (has) => (await import("/src/outline-io.js")).serializeOutline(window.view.state.doc).split("\n").findLast((l) => l.includes(has)) ?? "", has);
 // a sum's terms in any order
 const terms = (tex) => tex.replace(/\s/g, "").split("+").sort().join("+");
 
@@ -45,6 +47,14 @@ const after = await line("(a+b)");
 const right = /=\s*(.*)\$/.exec(after)?.[1] ?? "";
 check(terms(right.replace(/[{}]/g, "")) === terms("a^2+2ab+b^2"), `picked, it goes after the "=" (${after})`);
 check(!(await hint()), "and the hint is gone (the caret is no longer after an \"=\")");
+check(!(await pg.$(".palette.suggest:not([hidden])")), "the answer's last word (ab) brings up no command suggestion");
+await pg.keyboard.press("Meta+Shift+Enter");
+check(/2ab\$/.test(await line("(a+b)")), "and ⌘⇧↵ after it opens a new line, leaving the answer as it was");
+// a suggestion that is up: ⌘⇧↵ still opens a new line instead of taking it
+await pg.keyboard.type("$ab");
+check(!!(await pg.$(".palette.suggest:not([hidden])")), "(typing ab in a formula suggests commands)");
+await pg.keyboard.press("Meta+Shift+Enter");
+check(/\$ab\$/.test(await line("ab$")), "⌘⇧↵ does not take the suggestion");
 
 // nothing to work out: no hint
 await pg.keyboard.press("Meta+Shift+Enter");
@@ -62,6 +72,31 @@ await pg.keyboard.type("$y = 2x+3x =");
 await settle();
 h = await hint();
 check(!!h && h.some((x) => x.tex.replace(/\s/g, "") === "5x"), `y = 2x+3x = offers 5x (${JSON.stringify(h)})`);
+
+// a selection in a formula: ^ and _ move it into a script, still selected
+const scriptLine = async (key) => {
+  await pg.keyboard.press("Meta+Shift+Enter");
+  await pg.keyboard.type("$(a+b)2");
+  await pg.keyboard.press("Shift+ArrowLeft");
+  await key();
+  return { line: await line("(a+b)"), sel: await pg.evaluate(() => { const s = window.view.state.selection; return window.view.state.doc.textBetween(s.from, s.to) + "|" + s.$from.parent.type.name; }) };
+};
+let r = await scriptLine(() => pg.keyboard.type("^"));
+check(/\(a\+b\)\^\{?2\}?\$/.test(r.line) && r.sel === "2|sup", `^ on a selected 2 makes it the power, still selected (${r.line}, ${r.sel})`);
+await pg.keyboard.press("Escape");
+r = await scriptLine(() => pg.keyboard.type("_"));
+check(/\(a\+b\)_\{?2\}?\$/.test(r.line) && r.sel === "2|sub", `_ makes it a subscript (${r.line}, ${r.sel})`);
+await pg.keyboard.press("Escape");
+// the same keys in the menu Space opens on the selection
+r = await scriptLine(async () => {
+  await pg.keyboard.press("Space");
+  await pg.waitForSelector(".palette li", { state: "attached" });
+  check(await pg.evaluate(() => [...document.querySelectorAll(".palette kbd")].map((k) => k.textContent).join("") === "^_"), "the menu shows ^ and _ beside the two actions");
+  await pg.keyboard.type("_");
+});
+// (the actions menu: its input hidden, keys only)
+const left = await pg.evaluate(() => [...document.querySelectorAll(".palette:has(.hidden-input)")].map((p) => p.textContent.slice(0, 60)));
+check(/\(a\+b\)_\{?2\}?\$/.test(r.line) && !left.length, `_ in the menu does it and closes the menu (${r.line} ${JSON.stringify(left)})`);
 
 await browser.close();
 await server.close();

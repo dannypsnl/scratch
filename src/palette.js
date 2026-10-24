@@ -80,6 +80,8 @@ export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
       li.querySelector(".cmd").textContent = it.kind === "action" ? it.note : "\\" + it.name;
       // (a Nerdamer action shows its answer, and is not a change of notation)
       li.querySelector(".note").textContent = it.kind === "action" ? (it.action.input ? "" : t("notation.note")) : it.note ?? "";
+      // an action with a key of its own in a formula (^ _) takes it here too
+      if (it.action?.key) li.querySelector(".note").prepend(Object.assign(document.createElement("kbd"), { textContent: it.action.key }), " ");
       li.onmousedown = (ev) => { ev.preventDefault(); run(it); };
       return li;
     }));
@@ -91,6 +93,7 @@ export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
     else if (ev.key === "ArrowUp") { active = (active - 1 + items.length) % items.length; render(); ev.preventDefault(); }
     else if (ev.key === "Enter" || ev.key === "Tab") { if (items[active]) run(items[active]); ev.preventDefault(); }
     else if (ev.key === "Escape" || (ev.key === "Backspace" && input.value === "")) { close(); ev.preventDefault(); }
+    else if (actionsOnly && actions.some((a) => a.action.key === ev.key)) { run(actions.find((a) => a.action.key === ev.key)); ev.preventDefault(); }
   });
   closeOnBlur(input, box);
   render();

@@ -56,7 +56,8 @@ export const suggest = new Plugin({
       // only right after a letter is typed (not on moving next to a word);
       // what changes neither the document nor the selection leaves it be
       if (!tr.docChanged) return tr.selectionSet ? null : old;
-      if (tr.getMeta("composition") || tr.getMeta("paste")) return null;
+      // ("notTyped": text put in that nobody typed, an answer or another notation)
+      if (tr.getMeta("composition") || tr.getMeta("paste") || tr.getMeta("notTyped")) return null;
       const w = wordBefore(state);
       if (!w || tr.doc.content.size <= tr.before.content.size) return null;
       const items = suggestions(w.word);
@@ -71,7 +72,9 @@ export const suggest = new Plugin({
       if (ev.key === "ArrowDown") return move(1);
       if (ev.key === "ArrowUp") return move(-1);
       if (ev.key === "Escape") { view.dispatch(view.state.tr.setMeta(key, "close")); return true; }
-      const n = (ev.metaKey || ev.ctrlKey) && /^[1-9]$/.test(ev.key) ? Number(ev.key) - 1 : ev.key === "Enter" || ev.key === "Tab" ? s.active : -1;
+      // (plain Enter or Tab: ⌘⇧↵ and the like are keys of their own)
+      const plain = !ev.metaKey && !ev.ctrlKey && !ev.altKey && !ev.shiftKey;
+      const n = (ev.metaKey || ev.ctrlKey) && /^[1-9]$/.test(ev.key) ? Number(ev.key) - 1 : plain && (ev.key === "Enter" || ev.key === "Tab") ? s.active : -1;
       if (n >= 0 && s.items[n]) { take(view, s, s.items[n]); return true; }
       if (ev.key === " ") view.dispatch(view.state.tr.setMeta(key, "close")); // and Space does what it does
       return false;
