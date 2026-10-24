@@ -27,7 +27,7 @@ export const SYMBOLS = {
   // binary operators
   cdot: sym("⋅", "bin"), times: sym("×", "bin"), circ: sym("∘", "bin"), otimes: sym("⊗", "bin"),
   oplus: sym("⊕", "bin"), cup: sym("∪", "bin"), cap: sym("∩", "bin"), wedge: sym("∧", "bin"),
-  vee: sym("∨", "bin"), pm: sym("±", "bin"), setminus: sym("∖", "bin"),
+  vee: sym("∨", "bin"), pm: sym("±", "bin"), setminus: sym("∖", "bin"), bullet: sym("∙", "bin"),
   // relations
   le: sym("≤", "rel"), leq: sym("≤", "rel"), ge: sym("≥", "rel"), geq: sym("≥", "rel"),
   neq: sym("≠", "rel"), equiv: sym("≡", "rel"), cong: sym("≅", "rel"), simeq: sym("≃", "rel"),
