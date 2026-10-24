@@ -503,19 +503,44 @@ export const term = (dir) => (state, dispatch) => {
   }
   const $p = sel.empty ? sel.$head : state.doc.resolve(dir > 0 ? sel.to : sel.from);
   if (!isMathContainer($p.parent.type)) return false;
+  return caret(state, dispatch, termStep($p, dir));
+};
+
+function termStep($p, dir) {
   const list = items($p);
   if (dir > 0) {
     let k = list.findIndex((it) => it.from >= $p.pos);
-    if (k < 0) return caret(state, dispatch, stepRight($p));
+    if (k < 0) return stepRight($p);
     const op = list[k].op;
     while (k < list.length && list[k].op === op) k++;
-    return caret(state, dispatch, list[k - 1].to);
+    return list[k - 1].to;
   }
   let k = list.findLastIndex((it) => it.to <= $p.pos);
-  if (k < 0) return caret(state, dispatch, stepLeft($p));
+  if (k < 0) return stepLeft($p);
   const op = list[k].op;
   while (k >= 0 && list[k].op === op) k--;
-  return caret(state, dispatch, list[k + 1].from);
+  return list[k + 1].from;
+}
+
+// Option-Shift: the same steps, extending the selection. Both ends stay in
+// one container of the formula; an end inside a structure grows to take in
+// the whole structure, and the selection never runs out of the formula.
+export const selectTerm = (dir) => (state, dispatch) => {
+  const sel = state.selection;
+  const $h = sel.$head;
+  if (!inMath($h) || !isMathContainer($h.parent.type)) return false;
+  const md = mathDepth(state.doc.resolve(sel.anchor));
+  if (md < 0 || sel.$anchor.before(md) !== $h.before(mathDepth($h))) return false; // ends in two formulas
+  let anchor = sel.anchor;
+  let head = termStep($h, dir);
+  if (!inMath(state.doc.resolve(head))) head = dir > 0 ? $h.end(md) : $h.start(md);
+  const $a = state.doc.resolve(anchor), $t = state.doc.resolve(head);
+  let d = $a.sharedDepth(head);
+  while (!isMathContainer($a.node(d).type)) d--;
+  if ($a.depth > d) anchor = anchor >= head ? $a.after(d + 1) : $a.before(d + 1);
+  if ($t.depth > d) head = head < anchor ? $t.before(d + 1) : $t.after(d + 1);
+  if (dispatch) dispatch(state.tr.setSelection(TextSelection.create(state.doc, anchor, head)).setMeta(navGuard, true).scrollIntoView());
+  return true;
 };
 
 // Cmd: to the edge of the whole formula; pressed again at the edge, leave it.

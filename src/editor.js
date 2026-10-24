@@ -7,7 +7,7 @@ import { history, undo, redo } from "prosemirror-history";
 import { schema } from "./schema.js";
 import { parseMath, serializeMath } from "./latex.js";
 import { parseInline, parseOutline, serializeInline, serializeOutline } from "./outline-io.js";
-import { horizontal, vertical, term, formula, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
+import { horizontal, vertical, term, selectTerm, formula, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
 import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, toggleFoldAt, blockIds, outlineDecorations } from "./outline.js";
 import { openPalette } from "./palette.js";
 import { openPicker } from "./picker.js";
@@ -30,6 +30,8 @@ const mathKeys = keymap({
   ArrowRight: horizontal(1),
   "Alt-ArrowLeft": term(-1),
   "Alt-ArrowRight": term(1),
+  "Shift-Alt-ArrowLeft": selectTerm(-1),
+  "Shift-Alt-ArrowRight": selectTerm(1),
   "Mod-ArrowLeft": formula(-1),
   "Mod-ArrowRight": formula(1),
   ArrowUp: vertical(-1),
