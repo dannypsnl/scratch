@@ -9,10 +9,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-concurrency:
-  group: test-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   app:
     # macOS: the input method test drives a real WKWebView (test/ime-webkit.swift)
