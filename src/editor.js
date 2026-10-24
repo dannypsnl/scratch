@@ -7,7 +7,7 @@ import { history, undo, redo } from "prosemirror-history";
 import { schema } from "./schema.js";
 import { parseMath, serializeMath } from "./latex.js";
 import { parseInline, parseOutline, serializeInline, serializeOutline } from "./outline-io.js";
-import { horizontal, vertical, term, selectTerm, formula, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
+import { horizontal, vertical, term, selectTerm, formula, selectionShape, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
 import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, toggleFoldAt, blockIds, outlineDecorations } from "./outline.js";
 import { openPalette } from "./palette.js";
 import { openPicker } from "./picker.js";
@@ -257,7 +257,7 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   const state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, mathDecorations, scriptStacking, outlineDecorations, notationHint],
+    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
   });
   const view = new EditorView(mount, {
     state,

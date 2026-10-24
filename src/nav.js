@@ -57,6 +57,42 @@ export const navGuard = new Plugin({
   },
 });
 
+// ---------- selection shape ----------
+
+// Every selection is put in shape here, whichever way it was made (keys, a
+// drag, the browser's own word selection): a function of the document and
+// the raw ends alone.
+// - Both ends in one container: an end inside a formula, or inside a
+//   structure, grows to take in the whole of it.
+// - No caret between a stacked script pair (x^2_i between 2 and i): drawn at
+//   the same spot as the start of the stack, it goes before the stack.
+export function shapeSelection(doc, anchor, head) {
+  if (anchor === head) {
+    const $h = doc.resolve(head);
+    if (!isMathContainer($h.parent.type) || !$h.nodeBefore || !$h.nodeAfter) return null;
+    const i = $h.index();
+    return scriptPartner($h.parent, i - 1) === i ? [head - $h.nodeBefore.nodeSize, head - $h.nodeBefore.nodeSize] : null;
+  }
+  const $a = doc.resolve(anchor), $h = doc.resolve(head);
+  let d = $a.sharedDepth(head);
+  while (d > 0 && !(isMathContainer($a.node(d).type) || $a.node(d).isTextblock)) d--;
+  if (d === 0) return null; // across blocks
+  let a = anchor, h = head;
+  if ($a.depth > d) a = anchor < head ? $a.before(d + 1) : $a.after(d + 1);
+  if ($h.depth > d) h = head < anchor ? $h.before(d + 1) : $h.after(d + 1);
+  return a === anchor && h === head ? null : [a, h];
+}
+
+export const selectionShape = new Plugin({
+  appendTransaction(trs, _old, state) {
+    if (!trs.some((tr) => tr.selectionSet || tr.docChanged)) return null;
+    const sel = state.selection;
+    if (!(sel instanceof TextSelection)) return null;
+    const shaped = shapeSelection(state.doc, sel.anchor, sel.head);
+    return shaped && state.tr.setSelection(TextSelection.create(state.doc, ...shaped)).setMeta(navGuard, true);
+  },
+});
+
 // ---------- Left / Right ----------
 
 function stepRight($p) {
