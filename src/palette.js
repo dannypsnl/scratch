@@ -8,7 +8,7 @@ import { t } from "./i18n.js";
 // "\" inside a formula opens this. Everything structural is summoned here,
 // including commands the spec table does not know (the last entry).
 
-const ENTRIES = [
+export const ENTRIES = [
   ...Object.entries(STRUCTS).map(([name, s]) => ({ name, kind: "struct", arity: s.arity, tex: s.example, note: t("palette.slots", s.arity) })),
   ...Object.entries(SYMBOLS).map(([name, s]) => ({ name, kind: "sym", tex: s.preview ?? "\\" + name })),
   // \xrightarrow and kin: an \overset over the arrow (nav.js insertStruct)
@@ -17,7 +17,7 @@ const ENTRIES = [
 
 // Rendered preview of what the entry inserts.
 const previews = new Map();
-function preview(tex) {
+export function preview(tex) {
   if (!previews.has(tex)) previews.set(tex, katex.renderToString(tex, { throwOnError: false }));
   return previews.get(tex);
 }
@@ -58,13 +58,7 @@ export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
   const run = (item) => {
     close();
     if (item.kind === "action") applyNotation(view, item.action);
-    else if (item.kind === "sym") insertSym(view.state, view.dispatch, item.name);
-    else if (item.kind === "struct" && STRUCTS[item.name]?.letter && view.state.selection.empty) openLetter(view, item.name);
-    else if (item.kind === "struct") insertStruct(view.state, view.dispatch, item.name, item.arity);
-    else if (item.kind === "generic") {
-      // second stage: how many argument slots
-      openArity(view, item.name);
-    }
+    else insertEntry(view, item);
   };
 
   function render() {
@@ -101,6 +95,14 @@ export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
   closeOnBlur(input, box);
   render();
   input.focus();
+}
+
+// What an entry inserts, at the caret (or around the selection)
+export function insertEntry(view, item) {
+  if (item.kind === "sym") insertSym(view.state, view.dispatch, item.name);
+  else if (item.kind === "struct" && STRUCTS[item.name]?.letter && view.state.selection.empty) openLetter(view, item.name);
+  else if (item.kind === "struct") insertStruct(view.state, view.dispatch, item.name, item.arity);
+  else if (item.kind === "generic") openArity(view, item.name); // second stage: how many argument slots
 }
 
 function openArity(view, name) {

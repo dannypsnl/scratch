@@ -11,6 +11,7 @@ import { horizontal, vertical, term, selectTerm, selectStep, selectEdge, formula
 import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, newTopBlock, blockIds, outlineDecorations } from "./outline.js";
 import { blockDrag } from "./drag.js";
 import { openPalette } from "./palette.js";
+import { suggest } from "./suggest.js";
 import { openPicker } from "./picker.js";
 import { addImage, imageURL, isImageFile } from "./images.js";
 import { newId } from "./outline-io.js";
@@ -294,7 +295,7 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   let state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
+    plugins: [compositionCommit, history(), suggest, mathKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
   });
   // notes saved while labelled arrows were x-arrow structures: \overset again
   // (saved with the next edit)
