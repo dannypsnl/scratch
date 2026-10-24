@@ -1,7 +1,6 @@
 import { Plugin, TextSelection, NodeSelection } from "prosemirror-state";
 import { Fragment } from "prosemirror-model";
-import { schema } from "./schema.js";
-import { inMath } from "./nav.js";
+import { schema, isMathContainer } from "./schema.js";
 import { t } from "./i18n.js";
 import { toCas, runCas } from "./cas.js";
 
@@ -60,7 +59,8 @@ function unparen(frag) {
 // The selection, when it lies within one container of a formula.
 function selected(state) {
   const sel = state.selection;
-  if (sel.empty || !inMath(sel.$from) || !sel.$from.sameParent(sel.$to)) return null;
+  // within one container (a slot itself, node-selected, is not a selection here)
+  if (sel.empty || !isMathContainer(sel.$from.parent.type) || !sel.$from.sameParent(sel.$to)) return null;
   const content = state.doc.slice(sel.from, sel.to).content;
   const node = sel instanceof NodeSelection ? sel.node : content.childCount === 1 && !content.firstChild.isText ? content.firstChild : null;
   return { from: sel.from, to: sel.to, content, node };
