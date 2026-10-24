@@ -1,4 +1,5 @@
 // Declarative tables. Adding a command = adding a row here.
+import { KATEX_SYMBOLS } from "./katex-symbols.js";
 
 // Zero-argument commands: rendered as one glyph.
 // cls: "ord" (ordinary), "bin" (binary op), "rel" (relation), "op" (large operator),
@@ -11,7 +12,13 @@ const opname = (name) => ({ char: name, cls: "opname", italic: false, preview: `
 const opnames = (...names) => Object.fromEntries(names.map((n) => [n, opname(n)]));
 const bb = (letter) => ({ char: letter, cls: "ord", italic: false, bb: true, preview: `\\mathbb{${letter}}` });
 
+// Every symbol KaTeX knows (generated: scripts/katex-symbols.mjs); the rows
+// written out below take precedence.
+const fromKatex = Object.fromEntries(Object.entries(KATEX_SYMBOLS).map(([name, [char, cls, font, italic]]) =>
+  [name, { char, cls, italic: !!italic, ams: font === "ams" }]));
+
 export const SYMBOLS = {
+  ...fromKatex,
   // lowercase Greek
   alpha: sym("α", "ord", true), beta: sym("β", "ord", true), gamma: sym("γ", "ord", true),
   delta: sym("δ", "ord", true), epsilon: sym("ϵ", "ord", true), varepsilon: sym("ε", "ord", true),
@@ -41,12 +48,17 @@ export const SYMBOLS = {
   // misc
   infty: sym("∞"), partial: sym("∂"), nabla: sym("∇"), forall: sym("∀"), exists: sym("∃"),
   ldots: sym("…"), cdots: sym("⋯"), emptyset: sym("∅"), ell: sym("ℓ", "ord", true), top: sym("⊤"), bot: sym("⊥"),
+  // spacing (\, \: \; \! keep their one-character names)
+  quad: sym(" "), qquad: sym("  "), enspace: sym(" "), thinspace: sym(" "),
+  medspace: sym(" "), thickspace: sym(" "), ",": sym(" "), ":": sym(" "), ";": sym(" "), "!": sym(""),
   // large operators
   sum: sym("∑", "op"), prod: sym("∏", "op"), int: sym("∫", "op"), coprod: sym("∐", "op"),
   // operator names; rank, Hom, End, Aut, id, im, coker, lcm, tr are not
   // LaTeX built-ins, so like \Z the publisher needs them defined (\operatorname)
   ...opnames("ker", "dim", "deg", "det", "rank", "hom", "Hom", "End", "Aut", "id", "im", "coker",
-    "sin", "cos", "tan", "log", "ln", "exp", "lim", "sup", "inf", "max", "min", "arg", "gcd", "lcm", "mod", "Pr", "tr"),
+    "sin", "cos", "tan", "log", "ln", "exp", "lim", "sup", "inf", "max", "min", "arg", "gcd", "lcm", "mod", "Pr", "tr",
+    "arcsin", "arccos", "arctan", "sinh", "cosh", "tanh", "coth", "cot", "csc", "sec", "lg", "liminf", "limsup",
+    "sh", "ch", "th", "cth", "tg", "ctg", "cotg", "cosec", "arctg", "arcctg"),
   bigcup: sym("⋃", "op"), bigcap: sym("⋂", "op"), bigoplus: sym("⨁", "op"), bigotimes: sym("⨂", "op"),
 };
 
@@ -67,12 +79,47 @@ export const STRUCTS = {
   mathcal: { arity: 1, layout: "font-cal", rows: [[0]], example: "\\mathcal{C}", letter: true },
   mathrm: { arity: 1, layout: "font-rm", rows: [[0]], example: "\\mathrm{d}x" },
   operatorname: { arity: 1, layout: "opname", rows: [[0]], example: "\\operatorname{rank}" },
+  // the other forms KaTeX has
+  tfrac: { arity: 2, layout: "fraction", rows: [[0], [1]], example: "\\tfrac{a}{b}", small: true },
+  cfrac: { arity: 2, layout: "fraction", rows: [[0], [1]], example: "\\cfrac{a}{b}" },
+  dbinom: { arity: 2, layout: "binom", rows: [[0], [1]], example: "\\dbinom{n}{k}" },
+  tbinom: { arity: 2, layout: "binom", rows: [[0], [1]], example: "\\tbinom{n}{k}" },
+  stackrel: { arity: 2, layout: "overset", rows: [[0], [1]], wrap: 1, example: "\\stackrel{f}{=}" },
+  underline: { arity: 1, layout: "underline", rows: [[0]], example: "\\underline{x}" },
+  boxed: { arity: 1, layout: "boxed", rows: [[0]], example: "\\boxed{x}" },
+  // accents: a mark over the argument; an arrow one stretches to it
+  ...accents({ hat: "ˆ", bar: "ˉ", vec: "→", tilde: "˜", dot: "˙", ddot: "¨", acute: "ˊ", grave: "ˋ", breve: "˘",
+    check: "ˇ", mathring: "˚", widehat: "ˆ", widetilde: "˜", widecheck: "ˇ", overleftrightarrow: "↔" }),
+  overrightarrow: { arity: 1, layout: "accent", rows: [[0]], example: "\\overrightarrow{AB}", accent: "→", stretch: "right" },
+  overleftarrow: { arity: 1, layout: "accent", rows: [[0]], example: "\\overleftarrow{AB}", accent: "←", stretch: "left" },
+  // fonts
+  mathbf: { arity: 1, layout: "font-bf", rows: [[0]], example: "\\mathbf{v}" },
+  mathit: { arity: 1, layout: "font-it", rows: [[0]], example: "\\mathit{diff}" },
+  mathsf: { arity: 1, layout: "font-sf", rows: [[0]], example: "\\mathsf{G}" },
+  mathtt: { arity: 1, layout: "font-tt", rows: [[0]], example: "\\mathtt{x}" },
+  mathfrak: { arity: 1, layout: "font-frak", rows: [[0]], example: "\\mathfrak{g}", letter: true },
+  mathscr: { arity: 1, layout: "font-scr", rows: [[0]], example: "\\mathscr{L}", letter: true },
+  mathnormal: { arity: 1, layout: "font-normal", rows: [[0]], example: "\\mathnormal{x}" },
+  boldsymbol: { arity: 1, layout: "font-bsym", rows: [[0]], example: "\\boldsymbol{\\alpha}" },
+  bm: { arity: 1, layout: "font-bsym", rows: [[0]], example: "\\bm{x}" },
+  // text: words with their spaces kept (a space typed in it is a space)
+  text: { arity: 1, layout: "font-rm", rows: [[0]], example: "\\text{if}", text: true },
+  textrm: { arity: 1, layout: "font-rm", rows: [[0]], example: "\\textrm{if}", text: true },
+  textbf: { arity: 1, layout: "font-bf", rows: [[0]], example: "\\textbf{if}", text: true },
+  textit: { arity: 1, layout: "font-textit", rows: [[0]], example: "\\textit{if}", text: true },
+  textsf: { arity: 1, layout: "font-sf", rows: [[0]], example: "\\textsf{if}", text: true },
+  texttt: { arity: 1, layout: "font-tt", rows: [[0]], example: "\\texttt{if}", text: true },
   // arrows that stretch to their label; \overset{f}{\to} becomes one (nav.js)
   xrightarrow: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xrightarrow{f}", arrow: { glyph: "→", dir: "right" } },
   xleftarrow: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xleftarrow{f}", arrow: { glyph: "←", dir: "left" } },
   xmapsto: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xmapsto{f}", arrow: { glyph: "→", dir: "right", bar: true } },
   xtwoheadrightarrow: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xtwoheadrightarrow{f}", arrow: { glyph: "↠", dir: "right" } },
 };
+
+function accents(marks) {
+  return Object.fromEntries(Object.entries(marks).map(([name, accent]) =>
+    [name, { arity: 1, layout: "accent", rows: [[0]], example: `\\${name}{x}`, accent }]));
+}
 
 // The x-arrow a label over a lone arrow becomes.
 export const X_ARROW = { to: "xrightarrow", rightarrow: "xrightarrow", leftarrow: "xleftarrow", mapsto: "xmapsto", twoheadrightarrow: "xtwoheadrightarrow" };

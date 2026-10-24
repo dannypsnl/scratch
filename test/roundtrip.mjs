@@ -27,6 +27,8 @@ const canonical = [
   "\\mathbb{R}^n",
   "\\{x\\}",
   "a^{\\alpha}",
+  "a\\,b\\quad c", // spacing is kept
+  "\\text{if and only if}",
 ];
 
 // Non-canonical inputs and the form they normalize to.
@@ -35,7 +37,7 @@ const normalizing = [
   ["x^{2}", "x^2"],
   ["\\alpha  x", "\\alpha x"],
   ["{a}{b}", "ab"],
-  ["a\\,b", "ab"],
+  ["a\\\\b", "ab"], // a line break means nothing in an inline formula
 ];
 
 let fail = 0;

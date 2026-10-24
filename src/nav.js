@@ -102,7 +102,7 @@ export const selectionShape = new Plugin({
 export function labelledArrows(state) {
   const found = [];
   state.doc.descendants((node, pos) => {
-    if (node.type !== T.struct || node.attrs.name !== "overset" || node.childCount !== 2) return true;
+    if (node.type !== T.struct || !["overset", "stackrel"].includes(node.attrs.name) || node.childCount !== 2) return true;
     const base = node.child(1);
     const x = base.childCount === 1 && base.firstChild.type === T.sym ? X_ARROW[base.firstChild.attrs.name] : null;
     if (x) found.push({ pos, node, x });
@@ -491,9 +491,14 @@ export function typeInMath(view, ch) {
     }
     case "$": return exitMath(state, dispatch);
     case " ": {
+      const $p = state.selection.$head;
+      // in \text{…} a space is a space
+      if ($p.parent.type === T.slot && STRUCTS[$p.node($p.depth - 1).attrs.name]?.text) {
+        dispatch(state.tr.insertText(" ").scrollIntoView());
+        return true;
+      }
       // at the end of a slot or script, Space finishes it: on to the next
       // slot, or out after the box, so the rest is not typed into the base
-      const $p = state.selection.$head;
       if (state.selection.empty && $p.parent.type !== T.math && !$p.nodeAfter) caret(state, dispatch, stepRight($p));
       return true;
     }

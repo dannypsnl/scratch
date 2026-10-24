@@ -200,7 +200,7 @@ isOperator it = case kind it of
 -- Labelled arrows
 
 -- | A label over a lone arrow is written as the arrow that stretches to fit
--- | its label: \overset{l}{\to} is \xrightarrow{l}, in the document itself,
+-- | its label: \overset{l}{\to} (or \stackrel) is \xrightarrow{l}, in the document itself,
 -- | so LaTeX made from it stretches too. Applied after every edit.
 xArrowOf :: String -> Maybe String
 xArrowOf = case _ of
@@ -218,6 +218,7 @@ isXArrow name = elem name [ "xrightarrow", "xleftarrow", "xmapsto", "xtwoheadrig
 xArrowFor :: Item -> Maybe String
 xArrowFor (Item i) = case i.kind, i.name, i.slots of
   "struct", "overset", [ _, [ Item b ] ] | b.kind == "sym" -> xArrowOf b.name
+  "struct", "stackrel", [ _, [ Item b ] ] | b.kind == "sym" -> xArrowOf b.name
   _, _, _ -> Nothing
 
 normalize :: Box -> Box

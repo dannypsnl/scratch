@@ -112,7 +112,7 @@ export const schema = new Schema({
       toDOM: (node) => {
         const s = SYMBOLS[node.attrs.name];
         if (!s) return ["span", { class: "pm-sym pm-unknown" }, "\\" + node.attrs.name];
-        return ["span", { class: `pm-sym pm-${s.cls}${s.italic ? " pm-italic" : ""}${s.bb ? " pm-bb" : ""}` }, s.char];
+        return ["span", { class: `pm-sym pm-${s.cls}${s.italic ? " pm-italic" : ""}${s.bb ? " pm-bb" : ""}${s.ams ? " pm-ams" : ""}` }, s.char];
       },
     },
     struct: {
@@ -122,13 +122,18 @@ export const schema = new Schema({
       content: "slot+",
       toDOM: (node) => {
         const { layout } = structSpec(node.attrs.name, node.childCount);
-        const cls = `pm-struct layout-${layout}`;
+        const cls = `pm-struct layout-${layout}${STRUCTS[node.attrs.name]?.small ? " pm-small" : ""}`;
         const deco = (text) => ["span", { class: "pm-deco", contenteditable: "false" }, text];
         switch (layout) {
           case "radical":
             return ["span", { class: cls }, deco("√"), ["span", { class: "pm-args" }, 0]];
           case "binom":
             return ["span", { class: cls }, deco("("), ["span", { class: "pm-args" }, 0], deco(")")];
+          case "accent": {
+            // the mark over the argument; an arrow mark stretches like an x-arrow's
+            const { accent, stretch } = STRUCTS[node.attrs.name];
+            return ["span", { class: `${cls} pm-accent-${node.attrs.name}` + (stretch ? ` pm-xarrow-${stretch}` : "") }, deco(accent), ["span", { class: "pm-args" }, 0]];
+          }
           case "xarrow": {
             // the label, then the arrow: a glyph for the head, a drawn shaft
             const { glyph, dir, bar } = STRUCTS[node.attrs.name].arrow;

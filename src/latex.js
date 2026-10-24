@@ -15,13 +15,17 @@ export function parseMath(src) {
     i++;
     if (i < src.length && !/[a-zA-Z]/.test(src[i])) {
       const c = src[i++];
-      return ESCAPABLE.includes(c) ? [c] : []; // \{ -> "{" ; \, \; \\ etc -> dropped
+      if (ESCAPABLE.includes(c)) return [c]; // \{ -> "{"
+      if (SYMBOLS[c]) return [schema.nodes.sym.create({ name: c })]; // \, \: \; \! spacing
+      return []; // \\ and the like: dropped
     }
     let name = "";
     while (i < src.length && /[a-zA-Z]/.test(src[i])) name += src[i++];
     if (SYMBOLS[name]) return [schema.nodes.sym.create({ name })];
     const slots = [];
-    if (STRUCTS[name]) {
+    if (STRUCTS[name]?.text) {
+      for (let k = 0; k < STRUCTS[name].arity; k++) slots.push(parseTextArg());
+    } else if (STRUCTS[name]) {
       for (let k = 0; k < STRUCTS[name].arity; k++) slots.push(parseArg());
     } else {
       for (;;) {
@@ -33,6 +37,23 @@ export function parseMath(src) {
       if (slots.length === 0) return [schema.nodes.sym.create({ name })];
     }
     return [schema.nodes.struct.create({ name }, slots.map((c) => schema.nodes.slot.create(null, c)))];
+  }
+
+  // \text{…}: the words as written, spaces kept (\{ \} \\ … unescaped)
+  function parseTextArg() {
+    ws();
+    if (src[i] !== "{") return parseArg();
+    i++;
+    let depth = 1, text = "";
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "\\" && i + 1 < src.length && ESCAPABLE.includes(src[i + 1])) { text += src[i + 1]; i += 2; continue; }
+      if (c === "{") depth++;
+      if (c === "}" && --depth === 0) { i++; break; }
+      text += c;
+      i++;
+    }
+    return normalize([text].filter(Boolean));
   }
 
   function parseArg() {

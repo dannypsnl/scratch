@@ -398,7 +398,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .pm-math ::selection, .pm-math::selection { background: color-mix(in srgb, var(--hot) 30%, transparent); }
 .pm-upright, .pm-sym, .pm-deco { font-family: KaTeX_Main, serif; font-style: normal; }
 .pm-sym.pm-italic { font-family: KaTeX_Math, serif; font-style: italic; }
-.pm-sym.pm-bb { font-family: KaTeX_AMS, serif; }
+.pm-sym.pm-bb, .pm-sym.pm-ams { font-family: KaTeX_AMS, serif; }
 .pm-sym.pm-op { font-family: KaTeX_Size1, KaTeX_Main, serif; }
 .pm-unknown { color: var(--muted); font-size: .8em; }
 .pm-sym.pm-opname { margin: 0 .17em; }
@@ -466,6 +466,39 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-font-bb > .pm-slot { font-family: KaTeX_AMS, serif; font-style: normal; }
 .layout-font-cal > .pm-slot { font-family: KaTeX_Caligraphic, serif; font-style: normal; }
 .layout-font-rm > .pm-slot, .layout-opname > .pm-slot { font-family: KaTeX_Main, serif; font-style: normal; }
+.layout-font-bf > .pm-slot { font-family: KaTeX_Main, serif; font-style: normal; font-weight: bold; }
+.layout-font-it > .pm-slot, .layout-font-textit > .pm-slot { font-family: KaTeX_Main, serif; font-style: italic; }
+.layout-font-sf > .pm-slot { font-family: KaTeX_SansSerif, sans-serif; font-style: normal; }
+.layout-font-tt > .pm-slot { font-family: KaTeX_Typewriter, monospace; font-style: normal; }
+.layout-font-frak > .pm-slot { font-family: KaTeX_Fraktur, serif; font-style: normal; }
+.layout-font-scr > .pm-slot { font-family: KaTeX_Script, serif; font-style: normal; }
+.layout-font-normal > .pm-slot { font-family: KaTeX_Math, serif; font-style: italic; }
+.layout-font-bsym > .pm-slot { font-family: KaTeX_Math, serif; font-style: italic; font-weight: bold; }
+/* \text keeps its spaces */
+[class*="layout-font-"] > .pm-slot { white-space: pre; }
+.layout-underline > .pm-slot { border-bottom: .06em solid currentColor; }
+.layout-boxed > .pm-slot { border: .06em solid currentColor; padding: 0 .2em; }
+
+/* \tfrac: text-style, smaller */
+.layout-fraction.pm-small { font-size: .75em; }
+
+/* accents: the mark over the argument, the argument's line the baseline */
+.layout-accent { display: inline-block; text-align: center; }
+.layout-accent > .pm-args { display: block; }
+/* the mark's foot about .7em above the baseline: clear of capitals, a little
+   high over lowercase (KaTeX fits it to each letter; this does not measure) */
+.layout-accent > .pm-deco { display: block; height: .4em; line-height: .8; margin-bottom: -.31em; }
+.pm-accent-vec > .pm-deco { font-size: .65em; margin-bottom: -.3em; }
+/* wide marks stretch over the argument: a shape drawn as a mask in the text colour */
+.pm-accent-widehat > .pm-deco, .pm-accent-widetilde > .pm-deco, .pm-accent-widecheck > .pm-deco {
+  color: transparent; height: .2em; margin: 0 .05em .04em; background: currentColor;
+  -webkit-mask: var(--shape) 0 0 / 100% 100% no-repeat; mask: var(--shape) 0 0 / 100% 100% no-repeat;
+}
+.pm-accent-widehat > .pm-deco, .pm-accent-widetilde > .pm-deco, .pm-accent-widecheck > .pm-deco { background-color: var(--fg); }
+.pm-accent-widehat > .pm-deco { --shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 20' preserveAspectRatio='none'%3E%3Cpath d='M0 19 L50 1 L100 19' fill='none' stroke='black' stroke-width='5'/%3E%3C/svg%3E"); }
+.pm-accent-widecheck > .pm-deco { --shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 20' preserveAspectRatio='none'%3E%3Cpath d='M0 1 L50 19 L100 1' fill='none' stroke='black' stroke-width='5'/%3E%3C/svg%3E"); }
+.pm-accent-widetilde > .pm-deco { --shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 20' preserveAspectRatio='none'%3E%3Cpath d='M0 16 C25 0 40 0 50 10 S75 20 100 4' fill='none' stroke='black' stroke-width='5'/%3E%3C/svg%3E"); }
+.layout-accent.pm-xarrow-right > .pm-deco, .layout-accent.pm-xarrow-left > .pm-deco { display: flex; align-items: baseline; font-size: .7em; line-height: 1; height: auto; margin-bottom: -.35em; }
 .layout-opname { margin: 0 .17em; }
 
 /* unknown command: label + boxed slots, still fully structural */
