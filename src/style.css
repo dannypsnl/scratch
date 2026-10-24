@@ -227,6 +227,12 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   background: var(--line);
   box-shadow: 0 0 0 .12em var(--line);
 }
+/* dragging a bullet moves its block: the block fades, a line shows where it goes */
+.pm-bullet { cursor: grab; }
+body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
+.pm-block.pm-dragged { opacity: .35; }
+.block-drop { position: fixed; z-index: 50; height: 2px; background: var(--accent); border-radius: 1px; pointer-events: none; }
+.block-drop::before { content: ""; position: absolute; left: -3px; top: -3px; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--accent); background: var(--bg); }
 .pm-body > .pm-block { position: relative; }
 .pm-body > .pm-block::before {
   content: "";

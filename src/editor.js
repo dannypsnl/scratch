@@ -8,7 +8,8 @@ import { schema } from "./schema.js";
 import { parseMath, serializeMath } from "./latex.js";
 import { parseInline, parseOutline, serializeInline, serializeOutline } from "./outline-io.js";
 import { horizontal, vertical, term, selectTerm, selectStep, selectEdge, formula, selectionShape, xArrowsToOverset, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
-import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, toggleFoldAt, blockIds, outlineDecorations } from "./outline.js";
+import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, blockIds, outlineDecorations } from "./outline.js";
+import { blockDrag } from "./drag.js";
 import { openPalette } from "./palette.js";
 import { openPicker } from "./picker.js";
 import { addImage, imageURL, isImageFile } from "./images.js";
@@ -261,7 +262,7 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   let state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
+    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
   });
   // notes saved while labelled arrows were x-arrow structures: \overset again
   // (saved with the next edit)
@@ -285,15 +286,6 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
       return typed(view, ev.key);
     },
     handleDOMEvents: {
-      // clicking a bullet folds / unfolds its children
-      mousedown(view, ev) {
-        const bullet = ev.target.closest?.(".pm-bullet");
-        if (!bullet) return false;
-        ev.preventDefault();
-        const body = bullet.parentElement.querySelector(":scope > .pm-body");
-        toggleFoldAt(view, view.posAtDOM(body, 0) - 1);
-        return true;
-      },
       // fallback for input that bypasses keypress (autocorrect, dictation)
       beforeinput(view, ev) {
         if (ev.inputType !== "insertText" || !ev.data) return false;
