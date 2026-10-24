@@ -146,11 +146,15 @@ function drawHint() {
   box.style.left = `${Math.min(a.left, b.left) + window.scrollX}px`;
   box.style.top = `${Math.max(a.bottom, b.bottom) + 6 + window.scrollY}px`;
 }
-document.addEventListener("focusin", () => queueMicrotask(drawHint));
-document.addEventListener("focusout", () => queueMicrotask(drawHint));
+let listening = false;
 
 export const notationHint = new Plugin({
   view(view) {
+    if (!listening) {
+      listening = true;
+      document.addEventListener("focusin", () => queueMicrotask(drawHint));
+      document.addEventListener("focusout", () => queueMicrotask(drawHint));
+    }
     editors.add(view);
     drawHint();
     return { update: drawHint, destroy: () => { editors.delete(view); drawHint(); } };
