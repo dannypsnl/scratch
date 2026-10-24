@@ -1,0 +1,59 @@
+# Every push to main builds the app for every platform and publishes it as
+# a new GitHub release. No tag is needed: the tag is made here, from the
+# version in neutralino.config.json and the run number.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # macOS: the .app is signed ad hoc with codesign (scripts/bundle-mac.mjs);
+    # neu builds the Linux and Windows binaries from here too
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # the Neutralino binaries (bin/) are not in the repository
+      - run: npx neu update
+
+      - run: npm run dist
+
+      - name: Package
+        run: |
+          mkdir -p out
+          ditto -c -k --keepParent dist/scratch.app out/scratch-mac_universal.zip
+          for arch in x64 arm64 armhf; do
+            tar -czf "out/scratch-linux_$arch.tar.gz" -C dist/scratch "scratch-linux_$arch"
+          done
+          (cd dist/scratch && zip -q ../../out/scratch-win_x64.zip scratch-win_x64.exe)
+          ls -l out
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p 'require("./neutralino.config.json").version')
+          tag="v$version-build.$GITHUB_RUN_NUMBER"
+          short=${GITHUB_SHA::7}
+          gh release create "$tag" out/* \
+            --target "$GITHUB_SHA" \
+            --title "隨筆 $version (build $GITHUB_RUN_NUMBER, $short)" \
+            --notes "Built from $short: $(git log -1 --format=%s)" \
+            --latest
