@@ -32,6 +32,14 @@ const CASES = [
   ["a+\\frac{1}{2}|", "^", "a+\\left(\\frac{1}{2}\\right)^{}", ""],
   ["\\sqrt{x}|", "^2", "\\sqrt{x}^2", ""],
   ["x|", "^2", "x^2", ""],
+  // a closing bracket with nothing open in its box closes the one around the structure
+  ["\\sum|", "(1/n)", "\\sum(\\frac{1}{n})", ""],
+  ["|", "(1/(n+1))", "(\\frac{1}{(n+1)})", ""],
+  ["|", "1/(n+1)", "\\frac{1}{(n+1)}", ""],
+  ["|", "(x^2)", "(x^2)", ""],
+  ["|", "(a/b)+c", "(\\frac{a}{b})+c", ""],
+  ["|", "[1/n]", "[\\frac{1}{n}]", ""],
+  ["|", "1/n)", "\\frac{1}{n)}", ""],
 ];
 
 // "[a+b]" -> its LaTeX without marks, and the marks' offsets in the

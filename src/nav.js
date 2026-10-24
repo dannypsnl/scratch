@@ -498,6 +498,16 @@ function insertFrac(state, dispatch, undo = {}) {
 const BRACKETS = { "(": ")", "[": "]", "{": "}", "|": "|" };
 const GROUPED_FOR_POWER = new Set(["frac", "dfrac", "tfrac", "cfrac"]);
 
+// whether the first `size` of a container leaves an `open` bracket unclosed
+function unclosed(node, size, open, close) {
+  let depth = 0, pos = 0;
+  node.forEach((c) => {
+    if (c.isText) for (const ch of c.text) { if (pos >= size) break; if (ch === open) depth++; else if (ch === close && depth > 0) depth--; pos++; }
+    else pos += c.nodeSize;
+  });
+  return depth > 0;
+}
+
 // Handle one typed character while the caret is inside a formula.
 // Returns false only when the character should open the command palette
 // (Space on a selection: its menu of actions).
@@ -539,6 +549,23 @@ export function typeInMath(view, ch) {
       return true;
     }
     case "$": return exitMath(state, dispatch);
+    case ")":
+    case "]": {
+      // a closing bracket with nothing open in its box closes the one open
+      // around the structure: (1/n) is (\frac{1}{n}), not \frac{1}{n)}
+      const $p = state.selection.$head, open = ch === ")" ? "(" : "[";
+      if (state.selection.empty && !unclosed($p.parent, $p.parentOffset, open, ch)) {
+        for (let d = $p.depth - 1; d > 0 && mathDepth($p) <= d; d--) {
+          if (!isMathContainer($p.node(d).type)) continue;
+          const before = $p.posAtIndex($p.index(d), d) - $p.start(d);
+          if (!unclosed($p.node(d), before, open, ch)) continue;
+          const at = $p.after(d + 1), tr = state.tr.insertText(ch, at);
+          dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 1)).scrollIntoView());
+          return true;
+        }
+      }
+      return dispatch(state.tr.insertText(ch).scrollIntoView()), true;
+    }
     case " ": {
       // on a selection: the menu of what can be done with it
       if (!state.selection.empty) return false;
