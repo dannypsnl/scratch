@@ -495,7 +495,8 @@ function insertFrac(state, dispatch, undo = {}) {
 }
 
 // Handle one typed character while the caret is inside a formula.
-// Returns false only when the character should open the command palette.
+// Returns false only when the character should open the command palette
+// (Space on a selection: its menu of actions).
 export function typeInMath(view, ch) {
   const { state, dispatch } = view;
   // in \text{…} every key is a character (no scripts, fractions or commands)
@@ -515,6 +516,8 @@ export function typeInMath(view, ch) {
     }
     case "$": return exitMath(state, dispatch);
     case " ": {
+      // on a selection: the menu of what can be done with it
+      if (!state.selection.empty) return false;
       const $p = state.selection.$head;
       // at the end of a slot or script, Space finishes it: on to the next
       // slot, or out after the box, so the rest is not typed into the base

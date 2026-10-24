@@ -2,7 +2,7 @@ import katex from "katex";
 import { SYMBOLS, STRUCTS, X_ARROWS } from "./specs.js";
 import { insertStruct, insertSym, insertLetterStruct } from "./nav.js";
 import { place } from "./popover.js";
-import { notationActions, applyNotation } from "./notation.js";
+import { selectionActions, applyNotation } from "./notation.js";
 import { t } from "./i18n.js";
 
 // "\" inside a formula opens this. Everything structural is summoned here,
@@ -34,21 +34,25 @@ function score(name, q) {
   return i === q.length ? gaps + name.length / 100 : null;
 }
 
-export function openPalette(view, initial = "") {
+// The \ menu of commands; or, actionsOnly, the menu Space opens on a
+// selection: what can be done with it (they are not in the \ menu)
+export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
+  const offered = actionsOnly ? selectionActions(view.state) : [];
+  if (actionsOnly && !offered.length) return;
   const coords = view.coordsAtPos(view.state.selection.from);
   const box = document.createElement("div");
   box.className = "palette";
   place(box, coords);
   const input = document.createElement("input");
   input.placeholder = "\\command";
+  if (actionsOnly) input.className = "hidden-input"; // ↑ ↓ Enter only
   input.value = initial;
   const list = document.createElement("ul");
   box.append(input, list);
   document.body.append(box);
 
   let items = [], active = 0, askArity = null;
-  // with a selection, its other notations come first
-  const actions = notationActions(view.state).map((a) => ({ name: a.id, kind: "action", tex: a.tex, note: a.label, action: a }));
+  const actions = offered.map((a) => ({ name: a.id, kind: "action", tex: a.tex, note: a.label, action: a }));
 
   const close = () => { box.remove(); view.focus(); };
   const run = (item) => {
@@ -65,12 +69,12 @@ export function openPalette(view, initial = "") {
 
   function render() {
     const q = input.value.replace(/^\\/, "");
-    items = [...actions, ...ENTRIES].map((e) => ({ e, s: score(e.name, q) }))
+    items = (actionsOnly ? actions : [...actions, ...ENTRIES]).map((e) => ({ e, s: score(e.name, q) }))
       .filter((x) => x.s !== null)
       .sort((a, b) => a.s - b.s)
       .slice(0, 8)
       .map((x) => x.e);
-    if (/^[a-zA-Z]+$/.test(q) && !items.some((e) => e.name === q)) {
+    if (!actionsOnly && /^[a-zA-Z]+$/.test(q) && !items.some((e) => e.name === q)) {
       items.push({ name: q, kind: "generic", note: t("palette.generic") });
     }
     active = Math.min(active, Math.max(items.length - 1, 0));
@@ -80,7 +84,8 @@ export function openPalette(view, initial = "") {
       li.innerHTML = `<span class="cmd"></span><span class="pv">${it.tex ? preview(it.tex) : ""}</span><span class="note"></span>`;
       // an action is named by what it does; a command by its \\name
       li.querySelector(".cmd").textContent = it.kind === "action" ? it.note : "\\" + it.name;
-      li.querySelector(".note").textContent = it.kind === "action" ? t("notation.note") : it.note ?? "";
+      // (a Nerdamer action shows its answer, and is not a change of notation)
+      li.querySelector(".note").textContent = it.kind === "action" ? (it.action.input ? "" : t("notation.note")) : it.note ?? "";
       li.onmousedown = (ev) => { ev.preventDefault(); run(it); };
       return li;
     }));

@@ -113,12 +113,82 @@ const load = () => (loading ??= import("nerdamer").then((m) => m.default ?? m));
 // op: "simplify" | "factor" | "expand". Resolves to the result's nodes, or
 // null when Nerdamer could not do anything with it.
 export async function runCas(op, input) {
+  return (await casAnswer(op, input))?.nodes ?? null;
+}
+
+// The same, and whether the answer is another expression than the input as
+// written (x+1 and 1+x are one; 2x+3x and 5x are not), or null when Nerdamer
+// could not do anything with it.
+export async function casAnswer(op, input) {
   const N = await load();
-  let r;
   try {
-    r = op === "expand" ? N(input).expand() : N[op](input);
+    const r = op === "expand" ? N(input).expand() : N[op](input);
+    return { nodes: parseMath(tidy(r.toTeX())), changed: shape(r.toString()) !== shape(input) };
   } catch {
     return null;
   }
-  return parseMath(tidy(r.toTeX()));
+}
+
+// An expression in Nerdamer's syntax (ours, or its answers) as a key that is
+// the same for the same expression written in another order: terms and
+// factors sorted, parentheses around one thing dropped, sqrt(x) as x^(1/2).
+// Something it cannot read is its own key.
+export function shape(src) {
+  const toks = src.match(/[0-9]+(?:\.[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*|[-+*/^()]/g) ?? [];
+  if (toks.join("") !== src.replace(/\s+/g, "")) return src;
+  let i = 0;
+  const peek = () => toks[i];
+  const take = (t) => (toks[i] === t ? (i++, true) : false);
+  const fail = () => { throw new Error(src); };
+  // a sum: signed terms; a term: [sign, factors]
+  function sum() {
+    const terms = [];
+    let sign = take("-") ? -1 : (take("+"), 1);
+    for (;;) {
+      const [s, fs] = term();
+      terms.push(`${sign * s < 0 ? "-" : ""}${fs.length === 1 ? fs[0] : `P[${fs.sort().join(",")}]`}`);
+      if (take("+")) sign = 1; else if (take("-")) sign = -1; else break;
+    }
+    return terms.length === 1 && !terms[0].startsWith("-") ? terms[0] : `S[${terms.sort().join(",")}]`;
+  }
+  function term() {
+    let sign = 1;
+    const fs = [];
+    const one = () => { const [s, f] = unary(); sign *= s; return f; };
+    fs.push(one());
+    for (;;) {
+      if (take("*")) fs.push(one());
+      else if (take("/")) fs.push(`W[${one()},-1]`);
+      else break;
+    }
+    return [sign, fs.filter((f) => f !== "1").length ? fs.filter((f) => f !== "1") : ["1"]];
+  }
+  function unary() {
+    if (take("-")) { const [s, f] = unary(); return [-s, f]; }
+    let base = atom();
+    if (take("^")) {
+      const [s, e] = unary();
+      base = `W[${base},${s < 0 ? "-" : ""}${e}]`;
+    }
+    return [1, base];
+  }
+  function atom() {
+    const t = peek();
+    if (t === undefined) fail();
+    if (take("(")) { const e = sum(); if (!take(")")) fail(); return e; }
+    i++;
+    if (/^[A-Za-z_]/.test(t) && take("(")) {
+      const arg = sum();
+      if (!take(")")) fail();
+      return t === "sqrt" ? `W[${arg},W[2,-1]]` : `${t}(${arg})`;
+    }
+    if (!/^[0-9A-Za-z_]/.test(t)) fail();
+    return t;
+  }
+  try {
+    const key = sum();
+    return i === toks.length ? key : src;
+  } catch {
+    return src;
+  }
 }

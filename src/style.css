@@ -618,7 +618,7 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
   box-shadow: 0 3px 12px #0001;
   font: 12px system-ui, sans-serif;
 }
-.notation-hint .key { font: 12px ui-monospace, Menlo, monospace; color: var(--muted); padding: 0 4px; }
+.notation-hint .key { font: 11px ui-monospace, Menlo, monospace; color: var(--muted); margin-left: 6px; padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; }
 .notation-hint button { border: 0; background: none; color: var(--fg); font: inherit; padding: 2px 6px; border-radius: 4px; cursor: pointer; }
 .notation-hint button:hover { background: var(--slot); }
 .letter-picker .choices { display: flex; gap: 2px; padding: 0 6px 8px; font-size: 19px; }

@@ -71,7 +71,6 @@ const STRETCHY = [
   "\\widehat{ab}\\widetilde{ab}\\widecheck{ab}\\overrightarrow{ab}\\overleftarrow{ab}\\overleftrightarrow{ab}\\Overrightarrow{ab}\\overleftharpoon{ab}\\overrightharpoon{ab}\\overlinesegment{ab}\\overgroup{ab}",
   "\\underrightarrow{ab}\\underleftarrow{ab}\\underleftrightarrow{ab}\\underlinesegment{ab}\\undergroup{ab}\\utilde{ab}\\overbrace{ab}^{n}\\underbrace{ab}_{n}\\overbracket{ab}^{n}\\underbracket{ab}_{n}",
 ];
-const HINTED = ["slash", "frac", "power"]; // the actions the hint under a selection offers
 const ONLY = process.argv[2] ? process.argv[2].split(",").map(Number) : null;
 
 // no file watching: an edit made while the sweep runs must not reload its pages
@@ -301,7 +300,8 @@ for (const [fi, f] of FORMULAS.entries()) {
     if (r[0] === "range" && !(await H("sel")).sameParent) continue; // not a selection the UI makes
     const acts = await H("actions");
     await pause(20);
-    if (!!(await H("hint")) !== acts.some((a) => HINTED.includes(a))) await fail("hint shown or hidden wrongly", f, { r, acts });
+    // the hint's button: there exactly when the selection has actions
+    if (!!(await H("hint")) !== acts.length > 0) await fail("hint shown or hidden wrongly", f, { r, acts });
     for (const id of acts) {
       await select(r);
       await H("close");

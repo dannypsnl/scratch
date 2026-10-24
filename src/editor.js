@@ -177,6 +177,8 @@ function typed(view, ch, rest = "") {
     return false;
   }
   if (!typeInMath(view, ch)) {
+    // Space on a selection: what can be done with it
+    if (ch === " ") { openPalette(view, "", { actionsOnly: true }); return true; }
     // "\": a selection within one container stays for the command to wrap;
     // any other is cleared first. Then summon the palette at the caret
     const { $from, $to, empty } = view.state.selection;

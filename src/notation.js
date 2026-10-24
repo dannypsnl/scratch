@@ -2,8 +2,10 @@ import { Plugin, TextSelection, NodeSelection } from "prosemirror-state";
 import { Fragment } from "prosemirror-model";
 import { schema, isMathContainer } from "./schema.js";
 import { t } from "./i18n.js";
-import { toCas, runCas } from "./cas.js";
+import { toCas, runCas, casAnswer } from "./cas.js";
 import { inText } from "./nav.js";
+import { openPalette } from "./palette.js";
+import { serializeMath } from "./latex.js";
 
 const T = schema.nodes;
 
@@ -89,18 +91,19 @@ export function notationActions(state) {
   // around a side could not be told apart on the way back
   if (isFrac(node) && balanced(node.child(0).content) && balanced(node.child(1).content)) {
     const num = node.child(0).content, den = node.child(1).content;
-    out.push({ id: "slash", tex: "a/b", label: t("notation.slash"), hint: true, replace: paren(num).append(Fragment.from(text("/"))).append(paren(den)) });
+    out.push({ id: "slash", tex: "a/b", label: t("notation.slash"), replace: paren(num).append(Fragment.from(text("/"))).append(paren(den)) });
   }
   const at = slashAt(content);
   if (at >= 0) {
     const frac = struct("frac", unparen(content.cut(0, at)), unparen(content.cut(at + 1)));
-    out.push({ id: "frac", tex: "\\frac{a}{b}", label: t("notation.frac"), hint: true, replace: Fragment.from(frac) });
+    out.push({ id: "frac", tex: "\\frac{a}{b}", label: t("notation.frac"), replace: Fragment.from(frac) });
   }
   if (node?.type === T.struct && node.attrs.name === "sqrt") {
     const half = T.sup.create(null, struct("frac", Fragment.from(text("1")), Fragment.from(text("2"))));
-    out.push({ id: "power", tex: "x^{\\frac{1}{2}}", label: t("notation.power"), hint: true, replace: paren(node.child(0).content).append(Fragment.from(half)) });
+    out.push({ id: "power", tex: "x^{\\frac{1}{2}}", label: t("notation.power"), replace: paren(node.child(0).content).append(Fragment.from(half)) });
   }
-  // computed by Nerdamer when picked (the \ menu only)
+  // computed by Nerdamer (offered once worked out, when the answer changes
+  // something: selectionActions)
   const input = toCas(content);
   if (input) for (const op of ["simplify", "factor", "expand"]) out.push({ id: op, tex: "", label: t(`notation.${op}`), input, op });
   if (isScript(node)) {
@@ -111,6 +114,42 @@ export function notationActions(state) {
   }
   return out;
 }
+
+// What Nerdamer makes of a selection, worked out as soon as it is selected
+// (op and input -> the answer's content when it changes something, else
+// null, also while it is still being worked out), so that the hint offers
+// only the actions that do something.
+const answers = new Map();
+let working = 0, settled = [];
+function answer(op, input) {
+  const key = `${op} ${input}`;
+  if (!answers.has(key)) {
+    if (answers.size > 500) answers.clear();
+    answers.set(key, null);
+    working++;
+    casAnswer(op, input)
+      .then((r) => { if (r?.changed) answers.set(key, Fragment.from(r.nodes)); }, () => {})
+      .finally(() => {
+        if (--working === 0) for (const f of settled.splice(0)) f();
+        drawHint();
+      });
+  }
+  return answers.get(key);
+}
+// (for tests: once every answer asked for is in)
+export const casSettled = () => (working ? new Promise((f) => settled.push(f)) : Promise.resolve());
+
+// What a selection offers, in the menu Space (or the hint's button) opens:
+// every action, the Nerdamer ones once their answer is known to be another
+// expression.
+export function selectionActions(state) {
+  return notationActions(state).flatMap((a) => {
+    if (!a.op) return [a];
+    const r = answer(a.op, a.input);
+    return r ? [{ ...a, op: null, replace: r, tex: serializeMath(r) }] : []; // shown with its answer
+  });
+}
+
 
 // Replace the selection; what replaced it stays selected, so the hint offers
 // the way back. A Nerdamer action replaces it once the answer is in, unless
@@ -130,10 +169,12 @@ export async function applyNotation(view, action) {
   view.focus();
 }
 
-// The hint: one row of chips for the whole app, a function of the focused
-// editor alone (its selection's actions). Every editor update and every focus
-// change draws it again from scratch, so an editor that lost focus, or was
-// taken out of the page without being destroyed, leaves nothing behind.
+// The hint: under a selection within a formula, one button for the whole
+// app that opens the menu of what can be done with it (as Space does), so
+// that the menu is found by looking. A function of the focused editor alone:
+// every editor update and every focus change draws it again from scratch, so
+// an editor that lost focus, or was taken out of the page without being
+// destroyed, leaves nothing behind.
 const editors = new Set();
 let box = null;
 
@@ -141,18 +182,13 @@ function drawHint() {
   box ??= Object.assign(document.createElement("div"), { className: "notation-hint", hidden: true });
   if (!box.isConnected) document.body.append(box);
   const view = [...editors].find((v) => v.dom.isConnected && v.hasFocus());
-  const actions = view ? notationActions(view.state).filter((a) => a.hint) : [];
+  const actions = view ? selectionActions(view.state) : [];
   box.hidden = !actions.length;
   if (!actions.length) return;
-  box.replaceChildren(
-    Object.assign(document.createElement("span"), { className: "key", textContent: "\\" }),
-    ...actions.map((a) => {
-      const b = document.createElement("button");
-      b.textContent = a.label;
-      b.onmousedown = (ev) => { ev.preventDefault(); applyNotation(view, a); };
-      return b;
-    }),
-  );
+  const button = document.createElement("button");
+  button.append(t("notation.menu"), Object.assign(document.createElement("span"), { className: "key", textContent: "␣" }));
+  button.onmousedown = (ev) => { ev.preventDefault(); openPalette(view, "", { actionsOnly: true }); };
+  box.replaceChildren(button);
   const { from, to } = view.state.selection;
   const a = view.coordsAtPos(from), b = view.coordsAtPos(to);
   box.style.left = `${Math.min(a.left, b.left) + window.scrollX}px`;
