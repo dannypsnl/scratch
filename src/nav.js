@@ -151,10 +151,43 @@ function slotStart(struct, structPos, idx) {
   return pos + 1;
 }
 
+// Up / Down from plain text. WebKit counts \overset's label as a line of its
+// own, so on a line holding one it moves the caret into the label instead of
+// to the next line. Here the next line is found by probing further and further
+// away until a position on another line turns up; in a formula the caret
+// lands on the formula's own row. The column is kept across repeated presses.
+let goal = null;
+
+function intoLine(view, dir) {
+  const { state } = view;
+  const head = state.selection.head;
+  const c = view.coordsAtPos(head);
+  const x = goal?.pos === head ? goal.x : c.left;
+  const h = c.bottom - c.top;
+  for (let k = 1; k <= 6; k++) {
+    const hit = view.posAtCoords({ left: x, top: dir > 0 ? c.bottom + (k * h) / 2 : c.top - (k * h) / 2 });
+    if (!hit) return false; // off screen: leave it to the browser
+    let $hit = state.doc.resolve(hit.pos);
+    if (!$hit.parent.inlineContent) {
+      // past the end of a shorter line: the end of that line
+      const near = TextSelection.findFrom($hit, -1, true) ?? TextSelection.findFrom($hit, 1, true);
+      if (!near) continue;
+      $hit = near.$head;
+    }
+    const d = mathDepth($hit);
+    const pos = d > 0 ? nearestX(view, $hit.node(d), $hit.start(d), x) : $hit.pos;
+    if (Math.abs(view.coordsAtPos(pos).bottom - c.bottom) < h / 2) continue; // still this line
+    caret(state, view.dispatch, pos);
+    goal = { pos: view.state.selection.head, x };
+    return true;
+  }
+  return false;
+}
+
 export const vertical = (dir) => (state, dispatch, view) => {
   const sel = state.selection;
   const $p = sel.$head;
-  if (!inMath($p)) return false;
+  if (!inMath($p)) return view && sel.empty ? intoLine(view, dir) : false;
   if (!view) return true;
   const x = view.coordsAtPos($p.pos).left;
   const go = (node, contentStart) => caret(state, dispatch, nearestX(view, node, contentStart, x));
@@ -196,7 +229,9 @@ export const vertical = (dir) => (state, dispatch, view) => {
     }
     if ((n.type === T.sup && dir < 0) || (n.type === T.sub && dir > 0)) return go(n, pos + 1);
   }
-  return true; // swallow: never let the browser move the caret inside a formula
+  // 3. on to the next line; never let the browser move the caret inside a formula
+  if (sel.empty) intoLine(view, dir);
+  return true;
 };
 
 // ---------- Backspace / Delete ----------
