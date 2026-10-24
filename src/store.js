@@ -282,15 +282,10 @@ export const getBlock = (id) => locate(id)?.node ?? null;
 export const pageOfBlock = (id) => locate(id)?.page ?? null;
 
 // Write back blocks edited elsewhere (agenda, task views, backlinks). `blocks`
-// replaces the block `id`; when the editor showed it folded, its children are kept.
-export function replaceBlock(id, blocks, { folded }) {
+// replaces the block `id`.
+export function replaceBlock(id, blocks) {
   const at = locate(id);
   if (!at) return;
-  if (folded) {
-    const [first, ...rest] = blocks;
-    const kept = at.node.content.cut(at.node.firstChild.nodeSize);
-    blocks = [first.copy(first.content.append(kept)), ...rest];
-  }
   const tr = new Transform(at.doc).replaceWith(at.pos, at.pos + at.node.nodeSize, Fragment.fromArray(blocks));
   savePage(at.page, tr.doc);
 }

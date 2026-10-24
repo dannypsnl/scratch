@@ -27,13 +27,18 @@ function blockDepth($p) {
 export const splitBlock = (state, dispatch) => split(state, dispatch, false);
 
 // In a task item the root block is the whole document: Enter on its line opens
-// a first child instead of a sibling the list would not show.
+// a first child instead of a sibling the list would not show. A folded root
+// unfolds, so the new child is seen.
 export const splitRootAsChild = (state, dispatch) => {
   const { $from } = state.selection;
-  if ($from.parent.type === T.codeblock && $from.depth === 2) return split(state, dispatch, true);
+  const root = state.doc.firstChild;
+  const unfolding = dispatch && root.attrs.folded
+    ? (tr) => dispatch(tr.setNodeMarkup(0, null, { ...root.attrs, folded: false }))
+    : dispatch;
+  if ($from.parent.type === T.codeblock && $from.depth === 2) return split(state, unfolding, true);
   if ($from.parent.type !== T.line || $from.depth !== 2) return false;
   if ($from.parentOffset === 0 && $from.parent.content.size > 0) return true;
-  return split(state, dispatch, true);
+  return split(state, unfolding, true);
 };
 
 function split(state, dispatch, asChild) {
