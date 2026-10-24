@@ -4,9 +4,14 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 8787",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "serve": "node server.mjs",
+    "test": "node test/standalone.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.152.0"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
   }
 }

@@ -1,6 +1,9 @@
 # scratch sync
 
-The sync server for scratch: a Cloudflare Worker with one Durable Object per notebook.
+The sync server for scratch, in two forms that speak the same protocol, so the app needs only a URL and a token:
+
+- **Cloudflare:** a Worker with one Durable Object per notebook (`src/index.js`), images in R2.
+- **Self-hosted:** a plain Node server (`server.mjs`) for a machine of your own: updates in one SQLite file, images as files. No Cloudflare account needed. See [Self-hosted](#self-hosted).
 
 The server never looks inside the data. It:
 
@@ -42,6 +45,33 @@ Then, in the app:
 
 - Server: `wss://scratch-sync.<account>.workers.dev/sync`
 - Token: the `SYNC_TOKEN` you just set
+
+## Self-hosted
+
+Node 24 or later (it uses the built-in `node:sqlite`).
+
+```bash
+npm install
+SYNC_TOKEN=<a long random string> PORT=8787 DATA_DIR=./data npm run serve
+```
+
+Everything it keeps is under `DATA_DIR`: `updates.sqlite` (the update log of every notebook) and `blobs/<notebook>/` (images, named by their SHA-256). Back that directory up and you have backed up the server.
+
+Or with Docker:
+
+```bash
+docker build -t scratch-sync .
+docker run -d -p 8787:8787 -e SYNC_TOKEN=<token> -v scratch-sync:/data scratch-sync
+```
+
+In the app:
+
+- Server: `ws://<host>:8787/sync`, or `wss://…` behind a reverse proxy that adds TLS (Caddy: `reverse_proxy localhost:8787`). Use TLS for anything off your own network: the token travels in the URL.
+- Token: the `SYNC_TOKEN` you started it with
+
+To rotate the token, restart the server with the new one; devices holding the old one see "Token rejected", as with Cloudflare.
+
+`npm test` runs the self-hosted server through the protocol: two devices with real Loro documents, a device catching up, images, a wrong token, a restart.
 
 ## Rotating the token
 
