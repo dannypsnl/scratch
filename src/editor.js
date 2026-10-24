@@ -25,8 +25,20 @@ import { t } from "./i18n.js";
 
 const T = schema.nodes;
 
+// Key bindings, for keys typed. ProseMirror also runs them for a DOM change
+// that looks like a key (a deletion, as Backspace); while an input method
+// composes, a deletion is the input method taking back its own text (WebKit
+// deletes the composition before it commits it), and it must be read as the
+// change it is. Run as Backspace, beside a formula it deleted one character
+// and left the rest of the composition in the line (測測試); at the start of
+// a line it joined the line to the one before.
+function typedKeys(bindings) {
+  const { handleKeyDown } = keymap(bindings).props;
+  return new Plugin({ props: { handleKeyDown: (view, ev) => (ev.isTrusted || !view.composing) && handleKeyDown(view, ev) } });
+}
+
 // Formula keys first: each returns false outside a formula and falls through.
-const mathKeys = keymap({
+const mathKeys = typedKeys({
   ArrowLeft: horizontal(-1),
   ArrowRight: horizontal(1),
   "Alt-ArrowLeft": term(-1),
@@ -47,7 +59,7 @@ const mathKeys = keymap({
   Escape: exitMath,
 });
 
-const outlineKeys = keymap({
+const outlineKeys = typedKeys({
   Enter: splitBlock,
   Tab: indent,
   "Shift-Tab": outdent,
@@ -280,7 +292,7 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   let state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
+    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
   });
   // notes saved while labelled arrows were x-arrow structures: \overset again
   // (saved with the next edit)

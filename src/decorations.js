@@ -1,7 +1,7 @@
 import { Plugin } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import { isMathContainer } from "./schema.js";
-import { inMath } from "./nav.js";
+import { inMath, mathDepth } from "./nav.js";
 import { X_ARROWS, ARROW_X, SYMBOLS } from "./specs.js";
 
 // caret inside a code block or between two characters of inline code
@@ -217,27 +217,76 @@ function caretOverlay(view) {
   };
 }
 
+// The place just outside a formula and the formula's own edge are one place
+// to the DOM, and an input method composes at whichever the browser picks
+// (注音 typed after $m_2$ went into the subscript). So for a caret at either,
+// the other side is shut to the browser (contenteditable false) while it is
+// there: the formula, for a caret in text beside it; the neighbour outside,
+// for a caret at the formula's edge within.
+function shutDecos(state) {
+  const { $head: $h, empty } = state.selection;
+  if (!empty) return [];
+  const shut = (from, to) => {
+    const $f = state.doc.resolve(from);
+    if (from === to || $f.parent !== state.doc.resolve(to).parent) return [];
+    return [$f.nodeAfter?.isText ? Decoration.inline(from, to, { contenteditable: "false" }) : Decoration.node(from, to, { contenteditable: "false" })];
+  };
+  const d = mathDepth($h);
+  if (d < 0) {
+    return [
+      ...($h.nodeBefore?.type.name === "math" ? shut($h.pos - $h.nodeBefore.nodeSize, $h.pos) : []),
+      ...($h.nodeAfter?.type.name === "math" ? shut($h.pos, $h.pos + $h.nodeAfter.nodeSize) : []),
+    ];
+  }
+  let atStart = $h.parentOffset === 0, atEnd = $h.parentOffset === $h.parent.content.size;
+  for (let k = d; k < $h.depth; k++) {
+    atStart &&= $h.index(k) === 0;
+    atEnd &&= $h.indexAfter(k) === $h.node(k).childCount;
+  }
+  const $m = state.doc.resolve($h.before(d)), $e = state.doc.resolve($h.after(d));
+  return [
+    ...(atStart && $m.nodeBefore ? shut($m.pos - ($m.nodeBefore.isText ? 1 : $m.nodeBefore.nodeSize), $m.pos) : []),
+    ...(atEnd && $e.nodeAfter ? shut($e.pos, $e.pos + ($e.nodeAfter.isText ? 1 : $e.nodeAfter.nodeSize)) : []),
+  ];
+}
+
 export const mathDecorations = new Plugin({
   state: {
-    init: (_, state) => staticDecos(state.doc),
-    apply: (tr, old) => (tr.docChanged ? staticDecos(tr.doc) : old),
+    init: (_, state) => ({ set: staticDecos(state.doc), shut: DecorationSet.create(state.doc, shutDecos(state)), composing: false }),
+    apply: (tr, old, _, state) => {
+      // while an input method composes (from its first change until a while
+      // after it ends: WebKit commits by deleting the composition and then
+      // inserting the result), what is shut stays shut: the caret moves
+      // with the composition, and opening the formula beside it lets the
+      // commit land inside
+      const composing = tr.getMeta(mathDecorations) === "composed" ? false : old.composing || !!tr.getMeta("composition");
+      return {
+        set: tr.docChanged ? staticDecos(tr.doc) : old.set,
+        shut: composing ? old.shut.map(tr.mapping, tr.doc) : DecorationSet.create(state.doc, shutDecos(state)),
+        composing,
+      };
+    },
   },
   view: caretOverlay,
   props: {
+    handleDOMEvents: {
+      compositionend(view) {
+        setTimeout(() => { if (!view.composing && !view.isDestroyed) view.dispatch(view.state.tr.setMeta(mathDecorations, "composed")); }, 50);
+        return false;
+      },
+    },
     decorations(state) {
-      const set = this.getState(state);
+      const { set, shut } = this.getState(state);
       const $h = state.selection.$head;
-      for (let d = $h.depth; d > 0; d--) {
-        if ($h.node(d).type.name !== "math") continue;
-        // the formula being edited gets a tint; the box the caret is in (a
-        // slot, a script) a dashed frame, as TeXmacs does, so the end of a box
-        // and the place just after it look different
-        const decos = [Decoration.node($h.before(d), $h.after(d), { class: "pm-active" })];
-        // (an empty box shows itself already, as a dashed placeholder)
-        if ($h.depth > d && $h.parent.content.size) decos.push(Decoration.node($h.before(), $h.after(), { class: "pm-here" }));
-        return set.add(state.doc, decos);
-      }
-      return set;
+      const d = mathDepth($h);
+      if (d < 0) return set.add(state.doc, shut.find());
+      // the formula being edited gets a tint; the box the caret is in (a
+      // slot, a script) a dashed frame, as TeXmacs does, so the end of a box
+      // and the place just after it look different
+      const decos = [Decoration.node($h.before(d), $h.after(d), { class: "pm-active" })];
+      // (an empty box shows itself already, as a dashed placeholder)
+      if ($h.depth > d && $h.parent.content.size) decos.push(Decoration.node($h.before(), $h.after(), { class: "pm-here" }));
+      return set.add(state.doc, [...decos, ...shut.find()]);
     },
   },
 });
