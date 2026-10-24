@@ -1,13 +1,15 @@
 // The outline UI in WebKit (the engine the app runs in): a block dragged by
-// its bullet to every place in a small outline, each checked against what
-// should happen. Starts its own Vite server; needs the WebKit build:
-// npx playwright-core install webkit
+// its bullet to every place in a small outline, and every piece of a line cut
+// and pasted into another, each checked against what should happen. Starts
+// its own Vite server; needs the WebKit build: npx playwright-core install webkit
 //
 //   npm run test:ui
 import { createServer } from "vite";
 import { webkit } from "playwright-core";
 
 const OUTLINE = "- A\n  - A1\n  - A2\n- B\n  - B1\n    - B1a\n- C\n- D";
+// a line with marks, a formula and something that looks like a block ("- f")
+const LINES = "- ab **cd** $x^2$ e - f\n- target line\n  - child\n- end";
 
 const server = await createServer({ logLevel: "error", server: { port: 5197, hmr: false, watch: null } });
 await server.listen();
@@ -28,6 +30,8 @@ await pg.evaluate(async () => {
   const v = window.view;
   const blocks = (n) => { const out = []; n.forEach((c) => { if (c.type.name === "block") out.push(c); }); return out; };
   const tree = (n) => blocks(n).map((b) => ({ name: b.firstChild.textContent, id: b.attrs.id, folded: b.attrs.folded, children: tree(b) }));
+  // the i-th block in document order: [pos, node]
+  const nth = (i) => { let k = 0, at = null; v.state.doc.descendants((n, p) => { if (n.type.name === "block" && k++ === i) at = [p, n]; return at === null; }); return at; };
   window.__h = {
     load: (text) => {
       v.focus();
@@ -53,6 +57,21 @@ await pg.evaluate(async () => {
     })),
     drop: () => { const d = document.querySelector(".block-drop"); if (!d) return null; const r = d.getBoundingClientRect(); return { left: r.left, top: r.top }; },
     dragged: () => document.querySelectorAll(".pm-dragged").length,
+    // positions directly in the i-th block's line, and that line as text
+    linePositions: (i) => { const [p, b] = nth(i); return Array.from({ length: b.firstChild.content.size + 1 }, (_, k) => p + 2 + k).filter((x) => v.state.doc.resolve(x).parent === b.firstChild); },
+    line: (i) => IO.serializeInline(nth(i)[1].firstChild.content),
+    setRange: (a, b) => { v.focus(); v.dispatch(v.state.tr.setSelection(S.TextSelection.create(v.state.doc, a, b))); },
+    // what cutting [a, b) out of the i-th line should leave, the piece cut,
+    // and the j-th line with that piece put in at offset o
+    expectCut: (i, a, b, j, o) => {
+      const [p, blk] = nth(i), line = blk.firstChild.content, s = p + 2;
+      const piece = line.cut(a - s, b - s);
+      const target = (j === i ? line.cut(0, a - s).append(line.cut(b - s)) : nth(j)[1].firstChild.content);
+      return {
+        left: IO.serializeInline(line.cut(0, a - s).append(line.cut(b - s))),
+        pasted: IO.serializeInline(target.cut(0, o).append(piece).append(target.cut(o))),
+      };
+    },
     // another device's edit: a block in at the top, and a deadline on the
     // block named `name` (which redraws it)
     remote: (name) => {
@@ -60,6 +79,7 @@ await pg.evaluate(async () => {
       tr.doc.descendants((n, p) => { if (n.type.name === "block" && n.firstChild.textContent === name) tr.setNodeMarkup(p, null, { ...n.attrs, deadline: "2030-01-01" }); });
       v.dispatch(tr.setMeta("addToHistory", false));
     },
+    caretIn: (i, o) => { const [p] = nth(i); window.__h.setRange(p + 2 + o, p + 2 + o); },
   };
 });
 const H = (fn, ...args) => pg.evaluate(([fn, args]) => window.__h[fn](...args), [fn, args]);
@@ -222,6 +242,81 @@ async function dragCase(x, y, where, gesture, expectShape) {
   if (!seen.drop) fail("no drop line before Escape", {});
   if ((await H("json")) !== before || (await H("drop")) || (await H("dragged"))) fail("Escape does not cancel a drag", {});
   console.log("drag: click, folded target, a long drag, a change meanwhile, Escape");
+}
+
+// ---- cut, copy and paste
+
+{
+  // the outline as text, one line per block, for what else must not change
+  const lines = async () => { const t = await H("tree"), out = []; const walk = (t, d) => t.forEach((n) => { out.push(" ".repeat(d) + n.name); walk(n.children, d + 1); }); walk(t, 0); return out; };
+  await H("load", LINES);
+  const positions = await H("linePositions", 0);
+  const originalLines = await lines();
+  const O = 6; // pasted into "target line" here, after "target"
+  let n = 0;
+  for (const a of positions) for (const b of positions) {
+    if (a >= b) continue;
+    await H("load", LINES);
+    const original = await H("json");
+    const expect = await H("expectCut", 0, a, b, 1, O);
+    const label = { a, b, line: await H("line", 0) };
+    await H("setRange", a, b);
+    await pg.keyboard.press("ControlOrMeta+x"); await pause(30);
+    const cut = await H("line", 0), afterCut = await lines();
+    if (cut !== expect.left) fail("cut inside a line took something else", { ...label, expect: expect.left, got: cut });
+    if (afterCut.length !== originalLines.length || afterCut.slice(1).join("\n") !== originalLines.slice(1).join("\n")) fail("cut inside a line changed other blocks", { ...label, got: afterCut });
+    await H("close");
+    await H("caretIn", 1, O);
+    await pg.keyboard.press("ControlOrMeta+v"); await pause(30);
+    const pasted = await H("line", 1), afterPaste = await lines();
+    if (pasted !== expect.pasted) fail("pasted text did not go in at the caret", { ...label, expect: expect.pasted, got: pasted });
+    if (afterPaste.length !== originalLines.length) fail("paste inside a line made blocks", { ...label, got: afterPaste });
+    if (await H("check") !== true) fail("invalid document after cut and paste", label);
+    await pg.keyboard.press("ControlOrMeta+z"); await pause(30);
+    await pg.keyboard.press("ControlOrMeta+z"); await pause(30);
+    if ((await H("json")) !== original) fail("undo does not undo the cut and the paste", label);
+    n++;
+  }
+  console.log(`clipboard: ${n} pieces of a line cut and pasted`);
+
+  // as the hand does it: one character with Shift+Left, a word by double click
+  await H("load", "- alpha one\n- beta two");
+  await H("caretIn", 0, 9);
+  await pg.keyboard.press("Shift+ArrowLeft");
+  await pg.keyboard.press("ControlOrMeta+x"); await pause(30);
+  await H("caretIn", 1, 4);
+  await pg.keyboard.press("ControlOrMeta+v"); await pause(30);
+  if (JSON.stringify(await lines()) !== JSON.stringify(["alpha on", "betae two"])) fail("cut one character, paste it in a line", { got: await lines() });
+  const word = await pg.locator(".pm-line").nth(1).boundingBox();
+  await pg.mouse.dblclick(word.x + word.width - 8, word.y + word.height / 2);
+  await pg.keyboard.press("ControlOrMeta+c"); await pause(30);
+  await H("caretIn", 0, 0);
+  await pg.keyboard.press("ControlOrMeta+v"); await pause(30);
+  if (JSON.stringify(await lines()) !== JSON.stringify(["twoalpha on", "betae two"])) fail("copy a double-clicked word, paste it in a line", { got: await lines() });
+
+  // across blocks it is still blocks: pasted after the caret's block
+  await H("load", LINES);
+  {
+    const [a] = await H("linePositions", 0), t = await H("linePositions", 1);
+    await H("setRange", a + 3, t[6]); // "**cd** $x^2$ e - f" through "target"
+    await pg.keyboard.press("ControlOrMeta+c"); await pause(30);
+    await H("caretIn", 3, 1);
+    await pg.keyboard.press("ControlOrMeta+v"); await pause(30);
+    const got = await lines();
+    if (JSON.stringify(got) !== JSON.stringify([...originalLines, "cd x2 e - f", "target"])) fail("a copy across blocks pastes as those blocks", { got });
+    // a block with its child
+    await H("load", LINES);
+    const c = await H("linePositions", 2);
+    await H("setRange", t[0], c[c.length - 1]);
+    await pg.keyboard.press("ControlOrMeta+x"); await pause(30);
+    const left = await lines();
+    await H("caretIn", left.length - 1, 1); // in "end"
+    await pg.keyboard.press("ControlOrMeta+v"); await pause(30);
+    const got2 = await lines();
+    const want = [...left, "target line", " child"];
+    if (left.includes("child") || JSON.stringify(got2) !== JSON.stringify(want)) fail("a block with its child cut and pasted", { left, want, got: got2 });
+  }
+  console.log("clipboard: by hand, across blocks");
 }
 
 console.log(`\n${fails.length} failures`);

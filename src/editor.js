@@ -211,12 +211,29 @@ function closeInlineCode(view) {
 
 // Copy writes the outline text format (lossless apart from block ids), and
 // paste reads it back, so structure, formulas and task states survive.
+// Text from inside one line is written as that text alone (it arrives
+// wrapped in its block and line), so that it pastes into a line.
 function sliceToText(slice) {
-  const first = slice.content.firstChild;
+  let { content, openStart, openEnd } = slice;
+  const wrapper = (n) => (n.type === T.block && n.childCount === 1) || n.type === T.line || n.type === T.codeblock;
+  while (openStart > 0 && openEnd > 0 && content.childCount === 1 && wrapper(content.firstChild)) {
+    content = content.firstChild.content;
+    openStart--; openEnd--;
+  }
+  const first = content.firstChild;
   if (!first) return "";
-  if (first.type === T.block || first.type === T.line || first.type === T.codeblock) return serializeOutline(T.doc.create(null, slice.content));
-  if (first.type.spec.group?.includes("mathinline") && !first.isText) return serializeMath(slice.content);
-  return serializeInline(slice.content);
+  if (first.type === T.block || first.type === T.line || first.type === T.codeblock) return serializeOutline(T.doc.create(null, content));
+  if (first.type.spec.group?.includes("mathinline") && !first.isText) return serializeMath(content);
+  return serializeInline(content);
+}
+
+// Whether the clipboard holds what this editor copied from inside one line
+// (text that pastes inline even when it starts like a block, "- …").
+// ProseMirror tags its HTML with the slice's depth and the nodes around it.
+function copiedFromOneLine(html) {
+  if (!html?.includes("data-pm-slice")) return false;
+  const el = new DOMParser().parseFromString(html, "text/html").querySelector("[data-pm-slice]");
+  return !!el && (el.classList.contains("pm-line") || /"line"/.test(el.dataset.pmSlice));
 }
 
 // Pasted or dropped image files: each becomes its own block.
@@ -319,16 +336,21 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
         view.dispatch(view.state.tr.replaceWith(from, to, parseMath(text.replace(/^\$|\$$/g, ""))).scrollIntoView());
         return true;
       }
+      const inline = (s) => {
+        view.dispatch(view.state.tr.replaceWith(from, to, Fragment.fromArray(parseInline(s))).scrollIntoView());
+        return true;
+      };
+      // copied from inside a line: it goes in at the caret, spaces and all,
+      // even when it starts like a block ("- …")
+      if (!/[\r\n]/.test(text) && copiedFromOneLine(ev.clipboardData.getData("text/html"))) return inline(text);
       // blank lines go, except inside a fenced code block
       let inFence = false;
       const lines = text.replace(/\r/g, "").split("\n").filter((l) => {
         if (/^\s*(- (TODO |DOING |DONE )?)?```/.test(l)) inFence = !inFence;
         return inFence || l.trim();
       });
-      if (lines.length === 1 && !/^\s*- /.test(lines[0])) {
-        view.dispatch(view.state.tr.replaceWith(from, to, Fragment.fromArray(parseInline(lines[0]))).scrollIntoView());
-        return true;
-      }
+      if (!lines.length) return inline(text.replace(/[\r\n]/g, "")); // only spaces
+      if (lines.length === 1 && !/^\s*- /.test(lines[0])) return inline(lines[0]);
       // several lines (or one whole block): outline text; plain lines become blocks
       const outline = lines.every((l) => /^\s*- /.test(l)) ? lines.join("\n") : lines.map((l) => "- " + l.trim()).join("\n");
       return pasteBlocks(view, parseOutline(outline));
