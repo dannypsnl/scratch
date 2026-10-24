@@ -13,7 +13,8 @@
 //   npm run test:ui     (after the WebKit sweep)
 import { createServer } from "vite";
 import { chromium } from "playwright-core";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import { promisify } from "node:util";
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 
@@ -29,6 +30,9 @@ const CASES = [
   ["$\\frac{a}{b}$", "after 0", "$\\frac{a}{b}$主"],
   ["$\\xrightarrow{f}$", "after 0", "$\\xrightarrow{f}$主"],
   ["$\\sqrt{x}$ 後", "before 0", "主$\\sqrt{x}$ 後"],
+  // at the start of a line, before a formula that starts with a structure
+  ["$\\frac{a}{b}$ 後", "before 0", "主$\\frac{a}{b}$ 後"],
+  ["$\\hat{x}$", "before 0", "主$\\hat{x}$"],
   ["前 $\\text{ab}$", "in text", "前 $\\text{ab主}$"],
   ["前 $\\text{ab}$ 後", "in text", "前 $\\text{ab主}$ 後"],
   // inside a formula at its edge: the composition stays in the formula
@@ -120,7 +124,9 @@ if (process.platform === "darwin") {
   const bin = `${tmpdir()}/pm-ime-webkit/ime-webkit`;
   try {
     if (!existsSync(bin) || statSync(bin).mtimeMs < statSync(src).mtimeMs) execFileSync("swiftc", ["-O", src, "-o", bin], { stdio: "inherit" });
-    const out = execFileSync(bin, [url, JSON.stringify(RUNS)], { encoding: "utf8", timeout: 600000, stdio: ["ignore", "pipe", "ignore"] }).trimEnd().split("\n");
+    // (not execFileSync: the Vite server it loads from runs in this process)
+    const { stdout } = await promisify(execFile)(bin, [url, JSON.stringify(RUNS)], { encoding: "utf8", timeout: 600000 });
+    const out = stdout.trimEnd().split("\n");
     RUNS.forEach((r, k) => { if (out[k] !== r.expect) fails.push({ engine: "webkit", ...r, got: out[k] }); });
     console.log(`ime: ${RUNS.length} compositions in WebKit`);
   } catch (e) {

@@ -250,6 +250,9 @@ function shutDecos(state) {
   ];
 }
 
+// where a composition began, when that was the start of a line before a formula
+const lineStart = new WeakMap();
+
 export const mathDecorations = new Plugin({
   state: {
     init: (_, state) => ({ set: staticDecos(state.doc), shut: DecorationSet.create(state.doc, shutDecos(state)), composing: false }),
@@ -270,8 +273,24 @@ export const mathDecorations = new Plugin({
   view: caretOverlay,
   props: {
     handleDOMEvents: {
-      compositionend(view) {
-        setTimeout(() => { if (!view.composing && !view.isDestroyed) view.dispatch(view.state.tr.setMeta(mathDecorations, "composed")); }, 50);
+      compositionstart(view) {
+        const { $head, empty } = view.state.selection;
+        lineStart.set(view, empty && $head.parentOffset === 0 && $head.nodeAfter?.type.name === "math" ? $head.pos : null);
+        return false;
+      },
+      compositionend(view, ev) {
+        setTimeout(() => {
+          if (view.composing || view.isDestroyed) return;
+          const tr = view.state.tr.setMeta(mathDecorations, "composed");
+          // composing at the start of a line, before a formula that starts
+          // with a structure, WebKit leaves a placeholder space after what it
+          // commits: it goes
+          const at = lineStart.get(view), word = ev.data ?? "";
+          const $p = at == null ? null : tr.doc.resolve(at);
+          const text = $p?.nodeAfter, next = $p?.parent.maybeChild($p.index() + 1);
+          if (text?.isText && next?.type.name === "math" && (text.text === `${word} ` || text.text === `${word}\u00a0`)) tr.delete(at + word.length, at + word.length + 1);
+          view.dispatch(tr);
+        }, 50);
         return false;
       },
     },
