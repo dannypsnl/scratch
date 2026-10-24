@@ -17,6 +17,12 @@ const bb = (letter) => ({ char: letter, cls: "ord", italic: false, bb: true, pre
 const fromKatex = Object.fromEntries(Object.entries(KATEX_SYMBOLS).map(([name, [char, cls, font, italic]]) =>
   [name, { char, cls, italic: !!italic, ams: font === "ams" }]));
 
+// Operators whose scripts are limits, above and below them (as TeX sets them
+// in display style: \sum_{n=1}^N); the others keep theirs at the side (\int)
+export const LIMITS = new Set(["sum", "prod", "coprod", "bigcup", "bigcap", "bigsqcup", "bigvee", "bigwedge",
+  "bigodot", "bigoplus", "bigotimes", "biguplus", "lim", "liminf", "limsup", "max", "min", "sup", "inf", "det",
+  "gcd", "Pr", "injlim", "projlim", "varliminf", "varlimsup", "varinjlim", "varprojlim"]);
+
 export const SYMBOLS = {
   ...fromKatex,
   // lowercase Greek

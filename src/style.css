@@ -409,7 +409,13 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .pm-upright, .pm-sym, .pm-deco { font-family: KaTeX_Main, serif; font-style: normal; }
 .pm-sym.pm-italic { font-family: KaTeX_Math, serif; font-style: italic; }
 .pm-sym.pm-bb, .pm-sym.pm-ams { font-family: KaTeX_AMS, serif; }
-.pm-sym.pm-op { font-family: KaTeX_Size1, KaTeX_Main, serif; }
+/* large operators as TeX draws them in display style: the larger glyph,
+   centred on the axis */
+.pm-sym.pm-op { font-family: KaTeX_Size2, KaTeX_Main, serif; vertical-align: -.25em; margin-right: .167em; }
+.pm-sym.pm-op:has(+ :is(.pm-sup, .pm-sub)) { margin-right: 0; } /* (the space comes after its scripts: stack.js) */
+:is(.pm-sup, .pm-sub) .pm-sym.pm-op { font-family: KaTeX_Size1, KaTeX_Main, serif; vertical-align: 0; }
+/* a limit over or under its operator (stack.js places it) */
+.pm-limit { position: relative; left: var(--lx, 0px); }
 .pm-unknown { color: var(--muted); font-size: .8em; }
 .pm-sym.pm-opname { margin: 0 .17em; }
 .pm-bin { margin: 0 .22em; }

@@ -18,6 +18,7 @@ const FORMULAS = [
   "(a+b)^3",
   "\\mathbb{R}\\times\\mathcal{C}",
   "f\\left(\\frac{a}{b}\\right)^2-\\left|x\\right|",
+  "\\sum_{n=1}^{N}\\frac{1}{n}+\\int_0^1x", // limits over and under; scripts at an integral's side
 ];
 const KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Alt+ArrowLeft", "Alt+ArrowRight", "ControlOrMeta+ArrowLeft", "ControlOrMeta+ArrowRight", "Shift+Alt+ArrowLeft", "Shift+Alt+ArrowRight", "Shift+ArrowLeft", "Shift+ArrowRight", "Shift+ControlOrMeta+ArrowLeft", "Shift+ControlOrMeta+ArrowRight", "Space"];
 // Option + arrow from one end of the formula: the LaTeX left of the caret at
