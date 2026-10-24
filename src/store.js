@@ -231,7 +231,7 @@ export const namedPages = () => [...named].map(([id, p]) => ({ id, title: p.titl
 
 // ---------- blocks ----------
 
-function* pagesAll() {
+export function* pagesAll() {
   for (const [id, d] of journal) yield [id, d];
   for (const [id, p] of named) yield [id, p.doc];
 }

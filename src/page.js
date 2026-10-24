@@ -1,4 +1,5 @@
-import { TextSelection } from "prosemirror-state";
+import { TextSelection, Plugin, PluginKey } from "prosemirror-state";
+import { Decoration, DecorationSet } from "prosemirror-view";
 import { getPage, savePage, titleOf, renamePage, namedPages, backlinks, findPage, createPage, deletePage, isDate, onRemote } from "./store.js";
 import { createEditor } from "./editor.js";
 import { emptyDoc } from "./outline-io.js";
@@ -28,6 +29,22 @@ function replaceDoc(view, next) {
   view.dispatch(tr);
 }
 
+// The block just arrived at (from search or a block reference), marked for a
+// moment: meta with its position, or null to clear.
+const flashKey = new PluginKey("flash");
+const flash = new Plugin({
+  key: flashKey,
+  state: {
+    init: () => DecorationSet.empty,
+    apply(tr, set) {
+      const at = tr.getMeta(flashKey);
+      if (at === undefined) return set.map(tr.mapping, tr.doc);
+      return at === null ? DecorationSet.empty : DecorationSet.create(tr.doc, [Decoration.node(at, at + tr.doc.nodeAt(at).nodeSize, { class: "pm-flash" })]);
+    },
+  },
+  props: { decorations: (s) => flashKey.getState(s) },
+});
+
 // A delete button that asks once more before acting.
 export function deleteButton(onDelete) {
   const b = document.createElement("button");
@@ -53,6 +70,7 @@ export function deleteButton(onDelete) {
 export function mountOutline(root, page, ctx, { table = false, focus = true } = {}) {
   const renderLinked = table ? renderPageTable : renderBacklinks;
   const view = createEditor(root.querySelector(".editor"), getPage(page) ?? emptyDoc(), {
+    plugins: [flash],
     onUpdate(v, _prev, tr) {
       if (tr.docChanged && !tr.getMeta("remote")) savePage(page, v.state.doc);
       if (tr.docChanged) renderOutgoing(outgoingEl, page, v.state.doc);
@@ -73,17 +91,30 @@ export function mountOutline(root, page, ctx, { table = false, focus = true } = 
   });
   ctx.track({ destroy: off });
 
-  // arriving from a block reference: put the caret on that block
-  let caret = null;
+  // arriving from search or a block reference: the caret at the end of that
+  // block's line, folded blocks around it opened, the block in the middle of
+  // the window and marked for a moment
+  let at = null;
   if (ctx.state.focusBlock) {
     view.state.doc.descendants((n, pos) => {
-      if (caret === null && n.type.name === "block" && n.attrs.id === ctx.state.focusBlock) caret = pos + n.firstChild.nodeSize;
-      return caret === null;
+      if (at === null && n.type.name === "block" && n.attrs.id === ctx.state.focusBlock) at = pos;
+      return at === null;
     });
     ctx.state.focusBlock = null;
   }
-  if (caret !== null) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, caret)).scrollIntoView());
-  if (focus || caret !== null) view.focus();
+  if (at !== null) {
+    const tr = view.state.tr;
+    const $at = tr.doc.resolve(at);
+    for (let d = $at.depth; d > 0; d--) {
+      const n = $at.node(d);
+      if (n.attrs.folded) tr.setNodeMarkup($at.before(d), null, { ...n.attrs, folded: false });
+    }
+    tr.setSelection(TextSelection.create(tr.doc, at + tr.doc.nodeAt(at).firstChild.nodeSize));
+    view.dispatch(tr.setMeta(flashKey, at).setMeta("addToHistory", false));
+    view.nodeDOM(at)?.scrollIntoView({ block: "center" });
+    setTimeout(() => { if (!view.isDestroyed) view.dispatch(view.state.tr.setMeta(flashKey, null)); }, 1600);
+  }
+  if (focus || at !== null) view.focus();
   window.view = view; // for poking at it from devtools
   return view;
 }

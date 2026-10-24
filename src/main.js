@@ -14,6 +14,7 @@ import { today } from "./dates.js";
 import { place } from "./popover.js";
 import { applySettings, toggleSettings } from "./settings.js";
 import { renderSidebar } from "./sidebar.js";
+import { openSearch } from "./searchbox.js";
 import * as Neutralino from "@neutralinojs/lib";
 import { inNeutralino } from "./persist.js";
 import { t } from "./i18n.js";
@@ -79,6 +80,17 @@ document.querySelector(".sidebar").addEventListener("click", (e) => {
 
 document.querySelectorAll(".tabs [data-tab]").forEach((b) => {
   b.onclick = () => { state.tab = b.dataset.tab; render(); };
+});
+
+// ---------- search (⌘K, or the button in the sidebar) ----------
+
+const search = () => openSearch({
+  page: (id) => ctx.openPage(id),
+  block: (page, id) => { state.focusBlock = id; ctx.openPage(page); },
+});
+document.querySelector(".side-search").onclick = search;
+document.addEventListener("keydown", (e) => {
+  if (e.key === "k" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) { e.preventDefault(); search(); }
 });
 
 // ---------- sync status + settings ----------
@@ -199,6 +211,8 @@ function nativeMenu() {
       { id: "cut", text: t("menu.cut"), action: "cut:", shortcut: "x" },
       { id: "copy", text: t("menu.copy"), action: "copy:", shortcut: "c" },
       { id: "paste", text: t("menu.paste"), action: "paste:", shortcut: "v" },
+      sep,
+      { id: "search", text: t("menu.search"), shortcut: "k" },
     ] },
     { id: "window", text: t("menu.window"), menuItems: [
       { id: "minimize", text: t("menu.minimize"), action: "performMiniaturize:", shortcut: "m" },
@@ -210,6 +224,7 @@ if (inNeutralino) {
   Neutralino.events.on("mainMenuItemClicked", (e) => {
     if (e.detail.id === "settings") toggleSettings();
     else if (e.detail.id === "help") toggleHelp();
+    else if (e.detail.id === "search") search();
   });
 }
 
