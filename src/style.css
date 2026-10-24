@@ -651,7 +651,10 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .notation-hint .key { font: 11px ui-monospace, Menlo, monospace; color: var(--muted); margin-left: 6px; padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; }
 .notation-hint button { border: 0; background: none; color: var(--fg); font: inherit; padding: 2px 6px; border-radius: 4px; cursor: pointer; }
 .notation-hint button:hover { background: var(--slot); }
-.notation-hint button.equals { font-size: 15px; }
+.notation-hint:has(button.equals) { gap: 6px; padding: 4px; }
+.notation-hint button.equals { font-size: 15px; padding: 4px 12px; }
+.notation-hint button.equals + button.equals { position: relative; }
+.notation-hint button.equals + button.equals::before { content: ""; position: absolute; left: -4px; top: 6px; bottom: 6px; border-left: 1px solid var(--line); }
 
 /* over a selection of text: one button per mark, pressed when all of it has it */
 .format-bar {
