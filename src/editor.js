@@ -22,6 +22,7 @@ import { openDeadlinePicker } from "./deadline.js";
 import { mathDecorations } from "./decorations.js";
 import { notationHint } from "./notation.js";
 import { formatBar } from "./formatbar.js";
+import { derivations } from "./chain.js";
 import { scriptStacking } from "./stack.js";
 import { t } from "./i18n.js";
 
@@ -296,7 +297,7 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   let state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), suggest, mathKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint, formatBar],
+    plugins: [compositionCommit, history(), suggest, mathKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint, formatBar, derivations],
   });
   // notes saved while labelled arrows were x-arrow structures: \overset again
   // (saved with the next edit)

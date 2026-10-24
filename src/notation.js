@@ -1,6 +1,7 @@
 import { Plugin, TextSelection, NodeSelection } from "prosemirror-state";
 import { Fragment } from "prosemirror-model";
 import { schema, isMathContainer } from "./schema.js";
+import { SYMBOLS } from "./specs.js";
 import { t } from "./i18n.js";
 import { toCas, runCas, casAnswer } from "./cas.js";
 import { inText } from "./nav.js";
@@ -188,11 +189,31 @@ function equalsAt(state) {
     if (n.isText) for (let k = 0; k < n.text.length; k++) if (pos + k < end && "=<>".includes(n.text[k])) start = pos + k + 1;
     pos += n.nodeSize;
   });
-  const input = toCas(before.cut(start, end));
+  // nothing before the "=" on a line that goes on from the step above it
+  // (chain.js): what that step came to, after its last relation
+  const input = end === 0 && start === 0 ? stepAbove(sel.$from) : toCas(before.cut(start, end));
   // h(x) may be a function applied, which Nerdamer takes for h times x:
   // offered unasked, an answer must not rest on that guess
   if (!input || /[A-Za-z_0-9]\*\(/.test(input)) return null;
   return { input, at: sel.from, space: !/\s$/.test(last.text) };
+}
+
+// The formula of the line above (a sibling block), from its last relation
+// on, as Nerdamer input, when the caret's formula starts its line.
+function stepAbove($p) {
+  const d = $p.depth; // $p.parent: the formula
+  if ($p.node(d).type !== T.math || $p.index(d - 1) !== 0 || d < 3) return null;
+  const idx = $p.index(d - 3);
+  const prev = idx > 0 ? $p.node(d - 3).child(idx - 1) : null;
+  const math = prev?.type === T.block && prev.firstChild.firstChild?.type === T.math ? prev.firstChild.firstChild : null;
+  if (!math) return null;
+  let from = 0, pos = 0;
+  math.forEach((n) => {
+    if (n.isText) { for (let k = 0; k < n.text.length; k++) if ("=<>".includes(n.text[k])) from = pos + k + 1; }
+    else if (n.type === T.sym && SYMBOLS[n.attrs.name]?.cls === "rel") from = pos + n.nodeSize;
+    pos += n.nodeSize;
+  });
+  return from > 0 ? toCas(math.content.cut(from)) : null;
 }
 
 // [{ op, label, tex, replace }]: one per different answer

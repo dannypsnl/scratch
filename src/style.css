@@ -1022,3 +1022,6 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 /* the block arrived at, for a moment (page.js) */
 .pm-flash > .pm-body > .pm-line { animation: pm-flash 1.6s ease-out; border-radius: 3px; }
 @keyframes pm-flash { from { background: var(--mark); } to { background: transparent; } }
+
+/* a derivation's notes start at one column (chain.js) */
+.chain-gap { display: inline-block; }
