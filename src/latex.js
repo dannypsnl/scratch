@@ -121,6 +121,14 @@ export function parseMath(src) {
       }
       if (c === "\\") { out.push(...readCommand()); continue; }
       if (/\s/.test(c)) { i++; continue; }
+      // x² x₁₀: a run of Unicode super- or subscripts is a script
+      if (UNICODE_SCRIPTS[c]) {
+        const [type] = UNICODE_SCRIPTS[c];
+        let body = "";
+        while (i < src.length && UNICODE_SCRIPTS[src[i]]?.[0] === type) body += UNICODE_SCRIPTS[src[i++]][1];
+        out.push(schema.nodes[type].create(null, parseMath(body)));
+        continue;
+      }
       out.push(c);
       i++;
     }
@@ -129,6 +137,14 @@ export function parseMath(src) {
 
   return parseSeq(false);
 }
+
+// Unicode super- and subscripts (x², x₁, eⁱᵖ): which script, and what it holds
+export const UNICODE_SCRIPTS = Object.fromEntries([
+  ..."⁰¹²³⁴⁵⁶⁷⁸⁹".split("").map((c, k) => [c, ["sup", String(k)]]),
+  ..."₀₁₂₃₄₅₆₇₈₉".split("").map((c, k) => [c, ["sub", String(k)]]),
+  ...Object.entries({ "⁺": "+", "⁻": "-", "⁼": "=", "⁽": "(", "⁾": ")", "ⁿ": "n", "ⁱ": "i", "ᵃ": "a", "ᵇ": "b", "ᶜ": "c", "ᵈ": "d", "ᵉ": "e", "ᶠ": "f", "ᵍ": "g", "ʰ": "h", "ʲ": "j", "ᵏ": "k", "ˡ": "l", "ᵐ": "m", "ᵒ": "o", "ᵖ": "p", "ʳ": "r", "ˢ": "s", "ᵗ": "t", "ᵘ": "u", "ᵛ": "v", "ʷ": "w", "ˣ": "x", "ʸ": "y", "ᶻ": "z", "ᵀ": "T" }).map(([c, t]) => [c, ["sup", t]]),
+  ...Object.entries({ "₊": "+", "₋": "-", "₌": "=", "₍": "(", "₎": ")", "ₐ": "a", "ₑ": "e", "ₒ": "o", "ₓ": "x", "ₕ": "h", "ᵢ": "i", "ⱼ": "j", "ₖ": "k", "ₗ": "l", "ₘ": "m", "ₙ": "n", "ₚ": "p", "ᵣ": "r", "ₛ": "s", "ₜ": "t", "ᵤ": "u", "ᵥ": "v" }).map(([c, t]) => [c, ["sub", t]]),
+]);
 
 // strings -> merged text nodes
 function normalize(items) {

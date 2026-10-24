@@ -3,6 +3,7 @@ import { Fragment } from "prosemirror-model";
 import { schema, isMathContainer } from "./schema.js";
 import { structSpec, SYMBOLS, STRUCTS, SHORTHANDS, X_ARROWS } from "./specs.js";
 import { scriptPartner } from "./stack.js";
+import { UNICODE_SCRIPTS } from "./latex.js";
 
 // Inside a formula every caret move is computed from the model, never left to
 // the browser: contenteditable caret behaviour around nested inline spans is
@@ -535,6 +536,18 @@ export function typeInMath(view, ch) {
       return true;
     }
     default: {
+      // a Unicode super- or subscript: into the script just before, if it is
+      // one of its kind (x²³ is x^{23}), else a new one
+      if (UNICODE_SCRIPTS[ch]) {
+        const [type, body] = UNICODE_SCRIPTS[ch], $p = state.selection.$from;
+        if (state.selection.empty && $p.nodeBefore?.type === T[type]) {
+          const tr = state.tr.insertText(body, $p.pos - 1);
+          return dispatch(tr.setSelection(TextSelection.create(tr.doc, $p.pos + body.length)).scrollIntoView()), true;
+        }
+        const node = T[type].create(null, schema.text(body));
+        const tr = state.tr.replaceSelectionWith(node, false);
+        return dispatch(tr.scrollIntoView()), true;
+      }
       const tr = state.tr.insertText(ch);
       const undo = shorthands(tr);
       dispatch(tr.scrollIntoView());

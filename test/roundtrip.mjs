@@ -37,6 +37,11 @@ const canonical = [
 const normalizing = [
   ["\\frac 1 2", "\\frac{1}{2}"],
   ["x^{2}", "x^2"],
+  // Unicode super- and subscripts (pasted): scripts
+  ["x²", "x^2"],
+  ["x²³+y₁₀", "x^{23}+y_{10}"],
+  ["e⁻ⁱᵗ", "e^{-it}"],
+  ["Aᵀ", "A^T"],
   ["\\alpha  x", "\\alpha x"],
   ["{a}{b}", "ab"],
   ["\\overset{f}{\\to}", "\\xrightarrow{f}"], // written so that it stretches

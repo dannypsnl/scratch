@@ -21,6 +21,12 @@ const CASES = [
   ["[\\frac{a}{b}]", "(", "(\\frac{a}{b})", "ab"],
   // with a caret it is just typed
   ["a|", "(", "a(", ""],
+  // Unicode super- and subscripts, typed: scripts (a run of them, one script)
+  ["x|", "²", "x^2", ""],
+  ["x|", "²³", "x^{23}", ""],
+  ["x|", "⁻¹", "x^{-1}", ""],
+  ["x|", "₁₀", "x_{10}", ""],
+  ["x|", "₁²", "x_1^2", ""],
 ];
 
 // "[a+b]" -> its LaTeX without marks, and the marks' offsets in the
