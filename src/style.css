@@ -391,7 +391,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 }
 /* the formula being edited keeps a quiet tint; the red caret marks it */
 .pm-math.pm-active { background: var(--slot); }
-.pm-math .pm-here { outline: 1px solid color-mix(in srgb, var(--hot) 40%, transparent); outline-offset: 1px; border-radius: 2px; }
 .pm-math ::selection, .pm-math::selection { background: color-mix(in srgb, var(--hot) 30%, transparent); }
 .pm-upright, .pm-sym, .pm-deco { font-family: KaTeX_Main, serif; font-style: normal; }
 .pm-sym.pm-italic { font-family: KaTeX_Math, serif; font-style: italic; }

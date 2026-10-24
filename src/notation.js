@@ -8,7 +8,8 @@ const T = schema.nodes;
 
 // Other ways to write what is selected in a formula: a stacked fraction or
 // a/b, √x or x^{1/2}, or the selection moved into a superscript / subscript.
-// A hint under the selection lists them; "\" puts them first in its menu.
+// "\" puts them all first in its menu; a hint under the selection shows only
+// the real notation changes (`hint`), so selecting a plain letter shows nothing.
 
 const text = (s) => schema.text(s);
 const struct = (name, ...slots) => T.struct.create({ name }, slots.map((c) => T.slot.create(null, c)));
@@ -75,16 +76,16 @@ export function notationActions(state) {
   const out = [];
   if (isFrac(node)) {
     const num = node.child(0).content, den = node.child(1).content;
-    out.push({ id: "slash", tex: "a/b", label: t("notation.slash"), replace: paren(num).append(Fragment.from(text("/"))).append(paren(den)) });
+    out.push({ id: "slash", tex: "a/b", label: t("notation.slash"), hint: true, replace: paren(num).append(Fragment.from(text("/"))).append(paren(den)) });
   }
   const at = slashAt(content);
   if (at >= 0) {
     const frac = struct("frac", unparen(content.cut(0, at)), unparen(content.cut(at + 1)));
-    out.push({ id: "frac", tex: "\\frac{a}{b}", label: t("notation.frac"), replace: Fragment.from(frac) });
+    out.push({ id: "frac", tex: "\\frac{a}{b}", label: t("notation.frac"), hint: true, replace: Fragment.from(frac) });
   }
   if (node?.type === T.struct && node.attrs.name === "sqrt") {
     const half = T.sup.create(null, struct("frac", Fragment.from(text("1")), Fragment.from(text("2"))));
-    out.push({ id: "power", tex: "x^{\\frac{1}{2}}", label: t("notation.power"), replace: paren(node.child(0).content).append(Fragment.from(half)) });
+    out.push({ id: "power", tex: "x^{\\frac{1}{2}}", label: t("notation.power"), hint: true, replace: paren(node.child(0).content).append(Fragment.from(half)) });
   }
   if (isScript(node)) {
     out.push({ id: "unscript", tex: "x", label: t("notation.unscript"), replace: node.content });
@@ -98,9 +99,10 @@ export function notationActions(state) {
 // Replace the selection; what replaced it stays selected, so the hint offers
 // the way back.
 export function applyNotation(view, action) {
+  const replace = action.replace;
   const { from, to } = view.state.selection;
-  const tr = view.state.tr.replaceWith(from, to, action.replace);
-  tr.setSelection(TextSelection.create(tr.doc, from, from + action.replace.size));
+  const tr = view.state.tr.replaceWith(from, to, replace);
+  tr.setSelection(TextSelection.create(tr.doc, from, from + replace.size));
   view.dispatch(tr.scrollIntoView());
   view.focus();
 }
@@ -114,7 +116,7 @@ export const notationHint = new Plugin({
     document.body.append(box);
     let key = "";
     const update = () => {
-      const actions = view.hasFocus() ? notationActions(view.state) : [];
+      const actions = view.hasFocus() ? notationActions(view.state).filter((a) => a.hint) : [];
       if (!actions.length) { box.hidden = true; key = ""; return; }
       const { from, to } = view.state.selection;
       const k = `${from},${to},${actions.map((a) => a.id)}`;
