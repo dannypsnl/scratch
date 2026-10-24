@@ -18,6 +18,7 @@ import { inNeutralino } from "./persist.js";
 import { findPage, createPage, namedPages, pageDates, titleOf, isDate } from "./store.js";
 import { openDeadlinePicker } from "./deadline.js";
 import { mathDecorations } from "./decorations.js";
+import { notationHint } from "./notation.js";
 import { scriptStacking } from "./stack.js";
 import { t } from "./i18n.js";
 
@@ -254,7 +255,7 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   const state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, mathDecorations, scriptStacking, outlineDecorations],
+    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, mathDecorations, scriptStacking, outlineDecorations, notationHint],
   });
   const view = new EditorView(mount, {
     state,

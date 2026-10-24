@@ -2,6 +2,7 @@ import katex from "katex";
 import { SYMBOLS, STRUCTS } from "./specs.js";
 import { insertStruct, insertSym, insertLetterStruct } from "./nav.js";
 import { place } from "./popover.js";
+import { notationActions, applyNotation } from "./notation.js";
 import { t } from "./i18n.js";
 
 // "\" inside a formula opens this. Everything structural is summoned here,
@@ -44,11 +45,14 @@ export function openPalette(view, initial = "") {
   document.body.append(box);
 
   let items = [], active = 0, askArity = null;
+  // with a selection, its other notations come first
+  const actions = notationActions(view.state).map((a) => ({ name: a.id, kind: "action", tex: a.tex, note: a.label, action: a }));
 
   const close = () => { box.remove(); view.focus(); };
   const run = (item) => {
     close();
-    if (item.kind === "sym") insertSym(view.state, view.dispatch, item.name);
+    if (item.kind === "action") applyNotation(view, item.action);
+    else if (item.kind === "sym") insertSym(view.state, view.dispatch, item.name);
     else if (item.kind === "struct" && STRUCTS[item.name].letter && view.state.selection.empty) openLetter(view, item.name);
     else if (item.kind === "struct") insertStruct(view.state, view.dispatch, item.name, item.arity);
     else if (item.kind === "generic") {
@@ -59,7 +63,7 @@ export function openPalette(view, initial = "") {
 
   function render() {
     const q = input.value.replace(/^\\/, "");
-    items = ENTRIES.map((e) => ({ e, s: score(e.name, q) }))
+    items = [...actions, ...ENTRIES].map((e) => ({ e, s: score(e.name, q) }))
       .filter((x) => x.s !== null)
       .sort((a, b) => a.s - b.s)
       .slice(0, 8)
@@ -71,8 +75,10 @@ export function openPalette(view, initial = "") {
     list.replaceChildren(...items.map((it, k) => {
       const li = document.createElement("li");
       li.className = k === active ? "active" : "";
-      li.innerHTML = `<span class="cmd">\\${it.name}</span><span class="pv">${it.tex ? preview(it.tex) : ""}</span><span class="note"></span>`;
-      li.querySelector(".note").textContent = it.note ?? "";
+      li.innerHTML = `<span class="cmd"></span><span class="pv">${it.tex ? preview(it.tex) : ""}</span><span class="note"></span>`;
+      // an action is named by what it does; a command by its \\name
+      li.querySelector(".cmd").textContent = it.kind === "action" ? it.note : "\\" + it.name;
+      li.querySelector(".note").textContent = it.kind === "action" ? t("notation.note") : it.note ?? "";
       li.onmousedown = (ev) => { ev.preventDefault(); run(it); };
       return li;
     }));
