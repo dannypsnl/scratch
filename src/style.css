@@ -403,6 +403,9 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .pm-math.pm-active { background: var(--slot); }
 .pm-math .pm-here { outline: 1px dashed color-mix(in srgb, var(--fg) 45%, transparent); outline-offset: 1px; border-radius: 1px; }
 .pm-math ::selection, .pm-math::selection { background: color-mix(in srgb, var(--hot) 30%, transparent); }
+/* (a selected structure, symbol or script: marked as a whole, decorations.js) */
+.pm-math .pm-selected { background: color-mix(in srgb, var(--hot) 30%, transparent); border-radius: 2px; }
+.pm-math .pm-selected ::selection, .pm-math .pm-selected::selection { background: transparent; }
 .pm-upright, .pm-sym, .pm-deco { font-family: KaTeX_Main, serif; font-style: normal; }
 .pm-sym.pm-italic { font-family: KaTeX_Math, serif; font-style: italic; }
 .pm-sym.pm-bb, .pm-sym.pm-ams { font-family: KaTeX_AMS, serif; }

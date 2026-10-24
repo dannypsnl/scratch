@@ -250,6 +250,22 @@ function shutDecos(state) {
   ];
 }
 
+// What is selected in a formula is marked by the editor, a whole structure,
+// symbol or script at a time: the browser's own highlight paints text only,
+// and leaves out what is drawn (growing parentheses, a fraction's bar, a
+// root's sign) and, next to such things, sometimes the text as well.
+function selected(state) {
+  const { $from, $to, empty } = state.selection;
+  if (empty || !$from.sameParent($to) || !isMathContainer($from.parent.type)) return [];
+  const out = [];
+  let pos = $from.start();
+  $from.parent.forEach((c) => {
+    if (!c.isText && pos >= $from.pos && pos + c.nodeSize <= $to.pos) out.push(Decoration.node(pos, pos + c.nodeSize, { class: "pm-selected" }));
+    pos += c.nodeSize;
+  });
+  return out;
+}
+
 // where a composition began, when that was the start of a line before a formula
 const lineStart = new WeakMap();
 
@@ -305,7 +321,7 @@ export const mathDecorations = new Plugin({
       const decos = [Decoration.node($h.before(d), $h.after(d), { class: "pm-active" })];
       // (an empty box shows itself already, as a dashed placeholder)
       if ($h.depth > d && $h.parent.content.size) decos.push(Decoration.node($h.before(), $h.after(), { class: "pm-here" }));
-      return set.add(state.doc, [...decos, ...shut.find()]);
+      return set.add(state.doc, [...decos, ...selected(state), ...shut.find()]);
     },
   },
 });
