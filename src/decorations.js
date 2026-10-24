@@ -91,6 +91,9 @@ function fontSizeAt(view, pos) {
   return parseFloat(getComputedStyle(node).fontSize) || 16;
 }
 
+// sits on the line it is in, not raised or lowered like scripts and fractions
+const onLevel = (n) => n && !["math", "struct", "sup", "sub"].includes(n.type.name);
+
 function caretOverlay(view) {
   const el = document.createElement("div");
   el.className = "pm-caret";
@@ -112,6 +115,17 @@ function caretOverlay(view) {
     }
     const $h = view.state.doc.resolve(at);
     let c = view.coordsAtPos($h.pos, $h.nodeBefore ? -1 : 1);
+    // beside a script, fraction or formula its box sits higher or lower than
+    // the caret's own line: x from beside it, height from something on the
+    // caret's level (the neighbour on the other side, else any in the container)
+    if (!onLevel($h.nodeBefore) && $h.parent.inlineContent) {
+      let ref = onLevel($h.nodeAfter) ? $h.pos : null;
+      if (ref == null) $h.parent.forEach((n, off) => { if (ref == null && onLevel(n)) ref = $h.start() + off; });
+      if (ref != null) {
+        const r = view.coordsAtPos(ref, 1);
+        if (r.top || r.bottom) c = { left: c.left, top: r.top, bottom: r.bottom };
+      }
+    }
     if (!c.top && !c.bottom) {
       // only hidden things around (a line that is just tags): its left edge
       const line = view.domAtPos($h.start()).node;
