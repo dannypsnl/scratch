@@ -18,7 +18,8 @@ const CASES = [
   ["x+[y]", "[", "x+[y]", "y"],
   ["[x+y]", "|", "|x+y|", "x+y"],
   ["[x+y]", "{", "\\{x+y\\}", "x+y"],
-  ["[\\frac{a}{b}]", "(", "(\\frac{a}{b})", "ab"],
+  ["[\\frac{a}{b}]", "(", "\\left(\\frac{a}{b}\\right)", "ab"], // taller than a line: growing ones
+  ["[\\frac{a}{b}]", "{", "\\{\\frac{a}{b}\\}", "ab"], // (none for braces yet)
   // with a caret it is just typed
   ["a|", "(", "a(", ""],
   // Unicode super- and subscripts, typed: scripts (a run of them, one script)
@@ -33,12 +34,17 @@ const CASES = [
   ["\\sqrt{x}|", "^2", "\\sqrt{x}^2", ""],
   ["x|", "^2", "x^2", ""],
   // a closing bracket with nothing open in its box closes the one around the structure
-  ["\\sum|", "(1/n)", "\\sum(\\frac{1}{n})", ""],
-  ["|", "(1/(n+1))", "(\\frac{1}{(n+1)})", ""],
+  // (and a pair around something taller than a line grows with it)
+  ["\\sum|", "(1/n)", "\\sum\\left(\\frac{1}{n}\\right)", ""],
+  ["|", "(1/(n+1))", "\\left(\\frac{1}{(n+1)}\\right)", ""],
   ["|", "1/(n+1)", "\\frac{1}{(n+1)}", ""],
   ["|", "(x^2)", "(x^2)", ""],
-  ["|", "(a/b)+c", "(\\frac{a}{b})+c", ""],
-  ["|", "[1/n]", "[\\frac{1}{n}]", ""],
+  ["|", "(a/b)+c", "\\left(\\frac{a}{b}\\right)+c", ""],
+  ["|", "[1/n]", "\\left[\\frac{1}{n}\\right]", ""],
+  ["|", "|1/2|", "\\left|\\frac{1}{2}\\right|", ""],
+  ["|", "|x|+(a)", "|x|+(a)", ""],
+  ["|", "x|->y", "x\\mapsto y", ""],
+  ["|", "(x^(1/2))", "(x^{\\left(\\frac{1}{2}\\right)})", ""], // a script is not taller than a line
   ["|", "1/n)", "\\frac{1}{n)}", ""],
 ];
 

@@ -497,15 +497,68 @@ function insertFrac(state, dispatch, undo = {}) {
 
 const BRACKETS = { "(": ")", "[": "]", "{": "}", "|": "|" };
 const GROUPED_FOR_POWER = new Set(["frac", "dfrac", "tfrac", "cfrac"]);
+const OPENING = { ")": "(", "]": "[", "|": "|" };
 
-// whether the first `size` of a container leaves an `open` bracket unclosed
-function unclosed(node, size, open, close) {
-  let depth = 0, pos = 0;
+// Where, in the first `size` of a container, the `open` bracket left
+// unclosed is (an offset in it), or -1. (| opens and closes in turn.)
+function lastOpen(node, size, open, close) {
+  const stack = [];
+  let pos = 0;
   node.forEach((c) => {
-    if (c.isText) for (const ch of c.text) { if (pos >= size) break; if (ch === open) depth++; else if (ch === close && depth > 0) depth--; pos++; }
+    if (c.isText) for (const ch of c.text) {
+      if (pos >= size) break;
+      if (ch === open && !(open === close && stack.length)) stack.push(pos);
+      else if (ch === close && stack.length) stack.pop();
+      pos++;
+    }
     else pos += c.nodeSize;
   });
-  return depth > 0;
+  return stack.length ? stack[stack.length - 1] : -1;
+}
+
+// Taller than a line of text: a fraction, a binomial, delimiters that grow,
+// a brace with its label; or a structure holding one (not in a script).
+const TALL = new Set(["fraction", "binom", "delim", "overbrace", "underbrace"]);
+function tall(frag) {
+  let found = false;
+  const walk = (n) => {
+    if (found || n.type === T.sup || n.type === T.sub || n.isText) return;
+    if (n.type === T.struct) {
+      const spec = structSpec(n.attrs.name, n.childCount);
+      if (TALL.has(spec.layout) && !spec.small) { found = true; return; }
+    }
+    n.forEach(walk);
+  };
+  frag.forEach(walk);
+  return found;
+}
+
+// A closing bracket with nothing open in its box closes the one open around
+// the structure: (1/n) is (\frac{1}{n}), not \frac{1}{n)}. A pair around
+// something taller than a line becomes the delimiters that grow with it:
+// \left(\frac{1}{n}\right). False when it is just typed.
+function closeBracket(state, dispatch, ch) {
+  const open = OPENING[ch], $p = state.selection.$head;
+  if (!state.selection.empty) return false;
+  let at = $p.pos;
+  if (lastOpen($p.parent, $p.parentOffset, open, ch) < 0) {
+    for (let d = $p.depth - 1; d > 0 && mathDepth($p) <= d; d--) {
+      if (!isMathContainer($p.node(d).type)) continue;
+      if (lastOpen($p.node(d), $p.posAtIndex($p.index(d), d) - $p.start(d), open, ch) >= 0) { at = $p.after(d + 1); break; }
+    }
+  }
+  const $at = state.doc.resolve(at), o = lastOpen($at.parent, $at.parentOffset, open, ch);
+  const inside = o >= 0 ? state.doc.slice($at.start() + o + 1, at).content : null;
+  if (inside && tall(inside)) {
+    const group = T.struct.create({ name: `left${open}` }, T.slot.create(null, inside));
+    const tr = state.tr.replaceWith($at.start() + o, at, group);
+    dispatch(tr.setSelection(TextSelection.create(tr.doc, $at.start() + o + group.nodeSize)).scrollIntoView());
+    return true;
+  }
+  if (at === $p.pos) return false;
+  const tr = state.tr.insertText(ch, at);
+  dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 1)).scrollIntoView());
+  return true;
 }
 
 // Handle one typed character while the caret is inside a formula.
@@ -522,6 +575,13 @@ export function typeInMath(view, ch) {
   // so another wraps it again)
   const { from, to, $from, empty } = state.selection;
   if (BRACKETS[ch] && !empty && $from.sameParent(state.selection.$to) && isMathContainer($from.parent.type)) {
+    // (round something taller than a line: the delimiters that grow)
+    const inside = state.doc.slice(from, to).content;
+    if (STRUCTS[`left${ch}`] && tall(inside)) {
+      const tr = state.tr.replaceWith(from, to, T.struct.create({ name: `left${ch}` }, T.slot.create(null, inside)));
+      dispatch(tr.setSelection(TextSelection.create(tr.doc, from + 2, from + 2 + inside.size)).scrollIntoView());
+      return true;
+    }
     const tr = state.tr.insertText(BRACKETS[ch], to).insertText(ch, from);
     dispatch(tr.setSelection(TextSelection.create(tr.doc, from + 1, to + 1)).scrollIntoView());
     return true;
@@ -549,23 +609,6 @@ export function typeInMath(view, ch) {
       return true;
     }
     case "$": return exitMath(state, dispatch);
-    case ")":
-    case "]": {
-      // a closing bracket with nothing open in its box closes the one open
-      // around the structure: (1/n) is (\frac{1}{n}), not \frac{1}{n)}
-      const $p = state.selection.$head, open = ch === ")" ? "(" : "[";
-      if (state.selection.empty && !unclosed($p.parent, $p.parentOffset, open, ch)) {
-        for (let d = $p.depth - 1; d > 0 && mathDepth($p) <= d; d--) {
-          if (!isMathContainer($p.node(d).type)) continue;
-          const before = $p.posAtIndex($p.index(d), d) - $p.start(d);
-          if (!unclosed($p.node(d), before, open, ch)) continue;
-          const at = $p.after(d + 1), tr = state.tr.insertText(ch, at);
-          dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 1)).scrollIntoView());
-          return true;
-        }
-      }
-      return dispatch(state.tr.insertText(ch).scrollIntoView()), true;
-    }
     case " ": {
       // on a selection: the menu of what can be done with it
       if (!state.selection.empty) return false;
@@ -575,6 +618,11 @@ export function typeInMath(view, ch) {
       if (state.selection.empty && $p.parent.type !== T.math && !$p.nodeAfter) caret(state, dispatch, stepRight($p));
       return true;
     }
+    case ")":
+    case "]":
+    case "|":
+      if (closeBracket(state, dispatch, ch)) return true;
+      // else typed as it is
     default: {
       // a Unicode super- or subscript: into the script just before, if it is
       // one of its kind (x²³ is x^{23}), else a new one
