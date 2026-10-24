@@ -522,6 +522,7 @@ const OP_SYM = new Set(["bin", "rel"]);
 // A relation or binary operator, also one under or over a label: the arrow
 // in N \overset{f}{\to} M splits terms just as a bare \to does.
 function isOperator(node) {
+  if (node.isText) return node.text.length === 1 && OP_CHARS.has(node.text); // a lone =, + … under a label
   if (node.type === T.sym) return OP_SYM.has(SYMBOLS[node.attrs.name]?.cls);
   if (node.type !== T.struct || !["overset", "underset"].includes(node.attrs.name)) return false;
   const base = node.child(1).content;
