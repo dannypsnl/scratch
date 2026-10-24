@@ -446,6 +446,11 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .layout-fraction > .pm-slot { padding: 0 .15em; }
 .layout-fraction > .pm-slot:first-child { border-bottom: .06em solid currentColor; padding-bottom: .08em; }
 .layout-fraction > .pm-slot:last-child { padding-top: .05em; }
+/* a fraction in a fraction is smaller, as in TeX: .7 of the one around it,
+   then .5 of the outermost, and no smaller */
+.layout-fraction .layout-fraction > .pm-slot { font-size: .7em; }
+.layout-fraction .layout-fraction .layout-fraction > .pm-slot { font-size: .714em; }
+.layout-fraction .layout-fraction .layout-fraction .layout-fraction > .pm-slot { font-size: 1em; }
 
 /* \left( … \right): the delimiters are borders as tall as the content, a (
    the left half of an ellipse whose border thins to nothing at its ends */

@@ -46,6 +46,13 @@ const CASES = [
   ["|", "x|->y", "x\\mapsto y", ""],
   ["|", "(x^(1/2))", "(x^{\\left(\\frac{1}{2}\\right)})", ""], // a script is not taller than a line
   ["|", "1/n)", "\\frac{1}{n)}", ""],
+  // a/b/c is (a/b)/c; a slash after more than one term in a denominator takes the last
+  ["|", "1/2/3", "\\frac{\\frac{1}{2}}{3}", ""],
+  ["|", "1/2/3/4", "\\frac{\\frac{\\frac{1}{2}}{3}}{4}", ""],
+  ["|", "1/n+b/c", "\\frac{1}{n+\\frac{b}{c}}", ""],
+  ["|", "(1/n/b)", "\\left(\\frac{\\frac{1}{n}}{b}\\right)", ""],
+  ["|", "1/(2/3)", "\\frac{1}{\\left(\\frac{2}{3}\\right)}", ""],
+  ["|", "1/(n+1)/2", "\\frac{\\frac{1}{(n+1)}}{2}", ""],
 ];
 
 // "[a+b]" -> its LaTeX without marks, and the marks' offsets in the

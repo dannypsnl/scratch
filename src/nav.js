@@ -474,6 +474,12 @@ function insertFrac(state, dispatch, undo = {}) {
   let from = sel.from, to = sel.to, num = Fragment.empty;
   if (!sel.empty && sel.$from.sameParent(sel.$to)) {
     num = state.doc.slice(from, to).content;
+  } else if (sel.empty && endOfOneTermDenominator(sel.$head)) {
+    // a/b/c is (a/b)/c: at the end of a denominator of one term, the whole
+    // fraction is the numerator
+    const $h = sel.$head;
+    from = $h.before($h.depth - 1); to = $h.after($h.depth - 1);
+    num = state.doc.slice(from, to).content;
   } else if (sel.empty) {
     const before = sel.$head.nodeBefore;
     if (before?.isText) {
@@ -493,6 +499,24 @@ function insertFrac(state, dispatch, undo = {}) {
     dispatch(tr.setSelection(TextSelection.create(tr.doc, caretPos)).scrollIntoView());
   }
   return true;
+}
+
+// the caret at the end of a fraction's denominator that is one term (2, n,
+// 2n, x^2, (n+1); not n+1)
+function endOfOneTermDenominator($p) {
+  const struct = $p.node($p.depth - 1);
+  if ($p.parent.type !== T.slot || !GROUPED_FOR_POWER.has(struct.attrs.name) || $p.index($p.depth - 1) !== 1) return false;
+  if (!$p.parent.content.size || $p.parentOffset !== $p.parent.content.size) return false;
+  // (an operator inside parentheses is part of the term; an open one is not done)
+  let one = true, depth = 0;
+  $p.parent.forEach((c) => {
+    if (c.isText) for (const ch of c.text) {
+      if (ch === "(" || ch === "[") depth++;
+      else if ((ch === ")" || ch === "]") && depth) depth--;
+      else if (!depth && OP_CHARS.has(ch)) one = false;
+    } else if (!depth && c.type === T.sym && ["rel", "bin", "punct"].includes(SYMBOLS[c.attrs.name]?.cls)) one = false;
+  });
+  return one && depth === 0;
 }
 
 const BRACKETS = { "(": ")", "[": "]", "{": "}", "|": "|" };
