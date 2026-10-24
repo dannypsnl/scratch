@@ -140,7 +140,8 @@ function fontSizeAt(view, pos) {
 }
 
 // sits on the line it is in, not raised or lowered like scripts and fractions
-const onLevel = (n) => n && !["math", "struct", "sup", "sub"].includes(n.type.name);
+// (a large operator is drawn larger and lower: not on the caret's level)
+const onLevel = (n) => n && !["math", "struct", "sup", "sub"].includes(n.type.name) && !(n.type.name === "sym" && SYMBOLS[n.attrs.name]?.cls === "op");
 
 function caretOverlay(view) {
   const el = document.createElement("div");
