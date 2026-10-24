@@ -1,0 +1,19 @@
+package:
+  name: formula-model
+  dependencies:
+    - arrays
+    - foldable-traversable
+    - lcg
+    - maybe
+    - prelude
+    - quickcheck
+    - strings
+  test:
+    main: Test.Main
+    dependencies:
+      - console
+      - effect
+workspace:
+  packageSet:
+    registry: 81.10.0
+  extraPackages: {}
