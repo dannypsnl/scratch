@@ -10,7 +10,7 @@
     "app": "neu run",
     "app:build": "neu build",
     "dev:app": "node scripts/dev-app.mjs",
-    "dist": "npm run build && neu build --release --embed-resources --clean && node scripts/bundle-mac.mjs",
+    "dist": "npm run build && neu build --release --embed-resources --clean && node scripts/bundle-mac.mjs arm64 && node scripts/bundle-mac.mjs x64",
     "test:ui": "node test/ui-sweep.mjs && node test/suggest-ui.mjs && node test/ime.mjs && node test/outline-ui.mjs && node test/search-ui.mjs && node test/sync-ui.mjs && node test/format-ui.mjs",
     "test:model": "cd model && spago test && cd .. && node test/model-diff.mjs",
     "test:fuzz": "cd model && spago run --main Fuzz"

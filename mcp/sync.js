@@ -1,4 +1,4 @@
-import { VersionVector } from "loro-crdt/base64";
+import { VersionVector } from "loro-crdt";
 import { invalidate } from "../src/loro.js";
 
 // The MCP server as one more device on the sync relay (sync/server.mjs, or

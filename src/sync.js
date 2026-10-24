@@ -1,4 +1,4 @@
-import { VersionVector } from "loro-crdt/base64";
+import { VersionVector } from "loro-crdt";
 import { doc } from "./loro.js";
 import { flush, importRemote, getMeta, saveMeta } from "./store.js";
 import { flushUploads } from "./images.js";

@@ -17,7 +17,8 @@ The latest commit on `main` is built and published on the [releases page](https:
 
 | file | |
 |---|---|
-| `scratch-mac_universal.zip` | `scratch.app`, Apple silicon and Intel |
+| `scratch-mac_arm64.zip` | `scratch.app` for Apple silicon |
+| `scratch-mac_x64.zip` | `scratch.app` for Intel Macs |
 | `scratch-linux_x64.tar.gz`, `_arm64`, `_armhf` | a single binary |
 | `scratch-win_x64.zip` | a single `.exe` |
 
@@ -35,7 +36,7 @@ npx neu update     # the Neutralino binaries, into bin/ (not in the repository)
 ```bash
 npm run dev        # in a browser, http://localhost:5178
 npm run app        # in the Neutralino window, with the same dev server
-npm run dist       # dist/scratch/ for every platform, and dist/scratch.app
+npm run dist       # dist/scratch/ for every platform, and dist/mac_arm64/, dist/mac_x64/ scratch.app
 ```
 
 In a browser the notebook is kept in the browser's storage; in the app, under the data directory (`~/Library/Application Support/scratch/` on macOS).

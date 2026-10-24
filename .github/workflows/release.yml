@@ -40,7 +40,9 @@ jobs:
       - name: Package
         run: |
           mkdir -p out
-          ditto -c -k --keepParent dist/scratch.app out/scratch-mac_universal.zip
+          for arch in arm64 x64; do
+            ditto -c -k --keepParent "dist/mac_$arch/scratch.app" "out/scratch-mac_$arch.zip"
+          done
           for arch in x64 arm64 armhf; do
             tar -czf "out/scratch-linux_$arch.tar.gz" -C dist/scratch "scratch-linux_$arch"
           done

@@ -1,14 +1,17 @@
 // Wrap the Neutralino mac binary (resources embedded) into a real
-// dist/scratch.app: neu's --macos-bundle only renames the executable.
+// dist/mac_<arch>/scratch.app: neu's --macos-bundle only renames the
+// executable. One app per architecture: a universal binary holds two
+// executables, each with its own copy of the embedded resources.
+//   node scripts/bundle-mac.mjs arm64|x64
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 
 const config = JSON.parse(readFileSync("neutralino.config.json", "utf8"));
-const arch = process.argv[2] ?? "universal";
+const arch = process.argv[2] ?? "arm64";
 const bin = [`dist/scratch/scratch-mac_${arch}`, `dist/scratch/scratch-mac_${arch}.app`].find(existsSync);
 if (!bin) throw new Error(`no mac_${arch} binary in dist/scratch; run neu build --release --embed-resources first`);
 
-const app = "dist/scratch.app";
+const app = `dist/mac_${arch}/scratch.app`;
 rmSync(app, { recursive: true, force: true });
 mkdirSync(`${app}/Contents/MacOS`, { recursive: true });
 mkdirSync(`${app}/Contents/Resources`, { recursive: true });

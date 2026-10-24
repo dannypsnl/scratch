@@ -1,4 +1,4 @@
-import { LoroDoc } from "loro-crdt/base64";
+import { LoroDoc } from "loro-crdt";
 import { schema } from "./schema.js";
 
 // The notebook as one Loro document: the CRDT that is persisted and synced.
