@@ -1,4 +1,4 @@
-import { allTasks } from "./store.js";
+import { allTasks, pageDates, getPage } from "./store.js";
 import { taskItem } from "./taskitem.js";
 import { openCalendar, monthGrid } from "./calendar.js";
 import { today, addDays, weekStart, longDate } from "./dates.js";
@@ -11,9 +11,18 @@ import { t } from "./i18n.js";
 // A dot on a day means something is still open there: a TODO / DOING task
 // written that day, or one due that day. A hollow ring once that day has
 // passed with the task still open, red when it was the deadline that passed.
+// A grey dot: something is written that day, and nothing is open.
 // The week strip and both calendars mark days the same way.
 
 const dow = (d) => new Date(d + "T00:00").getDay();
+
+// anything written in a day's page (a formula or an image counts)
+const hasContent = (doc) => {
+  if (!doc) return false;
+  let found = false;
+  doc.descendants((n) => { if (found) return false; if ((n.isText && n.text.trim()) || (n.isInline && !n.isText)) found = true; return !found; });
+  return found;
+};
 
 export function renderJournal(root, ctx) {
   const date = ctx.state.date ?? today();
@@ -26,6 +35,8 @@ export function renderJournal(root, ctx) {
     if (t.date) put(t.date, t.date < now ? "stale" : "open");
     if (t.deadline) put(t.deadline, t.deadline < now ? "overdue" : "open");
   }
+  const written = new Set([...pageDates()].filter((day) => hasContent(getPage(day))));
+  const mark = (day) => open.get(day) ?? (written.has(day) ? "written" : null);
   const start = weekStart(date);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const [y, m, d] = date.split("-").map(Number);
@@ -37,7 +48,7 @@ export function renderJournal(root, ctx) {
       <button class="wk-prev" title="${t("week.prev")}">‹</button>
       <div class="week">
         ${days.map((day) => `
-          <button data-day="${day}" class="${[day === date && "selected", day === now && "is-today", open.has(day) && "has", open.get(day) === "stale" && "stale", open.get(day) === "overdue" && "overdue"].filter(Boolean).join(" ")}">
+          <button data-day="${day}" class="${[day === date && "selected", day === now && "is-today", mark(day) && "has", mark(day) === "stale" && "stale", mark(day) === "overdue" && "overdue", mark(day) === "written" && "written"].filter(Boolean).join(" ")}">
             <span class="dot"></span><span class="wd">${t("weekday.short")[dow(day)]}</span><span class="dn">${Number(day.slice(8))}</span>
           </button>`).join("")}
       </div>
@@ -67,7 +78,6 @@ export function renderJournal(root, ctx) {
   root.querySelector(".wk-next").onclick = () => go(addDays(date, 7));
   root.querySelector(".today-btn").onclick = () => go(now);
   const calBtn = root.querySelector(".cal-btn");
-  const mark = (day) => open.get(day) ?? null;
   calBtn.onclick = () => openCalendar(calBtn, date, mark, go);
   // with room to spare (see .journal-grid in style.css) the calendar is
   // always shown on the right and the dropdown button hides
