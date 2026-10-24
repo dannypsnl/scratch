@@ -36,8 +36,9 @@ const INSIDE = [
   ["(a+b)^3", "(a", "Alt+ArrowRight", ["(a+", "(a+b", "(a+b)"]],
 ];
 // A label over a lone arrow stays an \overset (both boxes editable), is drawn
-// with its arrow at least as wide as the label (a short label leaves it at a
-// bare arrow's length), and is written out as the \xrightarrow that stretches.
+// with its arrow as wide as the label (a short label leaves it at KaTeX's
+// least width for that arrow), and is written out as the \xrightarrow that
+// stretches.
 // [formula, its LaTeX afterwards, expectation for its labelled arrow]
 const XARROWS = [
   ["N\\overset{n\\mapsto(n,0)}{\\to}P", "N\\xrightarrow{n\\mapsto(n,0)}P", "stretched"],
@@ -154,8 +155,11 @@ async function fresh(f) {
         if (!o) return null;
         const bare = [...document.querySelectorAll(".pm-math > .pm-sym.pm-rel")].find((e) => e.textContent === "→");
         const label = o.querySelector(":scope > .pm-slot").getBoundingClientRect().width;
-        const arrow = o.querySelector(":scope > .pm-slot:last-child").getBoundingClientRect().width;
-        return { label, arrow, bare: bare?.getBoundingClientRect().width ?? null };
+        const shaft = o.querySelector(":scope > .pm-slot:last-child");
+        const arrow = shaft.getBoundingClientRect().width;
+        const sym = shaft.querySelector(".pm-sym"), cs = sym && getComputedStyle(sym);
+        const min = cs ? parseFloat(cs.getPropertyValue("--st-min")) * parseFloat(cs.fontSize) : null;
+        return { label, arrow, min, bare: bare?.getBoundingClientRect().width ?? null };
       },
       // the text of the slot (or script) the caret is in
       slotText: () => L.serializeMath(v.state.selection.$head.parent.content),
@@ -201,8 +205,8 @@ if (!ONLY) for (const [f, latex, expect] of XARROWS) {
   await pg.evaluate(() => window.view.dom.blur()); await pause(100);
   const got = await H("ser"), m = await H("xarrow");
   const ok = got === latex && (expect === "none" ? m === null
-    : expect === "stretched" ? m && m.arrow >= m.label - 1
-    : m && m.bare !== null && Math.abs(m.arrow - m.bare) <= 1);
+    : expect === "stretched" ? m && Math.abs(m.arrow - m.label) <= 1 && m.arrow >= m.min - 1
+    : m && m.min > m.label && Math.abs(m.arrow - m.min) <= 1);
   if (!ok) fails.push({ kind: "label over an arrow", f, latex, got, expect, m });
   console.log(`arrow: ${f}`);
 }
