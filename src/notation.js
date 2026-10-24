@@ -6,6 +6,7 @@ import { toCas, runCas, casAnswer } from "./cas.js";
 import { inText } from "./nav.js";
 import { openPalette } from "./palette.js";
 import { serializeMath } from "./latex.js";
+import katex from "katex";
 
 const T = schema.nodes;
 
@@ -169,6 +170,51 @@ export async function applyNotation(view, action) {
   view.focus();
 }
 
+// After an "=" just typed (the caret right after it, spaces allowed): what
+// the left side comes to, from the relation before it (or the start of the
+// line of the formula) to the "=". Offered when it is an algebraic
+// expression and an answer differs from it as written; picked, the answer
+// goes after the "=".
+function equalsAt(state) {
+  const sel = state.selection;
+  if (!sel.empty || !isMathContainer(sel.$from.parent.type) || inText(sel.$from)) return null;
+  const before = sel.$from.parent.content.cut(0, sel.$from.parentOffset);
+  const last = before.lastChild;
+  const m = last?.isText && /=\s*$/.exec(last.text);
+  if (!m) return null;
+  const end = before.size - (last.text.length - m.index);
+  let start = 0, pos = 0;
+  before.forEach((n) => {
+    if (n.isText) for (let k = 0; k < n.text.length; k++) if (pos + k < end && "=<>".includes(n.text[k])) start = pos + k + 1;
+    pos += n.nodeSize;
+  });
+  const input = toCas(before.cut(start, end));
+  return input ? { input, at: sel.from, space: !/\s$/.test(last.text) } : null;
+}
+
+// [{ op, label, tex, replace }]: one per different answer
+export function equalsActions(state) {
+  const e = equalsAt(state);
+  if (!e) return [];
+  const seen = new Set();
+  return ["expand", "factor", "simplify"].flatMap((op) => {
+    const r = answer(op, e.input);
+    if (!r) return [];
+    const tex = serializeMath(r);
+    if (seen.has(tex)) return [];
+    seen.add(tex);
+    return [{ op, label: t(`notation.${op}`), tex, replace: r, at: e.at, space: e.space }];
+  });
+}
+
+export function applyEquals(view, action) {
+  const pre = action.space ? Fragment.from(text(" ")) : Fragment.empty;
+  const tr = view.state.tr.insert(action.at, pre.append(action.replace));
+  tr.setSelection(TextSelection.create(tr.doc, action.at + pre.size + action.replace.size));
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+}
+
 // The hint: under a selection within a formula, one button for the whole
 // app that opens the menu of what can be done with it (as Space does), so
 // that the menu is found by looking. A function of the focused editor alone:
@@ -183,8 +229,23 @@ function drawHint() {
   if (!box.isConnected) document.body.append(box);
   const view = [...editors].find((v) => v.dom.isConnected && v.hasFocus());
   const actions = view ? selectionActions(view.state) : [];
-  box.hidden = !actions.length;
-  if (!actions.length) return;
+  const equals = view && !actions.length ? equalsActions(view.state) : [];
+  box.hidden = !actions.length && !equals.length;
+  if (box.hidden) return;
+  if (equals.length) {
+    box.replaceChildren(...equals.map((a) => {
+      const b = document.createElement("button");
+      b.className = "equals";
+      b.innerHTML = `<span class="op"></span>${katex.renderToString(a.tex, { throwOnError: false })}`;
+      b.firstChild.textContent = a.label;
+      b.onmousedown = (ev) => { ev.preventDefault(); applyEquals(view, a); };
+      return b;
+    }));
+    const c = view.coordsAtPos(view.state.selection.from);
+    box.style.left = `${c.left + window.scrollX}px`;
+    box.style.top = `${c.bottom + 6 + window.scrollY}px`;
+    return;
+  }
   const button = document.createElement("button");
   button.append(t("notation.menu"), Object.assign(document.createElement("span"), { className: "key", textContent: "␣" }));
   button.onmousedown = (ev) => { ev.preventDefault(); openPalette(view, "", { actionsOnly: true }); };
