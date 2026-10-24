@@ -82,7 +82,10 @@ export function openSearch(open) {
       box.dataset.page = g.page;
       const head = document.createElement("div");
       head.className = "search-page" + (isDate(g.page) ? " journal" : "");
-      head.append(snippet(g.title, [], g.titleHits));
+      // (the title's pieces in one span: in the flex row each would be an item, gaps between)
+      const name = document.createElement("span");
+      name.append(snippet(g.title, [], g.titleHits));
+      head.append(name);
       if (g.blocks.length) {
         const n = document.createElement("span");
         n.className = "count";

@@ -32,6 +32,7 @@ const NOTES = {
     "- 待辦 [[分析]] 習題",
   ],
   "2025-03-15": ["- TODO 寫 compact 的筆記 DEADLINE: <2025-03-20>"],
+  "Functional Programming": ["- 函數式"],
 };
 const FOLDED = "討論 Hausdorff 與 compact #拓樸";
 // filler: 120 journal days of 25 blocks, none matching any query below
@@ -55,6 +56,7 @@ const CASES = [
   ["has:deadline", { "2025-03-15": ["寫 compact 的筆記"] }],
   ["分析", { 分析: [], "2025-03-14": ["待辦 分析 習題"] }, ["分析"]],
   ["2025-03-15", { "2025-03-15": [] }, ["2025-03-15"]],
+  ["mming", { "Functional Programming": [] }, ["Functional Programming"]], // inside a word of a title
   ["-hausdorff", {}],
   ["沒有這個字", {}],
 ];
@@ -104,6 +106,14 @@ const shown = () => pg.evaluate(() => {
       hits: [...g.querySelectorAll(".search-hit")].map((h) => ({ id: h.dataset.block, text: h.textContent, marks: [...h.querySelectorAll("mark")].map((m) => m.textContent) })),
     })),
     items: [...box.querySelectorAll(".search-page:not(.plain), .search-hit")].map((el) => el.textContent),
+    // how far each mark stands from the text before it (0: flush, inside the word)
+    gaps: [...box.querySelectorAll("mark")].map((m) => {
+      const prev = m.previousSibling;
+      if (prev?.nodeType !== 3) return 0;
+      const r = document.createRange();
+      r.selectNodeContents(prev);
+      return Math.round(m.getBoundingClientRect().left - r.getBoundingClientRect().right);
+    }),
     active: box.querySelector(".active")?.textContent ?? null,
     focused: document.activeElement === box.querySelector("input"),
   };
@@ -127,6 +137,7 @@ for (const [q, want, titles = []] of CASES) {
   if (norm(gotMap) !== norm(wantMap)) fail("results", { q, want: wantMap, got: gotMap });
   const titleHits = got.groups.filter((g) => g.titleHit).map((g) => g.page).sort();
   if (JSON.stringify(titleHits) !== JSON.stringify(titles.map(pageId).sort())) fail("title hits", { q, want: titles, got: titleHits });
+  if (got.gaps.some((g) => Math.abs(g) > 1)) fail("mark not flush with the text before it", { q, gaps: got.gaps });
   // every plain word is marked in every block found (tag:/link: by the page's name)
   const words = q.split(/\s+/).filter((w) => w && !w.startsWith("-") && !/^(status|has):/.test(w)).map((w) => w.replace(/^(tag|link):/, "").toLowerCase());
   for (const g of got.groups) for (const h of g.hits) {
