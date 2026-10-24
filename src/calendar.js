@@ -3,7 +3,7 @@ import { place } from "./popover.js";
 import { t } from "./i18n.js";
 
 // A month grid (Monday first, ISO dates), drawn into `el`.
-// opts: { selected, base, mark(day) -> "open" | "stale" | "overdue" | "written" | null, onPick(day) }.
+// opts: { selected, base, mark(day) -> "written" | "todo" | "overdue" | null, onPick(day) }.
 // Opens on the month of `selected`, else of `base` (default today), the day
 // relative dates count from, outlined when it is not today.
 // Returns { show(day) }.
@@ -28,9 +28,8 @@ export function monthGrid(el, { selected, base = today(), mark = () => false, on
         day === base && day !== today() && "base",
         day === selected && "selected",
         mark(day) && "has",
-        mark(day) === "stale" && "stale",
+        mark(day) === "todo" && "todo",
         mark(day) === "overdue" && "overdue",
-        mark(day) === "written" && "written",
       ].filter(Boolean).join(" ");
       cells.push(`<button type="button" data-day="${day}" class="${cls}">${Number(day.slice(8))}</button>`);
     }

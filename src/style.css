@@ -376,8 +376,7 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .cal-grid .base { box-shadow: inset 0 0 0 1px var(--line); }
 .cal-grid .selected { background: var(--slot); }
 .cal-grid .has::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--accent); }
-.cal-grid .stale::after { background: transparent; box-shadow: inset 0 0 0 1.2px var(--accent); width: 5px; height: 5px; margin-left: -2.5px; }
-.cal-grid .written::after { background: var(--muted); opacity: .6; } /* written, nothing open */
+.cal-grid .todo::after { background: transparent; box-shadow: inset 0 0 0 1.2px var(--accent); width: 5px; height: 5px; margin-left: -2.5px; }
 .cal-grid .overdue::after { background: transparent; box-shadow: inset 0 0 0 1.2px var(--bad); width: 5px; height: 5px; margin-left: -2.5px; }
 
 .deadline-picker { padding: 8px; width: 17em; }
@@ -788,16 +787,14 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .week .dn { font-weight: 600; }
 .week .dot { flex: none; width: 5px; height: 5px; border-radius: 50%; background: transparent; }
 .week .has .dot { background: var(--accent); }
-/* past and still open: a hollow ring; red when a deadline passed (a filled red dot reads as a smudge) */
-.week .stale .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); width: 6px; height: 6px; }
+/* a dot: written; a ring: a task open; red when its deadline passed (journal.js) */
+.week .todo .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); width: 6px; height: 6px; }
 .week .overdue .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--bad); width: 6px; height: 6px; }
-.week .selected.stale .dot, .week .selected.overdue .dot { box-shadow: inset 0 0 0 1.5px var(--bg); }
+.week .selected.todo .dot, .week .selected.overdue .dot { box-shadow: inset 0 0 0 1.5px var(--bg); }
 .week .is-today .dn, .week .is-today .wd { color: var(--accent); }
 .week .selected, .week .selected:hover { background: var(--accent); } /* hover must not wash out the selected day */
 .week .selected .wd, .week .selected .dn { color: var(--bg); }
-.week .selected.has:not(.stale, .overdue) .dot { background: var(--bg); } /* a ring stays a ring */
-.week .written .dot { background: var(--muted); opacity: .6; } /* written, nothing open */
-.week .selected.written .dot { background: var(--bg); opacity: .7; }
+.week .selected.has:not(.todo, .overdue) .dot { background: var(--bg); } /* a ring stays a ring */
 .today-group { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; margin-left: auto; }
 .today-group .today-btn { font-size: 14px; padding: 5px 12px; border-radius: 0; }
 .today-group .cal-btn { font-size: 14px; padding: 5px 9px; border-left: 1px solid var(--line); border-radius: 0; }

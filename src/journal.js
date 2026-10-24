@@ -8,10 +8,9 @@ import { t } from "./i18n.js";
 // Heptabase-style journal: a week strip on top, one day below it; ‹ › move a
 // week, Today plus a calendar dropdown.
 //
-// A dot on a day means something is still open there: a TODO / DOING task
-// written that day, or one due that day. A hollow ring once that day has
-// passed with the task still open, red when it was the deadline that passed.
-// A grey dot: something is written that day, and nothing is open.
+// What a day holds, marked under it: a dot, something written; a ring, a
+// TODO / DOING task still open (written that day, or due that day); a red
+// ring, a deadline that passed with its task still open.
 // The week strip and both calendars mark days the same way.
 
 const dow = (d) => new Date(d + "T00:00").getDay();
@@ -27,13 +26,13 @@ const hasContent = (doc) => {
 export function renderJournal(root, ctx) {
   const date = ctx.state.date ?? today();
   const now = today();
-  const open = new Map(); // day -> "open" | "stale" | "overdue"
-  const rank = { open: 0, stale: 1, overdue: 2 };
+  const open = new Map(); // day -> "todo" | "overdue"
+  const rank = { todo: 0, overdue: 1 };
   const put = (day, m) => { if (!(rank[open.get(day)] >= rank[m])) open.set(day, m); };
   for (const t of allTasks()) {
     if (t.task === "done") continue;
-    if (t.date) put(t.date, t.date < now ? "stale" : "open");
-    if (t.deadline) put(t.deadline, t.deadline < now ? "overdue" : "open");
+    if (t.date) put(t.date, "todo");
+    if (t.deadline) put(t.deadline, t.deadline < now ? "overdue" : "todo");
   }
   const written = new Set([...pageDates()].filter((day) => hasContent(getPage(day))));
   const mark = (day) => open.get(day) ?? (written.has(day) ? "written" : null);
@@ -48,7 +47,7 @@ export function renderJournal(root, ctx) {
       <button class="wk-prev" title="${t("week.prev")}">‹</button>
       <div class="week">
         ${days.map((day) => `
-          <button data-day="${day}" class="${[day === date && "selected", day === now && "is-today", mark(day) && "has", mark(day) === "stale" && "stale", mark(day) === "overdue" && "overdue", mark(day) === "written" && "written"].filter(Boolean).join(" ")}">
+          <button data-day="${day}" class="${[day === date && "selected", day === now && "is-today", mark(day) && "has", mark(day) === "todo" && "todo", mark(day) === "overdue" && "overdue"].filter(Boolean).join(" ")}">
             <span class="dot"></span><span class="wd">${t("weekday.short")[dow(day)]}</span><span class="dn">${Number(day.slice(8))}</span>
           </button>`).join("")}
       </div>
