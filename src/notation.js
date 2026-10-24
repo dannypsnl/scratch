@@ -118,38 +118,41 @@ export async function applyNotation(view, action) {
   view.focus();
 }
 
-// The hint: a row of chips under the selection, while it has actions.
+// The hint: one row of chips for the whole app, a function of the focused
+// editor alone (its selection's actions). Every editor update and every focus
+// change draws it again from scratch, so an editor that lost focus, or was
+// taken out of the page without being destroyed, leaves nothing behind.
+const editors = new Set();
+let box = null;
+
+function drawHint() {
+  box ??= Object.assign(document.createElement("div"), { className: "notation-hint", hidden: true });
+  if (!box.isConnected) document.body.append(box);
+  const view = [...editors].find((v) => v.dom.isConnected && v.hasFocus());
+  const actions = view ? notationActions(view.state).filter((a) => a.hint) : [];
+  box.hidden = !actions.length;
+  if (!actions.length) return;
+  box.replaceChildren(
+    Object.assign(document.createElement("span"), { className: "key", textContent: "\\" }),
+    ...actions.map((a) => {
+      const b = document.createElement("button");
+      b.textContent = a.label;
+      b.onmousedown = (ev) => { ev.preventDefault(); applyNotation(view, a); };
+      return b;
+    }),
+  );
+  const { from, to } = view.state.selection;
+  const a = view.coordsAtPos(from), b = view.coordsAtPos(to);
+  box.style.left = `${Math.min(a.left, b.left) + window.scrollX}px`;
+  box.style.top = `${Math.max(a.bottom, b.bottom) + 6 + window.scrollY}px`;
+}
+document.addEventListener("focusin", () => queueMicrotask(drawHint));
+document.addEventListener("focusout", () => queueMicrotask(drawHint));
+
 export const notationHint = new Plugin({
   view(view) {
-    const box = document.createElement("div");
-    box.className = "notation-hint";
-    box.hidden = true;
-    document.body.append(box);
-    let key = "";
-    const update = () => {
-      const actions = view.hasFocus() ? notationActions(view.state).filter((a) => a.hint) : [];
-      if (!actions.length) { box.hidden = true; key = ""; return; }
-      const { from, to } = view.state.selection;
-      const k = `${from},${to},${actions.map((a) => a.id)}`;
-      if (k === key) return;
-      key = k;
-      box.replaceChildren(
-        Object.assign(document.createElement("span"), { className: "key", textContent: "\\" }),
-        ...actions.map((a) => {
-          const b = document.createElement("button");
-          b.textContent = a.label;
-          b.onmousedown = (ev) => { ev.preventDefault(); applyNotation(view, a); };
-          return b;
-        }),
-      );
-      box.hidden = false;
-      const a = view.coordsAtPos(from), b = view.coordsAtPos(to);
-      const bottom = Math.max(a.bottom, b.bottom) + 6;
-      box.style.left = `${Math.min(a.left, b.left) + window.scrollX}px`;
-      box.style.top = `${bottom + window.scrollY}px`;
-    };
-    view.dom.addEventListener("blur", update);
-    view.dom.addEventListener("focus", update);
-    return { update, destroy: () => box.remove() };
+    editors.add(view);
+    drawHint();
+    return { update: drawHint, destroy: () => { editors.delete(view); drawHint(); } };
   },
 });
