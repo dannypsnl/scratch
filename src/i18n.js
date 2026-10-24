@@ -15,7 +15,7 @@ const zh = {
   "sync.offline": "離線",
   "sync.error": "連線失敗",
   "sync.unauthorized": "Token 無效",
-  "sync.tokenRejected": "伺服器拒絕了這個 token，可能已經在 Cloudflare 換過。貼上新的 token 後重新連線。",
+  "sync.tokenRejected": "伺服器拒絕了這個 token，可能已經更換新 token。貼上新的 token 後重新連線。",
   "sync.urlPlaceholder": "wss://scratch-sync.<你的帳號>.workers.dev/sync",
   "sync.connect": "連線",
   "cancel": "取消",
