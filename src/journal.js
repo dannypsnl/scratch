@@ -29,10 +29,14 @@ export function renderJournal(root, ctx) {
   const open = new Map(); // day -> "todo" | "overdue"
   const rank = { todo: 0, overdue: 1 };
   const put = (day, m) => { if (!(rank[open.get(day)] >= rank[m])) open.set(day, m); };
+  // an overdue task is marked red on the day it is written, where a click
+  // finds it; its deadline day is marked only while it is still ahead (that
+  // day lists it under Due), or when the task is on no day at all
   for (const t of allTasks()) {
     if (t.task === "done") continue;
-    if (t.date) put(t.date, "todo");
-    if (t.deadline) put(t.deadline, t.deadline < now ? "overdue" : "todo");
+    const late = !!t.deadline && t.deadline < now;
+    if (t.date) put(t.date, late ? "overdue" : "todo");
+    if (t.deadline && (!late || !t.date)) put(t.deadline, late ? "overdue" : "todo");
   }
   const written = new Set([...pageDates()].filter((day) => hasContent(getPage(day))));
   const mark = (day) => open.get(day) ?? (written.has(day) ? "written" : null);
