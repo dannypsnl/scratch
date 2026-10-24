@@ -1,6 +1,6 @@
 import { VersionVector } from "loro-crdt/base64";
 import { doc } from "./loro.js";
-import { flush, importRemote, getMeta, saveMeta } from "./store.js";
+import { flush, importRemote, getMeta, saveMeta, saveProgress } from "./store.js";
 import { flushUploads } from "./images.js";
 
 // Client side of the sync relay (sync/src/index.js).
@@ -9,6 +9,9 @@ import { flushUploads } from "./images.js";
 //   seq     the last server sequence received, sent in "hello" on connect
 //   acked   the Loro version the server is known to have from us; on connect
 //           everything newer is sent, which covers edits made offline
+// Both are kept only once the snapshot holding what they count is saved
+// (store.js). An update that waits on changes this device lacks means some
+// were lost all the same: the whole log is asked for again, once.
 //
 // Live, every local Loro change is sent as it is committed and acked by id.
 
@@ -50,11 +53,16 @@ export function connect() {
   const sock = new WebSocket(url);
   sock.binaryType = "arraybuffer";
   ws = sock;
+  // hellos not yet answered by "synced": until then the log may have a gap
+  // below what arrives, so progress waits for the last "synced"
+  let hellos = 0, resent = false;
+  const hello = (since) => { hellos++; sock.send(JSON.stringify({ type: "hello", since })); };
+  const advance = (seq) => { if (!hellos) saveProgress({ seq: Math.max(getMeta().seq ?? 0, seq) }); };
 
   sock.onopen = () => {
     retry = 0;
     setStatus({ state: "syncing" });
-    sock.send(JSON.stringify({ type: "hello", since: getMeta().seq ?? 0 }));
+    hello(getMeta().seq ?? 0);
     // everything the server has not acknowledged from us, including offline edits
     flush();
     const acked = getMeta().acked;
@@ -68,10 +76,13 @@ export function connect() {
       if (msg.type === "ack") {
         const vv = inflight.get(msg.id);
         inflight.delete(msg.id);
-        saveMeta({ acked: vv ? b64(vv) : getMeta().acked, seq: Math.max(getMeta().seq ?? 0, msg.seq) });
+        saveProgress({ acked: vv ? b64(vv) : getMeta().acked });
+        advance(msg.seq);
         if (!inflight.size && status.state === "synced") setStatus({ state: "synced" });
       } else if (msg.type === "synced") {
-        saveMeta({ seq: Math.max(getMeta().seq ?? 0, msg.seq) });
+        hellos--;
+        advance(msg.seq);
+        if (hellos) return;
         setStatus({ state: "synced" });
         flushUploads();
       }
@@ -80,8 +91,13 @@ export function connect() {
     const view = new DataView(ev.data);
     if (view.getUint8(0) !== 1) return;
     const seq = Number(view.getBigUint64(1));
-    importRemote(new Uint8Array(ev.data, 9));
-    saveMeta({ seq: Math.max(getMeta().seq ?? 0, seq) });
+    if (!importRemote(new Uint8Array(ev.data, 9)) && !resent) {
+      resent = true;
+      saveProgress({ seq: 0 });
+      hello(0);
+      return;
+    }
+    advance(seq);
   };
 
   sock.onclose = (ev) => {

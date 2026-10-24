@@ -18,6 +18,11 @@ const named = new Map(); // id -> { title, doc, fields }
 const base = new Map(); // page -> doc as last read from / written to Loro
 const dirty = new Set(); // pages edited since the last flush
 let meta = {};
+// Sync progress (seq, acked) waits here until a snapshot holding everything
+// it counts is on disk; only then is it written to meta. Written at once, it
+// ran ahead of a snapshot cut short by quitting, and what it counted as
+// received was never asked for again.
+let progress = {};
 
 export const isDate = (id) => /^\d{4}-\d\d-\d\d$/.test(id);
 
@@ -78,25 +83,43 @@ function markDirty(page) {
 const remoteListeners = new Set();
 export const onRemote = (fn) => { remoteListeners.add(fn); return () => remoteListeners.delete(fn); };
 
+// False when the update waits on changes this device does not have.
 export function importRemote(bytes) {
   flush();
-  doc.import(bytes);
+  const { pending } = doc.import(bytes);
   const changed = rebuild();
   if (changed.size) for (const fn of remoteListeners) fn(changed);
+  return !pending;
 }
 
 // ---------- persistence ----------
 
 let snapTimer = null;
+let saving = Promise.resolve();
 function scheduleSnapshot() {
   clearTimeout(snapTimer);
-  snapTimer = setTimeout(() => persistence.saveSnapshot(doc.export({ mode: "snapshot" })), 1000);
+  snapTimer = setTimeout(saveSnapshot, 1000);
+}
+// one at a time, so two never write the same temporary file
+function saveSnapshot() {
+  const done = progress, notebook = meta.sync;
+  const bytes = doc.export({ mode: "snapshot" });
+  saving = saving.then(async () => {
+    await persistence.saveSnapshot(bytes);
+    if (Object.keys(done).length && meta.sync === notebook) { meta = { ...meta, ...done }; await persistence.saveMeta(meta); }
+  }).catch((e) => console.error("saving the notebook failed", e));
+  return saving;
 }
 
-export const getMeta = () => meta;
+export const getMeta = () => ({ ...meta, ...progress });
 export function saveMeta(patch) {
   meta = { ...meta, ...patch };
+  progress = Object.fromEntries(Object.entries(progress).filter(([k]) => !(k in patch)));
   persistence.saveMeta(meta);
+}
+export function saveProgress(patch) {
+  progress = { ...progress, ...patch };
+  scheduleSnapshot();
 }
 
 export async function load() {
@@ -108,7 +131,7 @@ export async function load() {
   rebuild();
   window.addEventListener("beforeunload", () => {
     flush();
-    persistence.saveSnapshot(doc.export({ mode: "snapshot" }));
+    saveSnapshot();
   });
 }
 
