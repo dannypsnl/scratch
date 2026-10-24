@@ -170,6 +170,14 @@ export const horizontal = (dir) => (state, dispatch) => {
     // away, where the DOM caret cannot be trusted; see navGuard)
     if (dir > 0 && $p.nodeAfter?.type === T.math) return caret(state, dispatch, $p.pos + 1);
     if (dir < 0 && $p.nodeBefore?.type === T.math) return caret(state, dispatch, $p.pos - 1);
+    // one character from a formula (a space typed after it): the step onto
+    // its edge is taken here too; WebKit on macOS went past the formula, a
+    // non-editable box, in the same step, to its far side
+    const next = $p.pos + dir;
+    if ((dir > 0 ? $p.nodeAfter : $p.nodeBefore)?.isText && next >= $p.start() && next <= $p.end()) {
+      const $n = state.doc.resolve(next);
+      if ((dir > 0 ? $n.nodeAfter : $n.nodeBefore)?.type === T.math) return caret(state, dispatch, next);
+    }
     if (!besideSpecial($p)) return false;
     const from = skipTags(state.doc, $p.pos, dir);
     const $f = state.doc.resolve(from);
