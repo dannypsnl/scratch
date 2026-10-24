@@ -1,6 +1,8 @@
 # Every push to main builds the app for every platform and publishes it as
-# a new GitHub release. No tag is needed: the tag is made here, from the
-# version in neutralino.config.json and the run number.
+# the one GitHub release: the releases (and tags) of earlier builds are
+# deleted, so only the build of the latest commit is kept. No tag is needed:
+# the tag is made here, from the version in neutralino.config.json and the
+# run number.
 name: release
 
 on:
@@ -13,7 +15,8 @@ permissions:
 
 concurrency:
   group: release
-  cancel-in-progress: false
+  # a newer push makes this build moot
+  cancel-in-progress: true
 
 jobs:
   release:
@@ -52,6 +55,8 @@ jobs:
           version=$(node -p 'require("./neutralino.config.json").version')
           tag="v$version-build.$GITHUB_RUN_NUMBER"
           short=${GITHUB_SHA::7}
+          gh release list --limit 1000 --json tagName -q '.[].tagName' |
+            while read -r old; do gh release delete "$old" --cleanup-tag --yes; done
           gh release create "$tag" out/* \
             --target "$GITHUB_SHA" \
             --title "隨筆 $version (build $GITHUB_RUN_NUMBER, $short)" \

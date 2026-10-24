@@ -13,7 +13,7 @@ An outliner notebook with math: a journal day for every date, named pages, tasks
 
 ## Download
 
-Every push to `main` is built and published on the [releases page](https://github.com/dannypsnl/scratch/releases):
+The latest commit on `main` is built and published on the [releases page](https://github.com/dannypsnl/scratch/releases) (earlier builds are removed):
 
 | file | |
 |---|---|
