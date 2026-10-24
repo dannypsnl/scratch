@@ -167,8 +167,11 @@ export const mathDecorations = new Plugin({
       const $h = state.selection.$head;
       for (let d = $h.depth; d > 0; d--) {
         if ($h.node(d).type.name !== "math") continue;
-        // highlight the formula being edited
-        return set.add(state.doc, [Decoration.node($h.before(d), $h.after(d), { class: "pm-active" })]);
+        // highlight the formula being edited, and outline the slot or script
+        // the caret is in: its end and the spot just after it share an x
+        const decos = [Decoration.node($h.before(d), $h.after(d), { class: "pm-active" })];
+        if ($h.depth > d) decos.push(Decoration.node($h.before(), $h.after(), { class: "pm-here" }));
+        return set.add(state.doc, decos);
       }
       return set;
     },
