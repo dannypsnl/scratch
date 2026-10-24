@@ -194,15 +194,21 @@ function slotStart(struct, structPos, idx) {
 // lands on the formula's own row. The column is kept across repeated presses.
 let goal = null;
 
-function intoLine(view, dir) {
+function intoLine(view, dir, scrolled = false) {
   const { state } = view;
   const head = state.selection.head;
   const c = view.coordsAtPos(head);
   const x = goal?.pos === head ? goal.x : c.left;
   const h = c.bottom - c.top;
   for (let k = 1; k <= 6; k++) {
-    const hit = view.posAtCoords({ left: x, top: dir > 0 ? c.bottom + (k * h) / 2 : c.top - (k * h) / 2 });
-    if (!hit) return false; // off screen: leave it to the browser
+    const y = dir > 0 ? c.bottom + (k * h) / 2 : c.top - (k * h) / 2;
+    if (!scrolled && (y < 0 || y > window.innerHeight)) {
+      // the next line is off screen: bring it in, then look again
+      window.scrollBy(0, y < 0 ? y - 2 * h : y - window.innerHeight + 2 * h);
+      return intoLine(view, dir, true);
+    }
+    const hit = view.posAtCoords({ left: x, top: y });
+    if (!hit) break; // past the editor's first or last line
     let $hit = state.doc.resolve(hit.pos);
     if (!$hit.parent.inlineContent) {
       // past the end of a shorter line: the end of that line
@@ -217,7 +223,12 @@ function intoLine(view, dir) {
     goal = { pos: view.state.selection.head, x };
     return true;
   }
-  return false;
+  // no line that way: to the start / end of this line, as browsers do, rather
+  // than letting the browser pick (it takes a raised label for a line)
+  const $h = state.selection.$head;
+  let d = $h.depth;
+  while (d > 0 && !$h.node(d).isTextblock) d--;
+  return caret(state, view.dispatch, dir < 0 ? $h.start(d) : $h.end(d));
 }
 
 export const vertical = (dir) => (state, dispatch, view) => {
