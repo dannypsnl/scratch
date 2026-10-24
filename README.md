@@ -50,14 +50,3 @@ npm run test:fuzz  # random edits against the model
 ```
 
 `npm test` starts the self-hosted sync server, so run `npm install` in `sync/` once first.
-
-## Layout
-
-| | |
-|---|---|
-| `src/` | the app: ProseMirror editor, formulas, journal, pages, search, sync client |
-| `model/` | a PureScript model of the formula editor, for testing it |
-| `sync/` | the sync relay (Cloudflare Worker and self-hosted Node) |
-| `mcp/` | the MCP server |
-| `scripts/` | build helpers: the mac bundle, icons, KaTeX tables |
-| `test/` | tests |
