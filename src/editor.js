@@ -7,7 +7,7 @@ import { history, undo, redo } from "prosemirror-history";
 import { schema } from "./schema.js";
 import { parseMath, serializeMath } from "./latex.js";
 import { parseInline, parseOutline, serializeInline, serializeOutline } from "./outline-io.js";
-import { horizontal, vertical, term, selectTerm, formula, selectionShape, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
+import { horizontal, vertical, term, selectTerm, formula, selectionShape, arrowShape, labelledArrows, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
 import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, toggleFoldAt, blockIds, outlineDecorations } from "./outline.js";
 import { openPalette } from "./palette.js";
 import { openPicker } from "./picker.js";
@@ -255,10 +255,14 @@ function pasteBlocks(view, doc) {
 // onUpdate(view, prevState, tr) runs after every transaction.
 // plugins: extra plugins that take precedence over the outline keys.
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
-  const state = EditorState.create({
+  let state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
+    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, arrowShape, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
   });
+  // notes written before x-arrows: their labelled arrows become x-arrows too
+  // (saved with the next edit)
+  const arrows = labelledArrows(state);
+  if (arrows) state = state.apply(arrows.setMeta("addToHistory", false));
   const view = new EditorView(mount, {
     state,
     // no macOS autocorrect / capitalisation bubbles or spell squiggles:

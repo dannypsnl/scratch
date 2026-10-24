@@ -189,10 +189,55 @@ isOperator :: Item -> Boolean
 isOperator it = case kind it of
   "ch" -> elem (nameOf it) [ "+", "-", "*", "=", "<", ">", ",", ";" ]
   "sym" -> let Item i = it in i.cls == "rel" || i.cls == "bin"
-  "struct" | nameOf it == "overset" || nameOf it == "underset" -> case A.index (slotsOf it) 1 of
-    Just [ base ] -> isOperator base
-    _ -> false
+  "struct"
+    | isXArrow (nameOf it) -> true
+    | nameOf it == "overset" || nameOf it == "underset" -> case A.index (slotsOf it) 1 of
+        Just [ base ] -> isOperator base
+        _ -> false
   _ -> false
+
+-- ---------------------------------------------------------------------------
+-- Labelled arrows
+
+-- | A label over a lone arrow is written as the arrow that stretches to fit
+-- | its label: \overset{l}{\to} is \xrightarrow{l}, in the document itself,
+-- | so LaTeX made from it stretches too. Applied after every edit.
+xArrowOf :: String -> Maybe String
+xArrowOf = case _ of
+  "to" -> Just "xrightarrow"
+  "rightarrow" -> Just "xrightarrow"
+  "leftarrow" -> Just "xleftarrow"
+  "mapsto" -> Just "xmapsto"
+  "twoheadrightarrow" -> Just "xtwoheadrightarrow"
+  _ -> Nothing
+
+isXArrow :: String -> Boolean
+isXArrow name = elem name [ "xrightarrow", "xleftarrow", "xmapsto", "xtwoheadrightarrow" ]
+
+-- | The base, when an item is a label over a lone arrow: the x-arrow it becomes.
+xArrowFor :: Item -> Maybe String
+xArrowFor (Item i) = case i.kind, i.name, i.slots of
+  "struct", "overset", [ _, [ Item b ] ] | b.kind == "sym" -> xArrowOf b.name
+  _, _, _ -> Nothing
+
+normalize :: Box -> Box
+normalize = map one
+  where
+  one it@(Item i) = case xArrowFor it of
+    Just x -> struct x [ normalize (fromMaybe [] (A.index i.slots 0)) ]
+    Nothing -> Item i { slots = map normalize i.slots }
+
+-- | Where a position ends up: in the label it stays; in the arrow it was
+-- | (now gone) it goes after the new x-arrow.
+normalizePos :: Box -> Pos -> Pos
+normalizePos line p = go line 0
+  where
+  go box d = case A.index p.path d of
+    Nothing -> p
+    Just step -> case A.index box step.item of
+      Just it | isJust (xArrowFor it) && step.slot == 1 -> { path: A.take d p.path, off: step.item + 1 }
+      Just it -> go (fromMaybe [] (A.index (slotsOf it) step.slot)) (d + 1)
+      Nothing -> p
 
 -- | Each press crosses one run of operators or one term (a structure counts
 -- | as part of the term it sits in). Parentheses make a scope: inside a

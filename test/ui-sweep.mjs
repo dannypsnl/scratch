@@ -22,7 +22,8 @@ const KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Alt+ArrowLeft"
 // Option + arrow from one end of the formula: the LaTeX left of the caret at
 // each stop. A relation over a label (\overset{f}{\to}) splits terms like a bare one.
 const PATHS = [
-  ["N\\overset{f}{\\to}M\\overset{g}{\\to}P", ["N", "N\\overset{f}{\\to}", "N\\overset{f}{\\to}M", "N\\overset{f}{\\to}M\\overset{g}{\\to}", "N\\overset{f}{\\to}M\\overset{g}{\\to}P"]],
+  // (a labelled \to is an \xrightarrow by then)
+  ["N\\overset{f}{\\to}M\\overset{g}{\\to}P", ["N", "N\\xrightarrow{f}", "N\\xrightarrow{f}M", "N\\xrightarrow{f}M\\xrightarrow{g}", "N\\xrightarrow{f}M\\xrightarrow{g}P"]],
   ["0\\to N\\to\\frac{M}{N}\\to 0", ["0", "0\\to", "0\\to N", "0\\to N\\to", "0\\to N\\to\\frac{M}{N}", "0\\to N\\to\\frac{M}{N}\\to", "0\\to N\\to\\frac{M}{N}\\to0"]],
   ["h(m_1)+h(m_2)=0", ["h(m_1)", "h(m_1)+", "h(m_1)+h(m_2)", "h(m_1)+h(m_2)=", "h(m_1)+h(m_2)=0"]],
   ["h(m_1)-h(m_2)", ["h(m_1)", "h(m_1)-", "h(m_1)-h(m_2)"]],
@@ -33,6 +34,17 @@ const INSIDE = [
   ["h(m_1)-h(m_2)", "h(m_1)-h(m_2", "Alt+ArrowLeft", ["h(m_1)-h(", "h(m_1)-h", "h(m_1)-"]],
   ["h(m_1)-h(m_2)", "h(", "Alt+ArrowRight", ["h(m_1", "h(m_1)", "h(m_1)-"]],
   ["(a+b)^3", "(a", "Alt+ArrowRight", ["(a+", "(a+b", "(a+b)"]],
+];
+// A label over a lone arrow is rewritten to the x-arrow that stretches to it,
+// in the document; drawn, the arrow is at least as wide as its label, and a
+// short label leaves it at a bare arrow's length.
+// [formula, its LaTeX afterwards, expectation for the first x-arrow]
+const XARROWS = [
+  ["N\\overset{n\\mapsto(n,0)}{\\to}P", "N\\xrightarrow{n\\mapsto(n,0)}P", "stretched"],
+  ["A\\overset{f}{\\to}B\\to C", "A\\xrightarrow{f}B\\to C", "natural"],
+  ["A\\overset{(n,p)}{\\leftarrow}B", "A\\xleftarrow{(n,p)}B", "stretched"],
+  ["A\\overset{ghij}{\\mapsto}B", "A\\xmapsto{ghij}B", "stretched"],
+  ["x\\overset{\\mathrm{def}}{=}y", "x\\overset{\\mathrm{def}}{=}y", "none"],
 ];
 const HINTED = ["slash", "frac", "power"]; // the actions the hint under a selection offers
 const ONLY = process.argv[2] ? process.argv[2].split(",").map(Number) : null;
@@ -112,6 +124,13 @@ async function fresh(f) {
       // the formula's LaTeX left of the caret, when the caret is directly in it
       leftOf: () => { const $h = v.state.selection.$head, p = math(); if ($h.parent !== v.state.doc.nodeAt(p)) return null; return L.serializeMath(v.state.doc.slice(p + 1, $h.pos).content); },
       // the caret where the formula's LaTeX left of it is `prefix`
+      // the first x-arrow drawn: its label's width, its arrow's, and a bare →'s
+      xarrow: () => {
+        const o = document.querySelector(".layout-xarrow");
+        if (!o) return null;
+        const bare = [...document.querySelectorAll(".pm-math > .pm-sym.pm-rel")].find((e) => e.textContent === "→");
+        return { label: o.querySelector(".pm-slot").getBoundingClientRect().width, arrow: o.querySelector(":scope > .pm-deco").getBoundingClientRect().width, bare: bare?.getBoundingClientRect().width ?? null };
+      },
       caretAfter: (prefix) => { const p = math(), n = v.state.doc.nodeAt(p); for (let x = p + 1; x < p + n.nodeSize; x++) if (v.state.doc.resolve(x).parent === n && L.serializeMath(v.state.doc.slice(p + 1, x).content) === prefix) return window.__h.setCaret(x); throw new Error("no caret after " + prefix); },
       edge: (end) => { const p = math(); return end ? p + v.state.doc.nodeAt(p).nodeSize - 1 : p + 1; },
       reparse: () => { const s = window.__h.ser(); const again = L.serializeMath(v.state.schema.nodes.math.create(null, L.parseMath(s)).content); return s === again ? null : [s, again]; },
@@ -137,6 +156,16 @@ if (!ONLY) for (const [f, stops] of PATHS) {
     if (JSON.stringify(got) !== JSON.stringify(expect)) fails.push({ kind: "option-arrow stops", f, key, expect, got });
   }
   console.log(`path: ${f}`);
+}
+if (!ONLY) for (const [f, latex, expect] of XARROWS) {
+  await fresh(f);
+  await pg.evaluate(() => window.view.dom.blur()); await pause(100);
+  const got = await H("ser"), m = await H("xarrow");
+  const ok = got === latex && (expect === "none" ? m === null
+    : expect === "stretched" ? m && m.arrow >= m.label - 1
+    : m && m.bare !== null && Math.abs(m.arrow - m.bare) <= 1);
+  if (!ok) fails.push({ kind: "label over an arrow", f, latex, got, expect, m });
+  console.log(`arrow: ${f}`);
 }
 if (!ONLY) for (const [f, from, key, expect] of INSIDE) {
   await fresh(f);

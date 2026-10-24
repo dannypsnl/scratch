@@ -67,7 +67,15 @@ export const STRUCTS = {
   mathcal: { arity: 1, layout: "font-cal", rows: [[0]], example: "\\mathcal{C}", letter: true },
   mathrm: { arity: 1, layout: "font-rm", rows: [[0]], example: "\\mathrm{d}x" },
   operatorname: { arity: 1, layout: "opname", rows: [[0]], example: "\\operatorname{rank}" },
+  // arrows that stretch to their label; \overset{f}{\to} becomes one (nav.js)
+  xrightarrow: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xrightarrow{f}", arrow: { glyph: "→", dir: "right" } },
+  xleftarrow: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xleftarrow{f}", arrow: { glyph: "←", dir: "left" } },
+  xmapsto: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xmapsto{f}", arrow: { glyph: "→", dir: "right", bar: true } },
+  xtwoheadrightarrow: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xtwoheadrightarrow{f}", arrow: { glyph: "↠", dir: "right" } },
 };
+
+// The x-arrow a label over a lone arrow becomes.
+export const X_ARROW = { to: "xrightarrow", rightarrow: "xrightarrow", leftarrow: "xleftarrow", mapsto: "xmapsto", twoheadrightarrow: "xtwoheadrightarrow" };
 
 // ASCII shorthands typed inside a formula, turned into a symbol as soon as
 // they are complete. A sequence may continue a symbol made by a shorter one:

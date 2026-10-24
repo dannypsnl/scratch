@@ -1,7 +1,7 @@
 import { Plugin, TextSelection, NodeSelection } from "prosemirror-state";
 import { Fragment } from "prosemirror-model";
 import { schema, isMathContainer } from "./schema.js";
-import { structSpec, SYMBOLS, SHORTHANDS } from "./specs.js";
+import { structSpec, SYMBOLS, STRUCTS, SHORTHANDS, X_ARROW } from "./specs.js";
 import { scriptPartner } from "./stack.js";
 
 // Inside a formula every caret move is computed from the model, never left to
@@ -91,6 +91,40 @@ export const selectionShape = new Plugin({
     const shaped = shapeSelection(state.doc, sel.anchor, sel.head);
     return shaped && state.tr.setSelection(TextSelection.create(state.doc, ...shaped)).setMeta(navGuard, true);
   },
+});
+
+// ---------- labelled arrows ----------
+
+// A label over a lone arrow is written as the arrow that stretches to fit it:
+// \overset{l}{\to} becomes \xrightarrow{l} in the document itself, so LaTeX
+// made from it stretches too. A caret in the label stays there; one on the
+// arrow (now gone) goes after the new x-arrow. (model: normalize, normalizePos)
+export function labelledArrows(state) {
+  const found = [];
+  state.doc.descendants((node, pos) => {
+    if (node.type !== T.struct || node.attrs.name !== "overset" || node.childCount !== 2) return true;
+    const base = node.child(1);
+    const x = base.childCount === 1 && base.firstChild.type === T.sym ? X_ARROW[base.firstChild.attrs.name] : null;
+    if (x) found.push({ pos, node, x });
+    return true;
+  });
+  if (!found.length) return null;
+  const tr = state.tr;
+  const { anchor, head } = state.selection;
+  const onArrow = (p) => found.find(({ pos, node }) => p > pos + 1 + node.child(0).nodeSize && p < pos + node.nodeSize - 1);
+  // last first, so earlier positions hold; the node is read again from the
+  // document as changed so far (an arrow in its label may have changed)
+  for (const { pos, x } of [...found].reverse()) {
+    const node = tr.doc.nodeAt(pos), start = pos + 1 + node.child(0).nodeSize;
+    tr.delete(start, start + node.child(1).nodeSize).setNodeMarkup(pos, null, { name: x });
+  }
+  const place = (p) => { const s = onArrow(p); return s ? tr.mapping.map(s.pos + s.node.nodeSize) : tr.mapping.map(p); };
+  if (onArrow(anchor) || onArrow(head)) tr.setSelection(TextSelection.create(tr.doc, place(anchor), place(head)));
+  return tr;
+}
+
+export const arrowShape = new Plugin({
+  appendTransaction: (trs, _old, state) => (trs.some((tr) => tr.docChanged) ? labelledArrows(state) : null),
 });
 
 // ---------- Left / Right ----------
@@ -524,6 +558,7 @@ const OP_SYM = new Set(["bin", "rel"]);
 function isOperator(node) {
   if (node.isText) return node.text.length === 1 && OP_CHARS.has(node.text); // a lone =, + … under a label
   if (node.type === T.sym) return OP_SYM.has(SYMBOLS[node.attrs.name]?.cls);
+  if (node.type === T.struct && STRUCTS[node.attrs.name]?.layout === "xarrow") return true;
   if (node.type !== T.struct || !["overset", "underset"].includes(node.attrs.name)) return false;
   const base = node.child(1).content;
   return base.childCount === 1 && isOperator(base.firstChild);

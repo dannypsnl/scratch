@@ -33,7 +33,8 @@ genPiece depth = frequency $ NEA.cons'
       <> if depth <= 0 then [] else
         [ Tuple 1.0 ((\a b -> [ struct "frac" [ a, b ] ]) <$> inner <*> inner)
         , Tuple 1.0 ((\a -> [ struct "sqrt" [ a ] ]) <$> inner)
-        , Tuple 1.0 ((\a -> [ struct "overset" [ a, [ sym "to" "rel" ] ] ]) <$> inner)
+        , Tuple 1.0 ((\a b -> [ struct "overset" [ a, [ b ] ] ]) <$> inner <*> elements (NEA.cons' (sym "to" "rel") [ sym "leftarrow" "rel", sym "mapsto" "rel", ch '=' ]))
+        , Tuple 0.5 ((\a -> [ struct "xrightarrow" [ a ] ]) <$> inner)
         , Tuple 1.0 ((\b s -> [ b, sup s ]) <$> genAtom <*> inner)
         , Tuple 1.0 ((\b s -> [ b, sub s ]) <$> genAtom <*> inner)
         , Tuple 1.0 ((\b s t -> [ b, sup s, sub t ]) <$> genAtom <*> inner <*> inner)

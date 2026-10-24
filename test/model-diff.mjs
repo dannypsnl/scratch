@@ -8,7 +8,7 @@
 import { EditorState, TextSelection, NodeSelection } from "prosemirror-state";
 import { schema } from "../src/schema.js";
 import { SYMBOLS } from "../src/specs.js";
-import { horizontal, term, selectTerm, navGuard, selectionShape } from "../src/nav.js";
+import { horizontal, term, selectTerm, navGuard, selectionShape, labelledArrows } from "../src/nav.js";
 import { notationActions } from "../src/notation.js";
 import * as M from "../model/output/Model/index.js";
 import * as G from "../model/output/Gen/index.js";
@@ -129,6 +129,19 @@ for (const line of lines) {
       const sel = { anchor: posOf(got.selection.anchor), head: posOf(got.selection.head) };
       if (!same(sel, want)) fail(`option-shift ${dir}`, line, { from: p, want, got: sel });
     }
+  }
+
+  // ---- labelled arrows become x-arrows: the document, and the caret from every stop
+  const normal = M.normalize(line);
+  for (const p of stops) {
+    const tr = labelledArrows(state(doc, TextSelection.create(doc, toPM(line, p))));
+    checks++;
+    if (!tr) { if (!same(normal, line)) fail("labelled arrows: nothing done", line, { want: M.showBox(normal) }); break; }
+    const got = lineOf(tr.doc);
+    if (!same(got, normal)) { fail("labelled arrows: document", line, { want: M.showBox(normal), got: M.showBox(got) }); break; }
+    const want = M.normalizePos(line)(p);
+    const head = positionTable(normal).get(tr.selection.head) ?? { pm: tr.selection.head };
+    if (!same(head, want) || !tr.selection.empty) fail("labelled arrows: caret", line, { from: p, want, got: head });
   }
 
   // ---- shape: every pair of positions inside the line (a drag, a click)

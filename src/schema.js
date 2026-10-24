@@ -1,5 +1,5 @@
 import { Schema, DOMSerializer } from "prosemirror-model";
-import { SYMBOLS, structSpec } from "./specs.js";
+import { SYMBOLS, STRUCTS, structSpec } from "./specs.js";
 import { t } from "./i18n.js";
 
 // Links point at ids; what they display is looked up at render time.
@@ -129,6 +129,11 @@ export const schema = new Schema({
             return ["span", { class: cls }, deco("√"), ["span", { class: "pm-args" }, 0]];
           case "binom":
             return ["span", { class: cls }, deco("("), ["span", { class: "pm-args" }, 0], deco(")")];
+          case "xarrow": {
+            // the label, then the arrow: a glyph for the head, a drawn shaft
+            const { glyph, dir, bar } = STRUCTS[node.attrs.name].arrow;
+            return ["span", { class: `${cls} pm-xarrow-${dir}${bar ? " pm-xarrow-bar" : ""}` }, ["span", { class: "pm-args" }, 0], deco(glyph)];
+          }
           case "generic":
             return ["span", { class: cls }, deco("\\" + node.attrs.name), ["span", { class: "pm-args" }, 0]];
           default:

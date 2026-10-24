@@ -445,6 +445,23 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-overset > .pm-slot:first-child { margin-bottom: -.3em; }
 .layout-underset > .pm-slot:first-child { order: 1; margin-top: -.15em; }
 
+/* \xrightarrow and kin: the label over an arrow as wide as it. The glyph
+   draws the head; a drawn shaft fills the rest, at KaTeX_Main's own shaft
+   (measured: .235em to .275em above the baseline). The glyph's line is the
+   last in the box, so the arrow sits on the text baseline. */
+.layout-xarrow { display: inline-block; text-align: center; margin: 0 .28em; }
+.layout-xarrow > .pm-args { display: block; }
+.layout-xarrow .pm-slot { display: block; width: fit-content; margin: 0 auto -.3em; padding: 0 .3em; font-size: .7em; line-height: 1; }
+.layout-xarrow > .pm-deco { display: flex; align-items: baseline; }
+.pm-xarrow-right > .pm-deco::before, .pm-xarrow-left > .pm-deco::after {
+  content: ""; flex: 1; min-width: .4em; height: .4em; position: relative; top: -.055em;
+  background: linear-gradient(currentColor, currentColor) 0 50% / 100% .04em no-repeat;
+}
+/* the shaft runs into the glyph's own; its min-width cancels that overlap */
+.pm-xarrow-right > .pm-deco::before { margin-right: -.4em; }
+.pm-xarrow-left > .pm-deco::after { margin-left: -.4em; }
+.pm-xarrow-bar > .pm-deco::before { border-left: .04em solid currentColor; }
+
 .layout-overline > .pm-slot { border-top: .06em solid currentColor; }
 .layout-font-bb > .pm-slot { font-family: KaTeX_AMS, serif; font-style: normal; }
 .layout-font-cal > .pm-slot { font-family: KaTeX_Caligraphic, serif; font-style: normal; }
