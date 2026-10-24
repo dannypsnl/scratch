@@ -494,6 +494,8 @@ function insertFrac(state, dispatch, undo = {}) {
   return true;
 }
 
+const BRACKETS = { "(": ")", "[": "]", "{": "}", "|": "|" };
+
 // Handle one typed character while the caret is inside a formula.
 // Returns false only when the character should open the command palette
 // (Space on a selection: its menu of actions).
@@ -502,6 +504,14 @@ export function typeInMath(view, ch) {
   // in \text{…} every key is a character (no scripts, fractions or commands)
   if (inText(state.selection.$head) && ch !== "$") {
     if (ch !== "\\") dispatch(state.tr.insertText(ch).scrollIntoView());
+    return true;
+  }
+  // a bracket typed on a selection within one box wraps it (still selected,
+  // so another wraps it again)
+  const { from, to, $from, empty } = state.selection;
+  if (BRACKETS[ch] && !empty && $from.sameParent(state.selection.$to) && isMathContainer($from.parent.type)) {
+    const tr = state.tr.insertText(BRACKETS[ch], to).insertText(ch, from);
+    dispatch(tr.setSelection(TextSelection.create(tr.doc, from + 1, to + 1)).scrollIntoView());
     return true;
   }
   switch (ch) {
