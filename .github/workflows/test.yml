@@ -1,0 +1,54 @@
+# Every push and pull request runs the tests: the app's (npm test, and the
+# editor in WebKit with npm run test:ui), the sync relay's, and the formula
+# editor against its PureScript model.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    # macOS: the input method test drives a real WKWebView (test/ime-webkit.swift)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            sync/package-lock.json
+
+      - run: npm ci
+      # npm test starts the self-hosted sync server
+      - run: npm ci
+        working-directory: sync
+
+      - run: npx playwright-core install webkit chromium-headless-shell
+
+      - run: npm test
+      - run: npm test
+        working-directory: sync
+      - run: npm run test:ui
+
+  model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run test:model
