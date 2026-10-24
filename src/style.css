@@ -405,18 +405,17 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .pm-sym.pm-opname { margin: 0 .17em; }
 .pm-bin { margin: 0 .22em; }
 .pm-math .pm-sym.pm-bin.pm-unary { margin: 0; } /* -x, (-x): an ordinary symbol (decorations.js) */
-/* a typed - is drawn as the minus KaTeX writes for it: the hyphen widened to
-   a minus's .778em (the LaTeX stays -) */
-.pm-minus { display: inline-block; transform: scaleX(2.33); margin: 0 .222em; }
-.pm-minus.pm-bin { margin: 0 .442em; }
+/* a typed - is drawn as the minus KaTeX writes for it (the document and the
+   LaTeX keep -): the minus glyph laid over the hyphen, which turns invisible
+   and takes the minus's .778em (letter-spacing), so the caret goes on either
+   side of the minus */
+.pm-minus { -webkit-text-fill-color: transparent; letter-spacing: .445em; }
+.pm-minus::before { content: "\2212"; -webkit-text-fill-color: currentColor; letter-spacing: 0; margin-right: -.778em; }
 /* in small type (scripts, labels, a root's index) TeX puts no space around
    relations, operators or commas: n\mapsto(n,0), not n ↦ (n, 0) */
 :is(.pm-sup, .pm-sub, .layout-overset > .pm-slot:first-child, .layout-underset > .pm-slot:first-child,
   .layout-overbrace > .pm-slot:first-child, .layout-underbrace > .pm-slot:last-child, .layout-root > .pm-slot:first-child)
   :is(.pm-rel, .pm-bin, .pm-punct) { margin-left: 0; margin-right: 0; }
-:is(.pm-sup, .pm-sub, .layout-overset > .pm-slot:first-child, .layout-underset > .pm-slot:first-child,
-  .layout-overbrace > .pm-slot:first-child, .layout-underbrace > .pm-slot:last-child, .layout-root > .pm-slot:first-child)
-  .pm-minus { margin: 0 .222em; }
 .pm-rel { margin: 0 .28em; }
 .pm-punct { margin-right: .17em; }
 
