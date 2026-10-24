@@ -22,7 +22,7 @@ await pg.waitForFunction(() => window.view);
 const settle = () => pg.evaluate(async () => { await (await import("/src/notation.js")).casSettled(); await new Promise((r) => setTimeout(r, 50)); });
 const hint = () => pg.evaluate(() => {
   const b = document.querySelector(".notation-hint");
-  return !b || b.hidden ? null : [...b.querySelectorAll("button.equals")].map((x) => ({ op: x.querySelector(".op").textContent, tex: x.querySelector("annotation")?.textContent ?? "" }));
+  return !b || b.hidden ? null : [...b.querySelectorAll("button.equals")].map((x) => ({ tex: x.querySelector("annotation")?.textContent ?? "" }));
 });
 // the last line holding `has`
 const line = (has) => pg.evaluate(async (has) => (await import("/src/outline-io.js")).serializeOutline(window.view.state.doc).split("\n").findLast((l) => l.includes(has)) ?? "", has);
@@ -66,6 +66,12 @@ await pg.keyboard.type("$a+b =");
 await settle();
 check(!(await hint()), "a+b = (already as simple as it gets) offers nothing");
 
+// h(m_1)+h(m_2) = : h may be a function, so nothing is offered
+await pg.keyboard.press("Meta+Shift+Enter");
+await pg.keyboard.type("$h(m)+h(n) =");
+await settle();
+check(!(await hint()), "h(m)+h(n) = offers nothing (h may be a function)");
+
 // after a relation, only what follows it is worked out
 await pg.keyboard.press("Meta+Shift+Enter");
 await pg.keyboard.type("$y = 2x+3x =");
@@ -97,6 +103,24 @@ r = await scriptLine(async () => {
 // (the actions menu: its input hidden, keys only)
 const left = await pg.evaluate(() => [...document.querySelectorAll(".palette:has(.hidden-input)")].map((p) => p.textContent.slice(0, 60)));
 check(/\(a\+b\)_\{?2\}?\$/.test(r.line) && !left.length, `_ in the menu does it and closes the menu (${r.line} ${JSON.stringify(left)})`);
+
+// a space typed after a formula, the caret after it: ← goes to the formula's
+// edge, then into it after the "=" (not past the whole formula)
+const caretAt = () => pg.evaluate(() => { const s = window.view.state.selection; const b = s.$from.nodeBefore, a = s.$from.nodeAfter; return `${s.$from.parent.type.name} ${b?.text ?? b?.type.name ?? ""}|${a?.text ?? a?.type.name ?? ""}`; });
+await pg.evaluate(async () => {
+  const view = window.view, IO = await import("/src/outline-io.js");
+  const doc = IO.parseOutline("- $\\frac{b^2-a^2}{b-a} =$ ");
+  const tr = view.state.tr.replaceWith(0, view.state.doc.content.size, doc.content);
+  let end = -1; tr.doc.descendants((n, p) => { if (n.type.name === "line") end = p + n.nodeSize - 1; });
+  view.dispatch(tr.setSelection(view.state.selection.constructor.create(tr.doc, end)));
+  view.focus();
+});
+await pg.keyboard.press("ArrowLeft");
+check(await caretAt() === "line math| ", `← from after the space stops beside the formula (${await caretAt()})`);
+await pg.keyboard.press("ArrowLeft");
+check(await caretAt() === "math =|", `← again goes in, after the "=" (${await caretAt()})`);
+await pg.keyboard.press("ArrowRight"); await pg.keyboard.press("ArrowRight");
+check(await caretAt() === "line  |", `→ → back out past the space (${await caretAt()})`);
 
 await browser.close();
 await server.close();

@@ -142,7 +142,8 @@ async function fresh(f) {
       atEdge: (pos, dir) => { const $x = v.state.doc.resolve(pos); let d = $x.depth; while ($x.node(d).type.name !== "math") d--; return dir < 0 ? pos === $x.start(d) : pos === $x.end(d); },
       actions: () => N.notationActions(v.state).map((a) => a.id),
       // what is on screen, not the hidden flag: a class's display can override it
-      hint: () => { const h = document.querySelector(".notation-hint"); return h && h.checkVisibility() && h.getBoundingClientRect().width > 0 ? h.textContent : null; },
+      // (the selection's hint; after an "=" a caret has answers of its own)
+      hint: () => { const h = document.querySelector(".notation-hint"); return h && h.checkVisibility() && h.getBoundingClientRect().width > 0 && !h.querySelector("button.equals") ? h.textContent : null; },
       close: () => v.dispatch(Hi.closeHistory(v.state.tr)),
       reset: (tex) => { const p = math(), n = v.state.doc.nodeAt(p); v.dispatch(v.state.tr.replaceWith(p + 1, p + n.nodeSize - 1, L.parseMath(tex)).setMeta("addToHistory", false)); },
       apply: (id) => N.applyNotation(v, N.notationActions(v.state).find((x) => x.id === id)),

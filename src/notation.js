@@ -189,7 +189,10 @@ function equalsAt(state) {
     pos += n.nodeSize;
   });
   const input = toCas(before.cut(start, end));
-  return input ? { input, at: sel.from, space: !/\s$/.test(last.text) } : null;
+  // h(x) may be a function applied, which Nerdamer takes for h times x:
+  // offered unasked, an answer must not rest on that guess
+  if (!input || /[A-Za-z_0-9]\*\(/.test(input)) return null;
+  return { input, at: sel.from, space: !/\s$/.test(last.text) };
 }
 
 // [{ op, label, tex, replace }]: one per different answer
@@ -236,8 +239,8 @@ function drawHint() {
     box.replaceChildren(...equals.map((a) => {
       const b = document.createElement("button");
       b.className = "equals";
-      b.innerHTML = `<span class="op"></span>${katex.renderToString(a.tex, { throwOnError: false })}`;
-      b.firstChild.textContent = a.label;
+      // the answer alone: a label (expand, factor) was as often wrong as right
+      b.innerHTML = katex.renderToString(a.tex, { throwOnError: false });
       b.onmousedown = (ev) => { ev.preventDefault(); applyEquals(view, a); };
       return b;
     }));
