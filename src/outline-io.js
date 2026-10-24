@@ -57,7 +57,7 @@ export function serializeInline(fragment) {
     } else if (n.type === T.ref) {
       s += `((${n.attrs.block}))`;
     } else if (n.type === T.image) {
-      s += `![${n.attrs.alt}](images/${n.attrs.src})`;
+      s += `![${n.attrs.alt}${n.attrs.width ? `|${n.attrs.width}` : ""}](images/${n.attrs.src})`;
     }
   });
   return s;
@@ -105,6 +105,7 @@ export function serializeOutline(doc) {
 // `code`, $..$ formulas, **bold**, *italic*, <u>underline</u>, ~~strike~~,
 // ==highlight== (no nesting of marks),
 // [[page]], #page, #[[page with spaces]], ((block-id)), ![alt](images/<file>)
+// (![alt|300](…): drawn 300px wide)
 export function parseInline(text) {
   const out = [];
   const re = new RegExp(String.raw`\x60([^\x60]+)\x60|!\[([^\]]*)\]\(images\/([^)\s]+)\)|\$([^$]*)\$|\*\*([^*]+)\*\*|\*([^*]+)\*|<u>(.+?)<\/u>|~~([^~]+)~~|==([^=]+)==|(#)?\[\[([^\]]+)\]\]|#([^${TAG_STOP}]+)|\(\(([a-z0-9]+)\)\)`, "g");
@@ -112,7 +113,10 @@ export function parseInline(text) {
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(schema.text(text.slice(last, m.index)));
     if (m[1] !== undefined) out.push(schema.text(m[1], [schema.marks.code.create()]));
-    else if (m[3] !== undefined) out.push(T.image.create({ alt: m[2], src: m[3] }));
+    else if (m[3] !== undefined) {
+      const [, alt, width] = /^(.*?)(?:\|(\d+))?$/.exec(m[2]);
+      out.push(T.image.create({ alt, src: m[3], width: width ? Number(width) : null }));
+    }
     else if (m[4] !== undefined) out.push(T.math.create(null, parseMath(m[4])));
     else if (m[5] !== undefined) out.push(schema.text(m[5], [schema.marks.strong.create()]));
     else if (m[6] !== undefined) out.push(schema.text(m[6], [schema.marks.em.create()]));

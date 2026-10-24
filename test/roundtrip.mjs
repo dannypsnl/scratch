@@ -63,6 +63,7 @@ const outlineSrc = [
   "- DONE finished",
   "- no state $x_i^2$",
   "- ![board](images/0f343b0931126a20f133d67c2b018a3b8b2b8f0e2e0d8b6b8c6d3c2a1b0c9d8e.png)",
+  "- ![board|320](images/0f343b0931126a20f133d67c2b018a3b8b2b8f0e2e0d8b6b8c6d3c2a1b0c9d8e.png) drawn 320px wide",
   "- read [[Mac Lane]], #topology, #[[algebraic topology]], see ((abc123)) and [[2026-10-23]]",
   "- fold a crane #origami",
   "  difficulty:: medium",

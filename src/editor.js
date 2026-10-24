@@ -1,4 +1,4 @@
-import { EditorState, TextSelection, Plugin } from "prosemirror-state";
+import { EditorState, TextSelection, NodeSelection, Plugin } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { Fragment } from "prosemirror-model";
 import { keymap } from "prosemirror-keymap";
@@ -261,17 +261,60 @@ async function insertImages(view, files) {
   pasteBlocks(view, T.doc.create(null, blocks));
 }
 
-// Images load asynchronously (local store, else the server).
-function imageView(node) {
-  const dom = document.createElement("img");
+// Images load asynchronously (local store, else the server). Selected, an
+// image has a handle at its lower right: dragged, it sets the width the
+// image is drawn at; a double click goes back to the image's own size.
+const MIN_WIDTH = 40;
+function imageView(node, view, getPos) {
+  const dom = document.createElement("span");
   dom.className = "pm-image";
-  dom.alt = node.attrs.alt;
-  dom.draggable = false;
+  const img = document.createElement("img");
+  img.alt = node.attrs.alt;
+  img.draggable = false;
   imageURL(node.attrs.src).then((url) => {
-    if (url) dom.src = url;
+    if (url) img.src = url;
     else dom.classList.add("missing");
   });
-  return { dom, ignoreMutation: () => true };
+  const handle = Object.assign(document.createElement("span"), { className: "pm-image-handle", title: t("image.resize") });
+  dom.append(img, handle);
+  const draw = (width) => { img.style.width = width ? `${width}px` : ""; dom.classList.toggle("sized", !!width); };
+  draw(node.attrs.width);
+  const setWidth = (width) => {
+    const pos = getPos();
+    if (pos === undefined) return;
+    const n = view.state.doc.nodeAt(pos);
+    // (still selected, to be resized again)
+    const tr = view.state.tr.setNodeMarkup(pos, null, { ...n.attrs, width });
+    view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, pos)));
+  };
+  handle.addEventListener("mousedown", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const x0 = ev.clientX, w0 = img.getBoundingClientRect().width;
+    // up to the editor's right edge (the line itself is only as wide as what is in it)
+    const most = view.dom.getBoundingClientRect().right - img.getBoundingClientRect().left;
+    let width = w0;
+    const move = (e) => { width = Math.round(Math.max(MIN_WIDTH, Math.min(most, w0 + e.clientX - x0))); draw(width); };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      if (Math.abs(width - w0) >= 1) setWidth(width);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  });
+  handle.addEventListener("dblclick", (ev) => { ev.preventDefault(); ev.stopPropagation(); setWidth(null); });
+  return {
+    dom,
+    update(next) {
+      if (next.type !== node.type || next.attrs.src !== node.attrs.src) return false;
+      node = next;
+      draw(node.attrs.width);
+      return true;
+    },
+    ignoreMutation: () => true,
+    stopEvent: (ev) => ev.target === handle,
+  };
 }
 
 // Insert pasted blocks next to the caret's block (replacing it when it is an

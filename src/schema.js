@@ -66,13 +66,14 @@ export const schema = new Schema({
       ],
     },
     // an image, by content-hash file name ("<sha256>.png"); drawn by a node
-    // view in editor.js that loads it from the local store or the server
+    // view in editor.js that loads it from the local store or the server.
+    // width: px it is drawn at (null: its own size, up to the column's)
     image: {
       group: "inline",
       inline: true,
       atom: true,
-      attrs: { src: {}, alt: { default: "" } },
-      toDOM: (node) => ["img", { class: "pm-image", alt: node.attrs.alt, "data-src": node.attrs.src }],
+      attrs: { src: {}, alt: { default: "" }, width: { default: null } },
+      toDOM: (node) => ["img", { class: "pm-image", alt: node.attrs.alt, "data-src": node.attrs.src, ...(node.attrs.width ? { width: node.attrs.width } : {}) }],
     },
     // ((block)): shows the referenced block's line, read-only. No longer
     // created anywhere; kept so notes that already contain one still load.

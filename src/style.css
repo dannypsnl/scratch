@@ -921,9 +921,15 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 /* inline-block, top-aligned: ProseMirror keeps an empty caret spot on each
    side of the image, and a block-level image would push those onto lines of
    their own */
-.pm-image { display: inline-block; vertical-align: top; max-width: 100%; max-height: 70vh; border-radius: 6px; margin: 4px 0; }
-.pm-image.missing { width: 12em; height: 6em; background: var(--panel); border: 1px dashed var(--line); }
-.ProseMirror-selectednode.pm-image { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pm-image { display: inline-block; position: relative; vertical-align: top; max-width: 100%; margin: 4px 0; line-height: 0; }
+.pm-image img { display: block; max-width: 100%; max-height: 70vh; border-radius: 6px; }
+/* a width chosen by hand: drawn at it, however tall */
+.pm-image.sized img { max-height: none; height: auto; }
+.pm-image.missing { width: 12em; height: 6em; background: var(--panel); border: 1px dashed var(--line); border-radius: 6px; }
+.ProseMirror-selectednode.pm-image img { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* the handle that resizes a selected image */
+.pm-image-handle { display: none; position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 3px; background: var(--accent); border: 2px solid var(--bg); cursor: nwse-resize; }
+.ProseMirror-selectednode.pm-image .pm-image-handle { display: block; }
 
 /* delete: quiet until hovered, red once armed (second click deletes) */
 .page-del { background: none; border: 0; cursor: pointer; font: 12px system-ui, sans-serif; color: var(--muted); padding: 3px 8px; border-radius: 5px; white-space: nowrap; }
@@ -953,7 +959,7 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .page-table tbody tr:hover { background: var(--panel); }
 .page-table .cell-due { font: 12px system-ui, sans-serif; color: var(--muted); }
 .page-table .cell-due.overdue { color: var(--bad); }
-.page-table .pm-image { max-height: 120px; }
+.page-table .pm-image img, .page-table img.pm-image { max-height: 120px; }
 
 /* fields: definitions as chips above the table, values editable in cells */
 .page-table th.col-add { width: 1%; text-align: center; font-size: 15px; font-weight: normal; padding: 4px 10px; }
