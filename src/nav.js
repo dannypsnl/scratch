@@ -519,6 +519,15 @@ export function insertMath(state, dispatch) {
 const OP_CHARS = new Set("+-*=<>,;");
 const OP_SYM = new Set(["bin", "rel"]);
 
+// A relation or binary operator, also one under or over a label: the arrow
+// in N \overset{f}{\to} M splits terms just as a bare \to does.
+function isOperator(node) {
+  if (node.type === T.sym) return OP_SYM.has(SYMBOLS[node.attrs.name]?.cls);
+  if (node.type !== T.struct || !["overset", "underset"].includes(node.attrs.name)) return false;
+  const base = node.child(1).content;
+  return base.childCount === 1 && isOperator(base.firstChild);
+}
+
 // Flat list of caret steps directly inside the container holding $p.
 function items($p) {
   const out = [];
@@ -527,8 +536,7 @@ function items($p) {
     if (child.isText) {
       for (const c of child.text) out.push({ from: pos, to: ++pos, op: OP_CHARS.has(c) });
     } else {
-      const op = child.type === T.sym && OP_SYM.has(SYMBOLS[child.attrs.name]?.cls);
-      out.push({ from: pos, to: (pos += child.nodeSize), op });
+      out.push({ from: pos, to: (pos += child.nodeSize), op: isOperator(child) });
     }
   });
   return out;
