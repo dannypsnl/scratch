@@ -300,9 +300,21 @@ function insertNode(state, dispatch, node, offset) {
   return true;
 }
 
+// A selection within one container becomes the struct's main argument
+// (\overset's base, a fraction's numerator); the caret then goes to the first
+// slot still empty, or after the struct when none is.
 export function insertStruct(state, dispatch, name, arity) {
-  const slots = Array.from({ length: arity }, () => T.slot.create());
-  return insertNode(state, dispatch, T.struct.create({ name }, slots), 2);
+  const { from, to, $from, $to, empty } = state.selection;
+  const content = !empty && $from.sameParent($to) ? state.doc.slice(from, to).content : Fragment.empty;
+  const main = structSpec(name, arity).wrap ?? 0;
+  const slots = Array.from({ length: arity }, (_, k) => T.slot.create(null, k === main ? content : null));
+  const node = T.struct.create({ name }, slots);
+  let offset = 1, target = node.nodeSize;
+  node.forEach((slot) => {
+    if (target === node.nodeSize && !slot.content.size) target = offset + 1;
+    offset += slot.nodeSize;
+  });
+  return insertNode(state, dispatch, node, target);
 }
 
 // \mathbb{R} and friends: one struct around one letter, caret after it.

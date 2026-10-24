@@ -49,7 +49,7 @@ export function openPalette(view, initial = "") {
   const run = (item) => {
     close();
     if (item.kind === "sym") insertSym(view.state, view.dispatch, item.name);
-    else if (item.kind === "struct" && STRUCTS[item.name].letter) openLetter(view, item.name);
+    else if (item.kind === "struct" && STRUCTS[item.name].letter && view.state.selection.empty) openLetter(view, item.name);
     else if (item.kind === "struct") insertStruct(view.state, view.dispatch, item.name, item.arity);
     else if (item.kind === "generic") {
       // second stage: how many argument slots

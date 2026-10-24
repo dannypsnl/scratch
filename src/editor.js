@@ -156,8 +156,10 @@ function typed(view, ch, rest = "") {
     return false;
   }
   if (!typeInMath(view, ch)) {
-    // "\": clear any selection first, then summon the palette at the caret
-    if (!view.state.selection.empty) view.dispatch(view.state.tr.deleteSelection());
+    // "\": a selection within one container stays for the command to wrap;
+    // any other is cleared first. Then summon the palette at the caret
+    const { $from, $to, empty } = view.state.selection;
+    if (!empty && !$from.sameParent($to)) view.dispatch(view.state.tr.deleteSelection());
     openPalette(view, rest);
   }
   return true;

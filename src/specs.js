@@ -52,15 +52,16 @@ export const SYMBOLS = {
 
 // Commands with arguments. rows lists slot indices top-to-bottom, used for Up/Down;
 // example is what the quick command menu renders as a preview; letter means it
-// styles a single letter, taken from the next key press.
+// styles a single letter, taken from the next key press; wrap is the slot a
+// selection goes into when the command is run over one (default the first).
 // Any command not listed here becomes layout "generic" with however many slots it has.
 export const STRUCTS = {
   frac: { arity: 2, layout: "fraction", rows: [[0], [1]], example: "\\frac{a}{b}" },
   dfrac: { arity: 2, layout: "fraction", rows: [[0], [1]], example: "\\dfrac{a}{b}" },
   binom: { arity: 2, layout: "binom", rows: [[0], [1]], example: "\\binom{n}{k}" },
   sqrt: { arity: 1, layout: "radical", rows: [[0]], example: "\\sqrt{x}" },
-  overset: { arity: 2, layout: "overset", rows: [[0], [1]], example: "\\overset{f}{\\to}" },
-  underset: { arity: 2, layout: "underset", rows: [[1], [0]], example: "\\underset{n}{\\lim}" },
+  overset: { arity: 2, layout: "overset", rows: [[0], [1]], wrap: 1, example: "\\overset{f}{\\to}" },
+  underset: { arity: 2, layout: "underset", rows: [[1], [0]], wrap: 1, example: "\\underset{n}{\\lim}" },
   overline: { arity: 1, layout: "overline", rows: [[0]], example: "\\overline{z}" },
   mathbb: { arity: 1, layout: "font-bb", rows: [[0]], example: "\\mathbb{R}", letter: true },
   mathcal: { arity: 1, layout: "font-cal", rows: [[0]], example: "\\mathcal{C}", letter: true },
