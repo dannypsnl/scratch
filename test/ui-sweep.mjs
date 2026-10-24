@@ -25,6 +25,14 @@ const PATHS = [
   ["N\\overset{f}{\\to}M\\overset{g}{\\to}P", ["N", "N\\overset{f}{\\to}", "N\\overset{f}{\\to}M", "N\\overset{f}{\\to}M\\overset{g}{\\to}", "N\\overset{f}{\\to}M\\overset{g}{\\to}P"]],
   ["0\\to N\\to\\frac{M}{N}\\to 0", ["0", "0\\to", "0\\to N", "0\\to N\\to", "0\\to N\\to\\frac{M}{N}", "0\\to N\\to\\frac{M}{N}\\to", "0\\to N\\to\\frac{M}{N}\\to0"]],
   ["h(m_1)+h(m_2)=0", ["h(m_1)", "h(m_1)+", "h(m_1)+h(m_2)", "h(m_1)+h(m_2)=", "h(m_1)+h(m_2)=0"]],
+  ["h(m_1)-h(m_2)", ["h(m_1)", "h(m_1)-", "h(m_1)-h(m_2)"]],
+];
+// The same from inside: [formula, LaTeX left of the starting caret, key, stops]
+// (parentheses are a scope: steps inside stay inside, then step out).
+const INSIDE = [
+  ["h(m_1)-h(m_2)", "h(m_1)-h(m_2", "Alt+ArrowLeft", ["h(m_1)-h(", "h(m_1)-h", "h(m_1)-"]],
+  ["h(m_1)-h(m_2)", "h(", "Alt+ArrowRight", ["h(m_1", "h(m_1)", "h(m_1)-"]],
+  ["(a+b)^3", "(a", "Alt+ArrowRight", ["(a+", "(a+b", "(a+b)"]],
 ];
 const HINTED = ["slash", "frac", "power"]; // the actions the hint under a selection offers
 const ONLY = process.argv[2] ? process.argv[2].split(",").map(Number) : null;
@@ -103,6 +111,8 @@ async function fresh(f) {
       check: () => { try { v.state.doc.check(); return true; } catch (e) { return String(e); } },
       // the formula's LaTeX left of the caret, when the caret is directly in it
       leftOf: () => { const $h = v.state.selection.$head, p = math(); if ($h.parent !== v.state.doc.nodeAt(p)) return null; return L.serializeMath(v.state.doc.slice(p + 1, $h.pos).content); },
+      // the caret where the formula's LaTeX left of it is `prefix`
+      caretAfter: (prefix) => { const p = math(), n = v.state.doc.nodeAt(p); for (let x = p + 1; x < p + n.nodeSize; x++) if (v.state.doc.resolve(x).parent === n && L.serializeMath(v.state.doc.slice(p + 1, x).content) === prefix) return window.__h.setCaret(x); throw new Error("no caret after " + prefix); },
       edge: (end) => { const p = math(); return end ? p + v.state.doc.nodeAt(p).nodeSize - 1 : p + 1; },
       reparse: () => { const s = window.__h.ser(); const again = L.serializeMath(v.state.schema.nodes.math.create(null, L.parseMath(s)).content); return s === again ? null : [s, again]; },
     };
@@ -127,6 +137,14 @@ if (!ONLY) for (const [f, stops] of PATHS) {
     if (JSON.stringify(got) !== JSON.stringify(expect)) fails.push({ kind: "option-arrow stops", f, key, expect, got });
   }
   console.log(`path: ${f}`);
+}
+if (!ONLY) for (const [f, from, key, expect] of INSIDE) {
+  await fresh(f);
+  await H("caretAfter", from); await pause(30);
+  const got = [];
+  for (let k = 0; k < expect.length; k++) { await pg.keyboard.press(key); await pause(40); got.push(await H("leftOf")); }
+  if (JSON.stringify(got) !== JSON.stringify(expect)) fails.push({ kind: "option-arrow stops from inside", f, from, key, expect, got });
+  console.log(`path: ${f} from ${from}`);
 }
 
 for (const [fi, f] of FORMULAS.entries()) {

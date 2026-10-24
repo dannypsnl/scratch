@@ -8,7 +8,7 @@ import Prelude hiding (sub)
 
 import Data.Array as A
 import Data.Foldable (all, elem, foldMap)
-import Data.Maybe (Maybe(..), fromMaybe, isJust)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.String.CodeUnits as SCU
 
 -- | One thing in a container, as a plain record so JavaScript reads it as is.
@@ -195,9 +195,13 @@ isOperator it = case kind it of
   _ -> false
 
 -- | Each press crosses one run of operators or one term (a structure counts
--- | as part of the term it sits in). At a container's edge, step out as the
--- | plain arrow does. In text, a formula is a single term; elsewhere in text
--- | the browser's own word steps apply (Nothing: not specified here).
+-- | as part of the term it sits in). Parentheses make a scope: inside a
+-- | group the steps stay between its "(" and ")", and from its inner edge
+-- | the next press steps out past the parenthesis; from outside, a whole
+-- | group is part of the term it sits in, h(m_2) being one term. At a
+-- | container's edge, step out as the plain arrow does. In text, a formula is
+-- | a single term; elsewhere in text the browser's own word steps apply
+-- | (Nothing: not specified here).
 termRight :: Box -> Pos -> Maybe Pos
 termRight line p
   | not (inFormula p) = do
@@ -205,13 +209,15 @@ termRight line p
       if kind it == "math" then Just p { off = p.off + 1 } else Nothing
   | otherwise = do
       box <- containerAt line p.path
-      case A.index box p.off of
+      let { group, hi } = scope box p.off
+      if p.off >= hi then case group of
+        Just g -> Just p { off = g.close + 1 }
         Nothing -> right line p
-        Just it -> Just p { off = runEnd box p.off (isOperator it) }
+      else Just p { off = runEnd box hi p.off (unitIsOp box p.off) }
   where
-  runEnd box i op = case A.index box i of
-    Just it | isOperator it == op -> runEnd box (i + 1) op
-    _ -> i
+  runEnd box hi i op =
+    let next = unitEnd box i
+    in if next < hi && unitIsOp box next == op then runEnd box hi next op else next
 
 termLeft :: Box -> Pos -> Maybe Pos
 termLeft line p
@@ -220,13 +226,51 @@ termLeft line p
       if kind it == "math" then Just p { off = p.off - 1 } else Nothing
   | otherwise = do
       box <- containerAt line p.path
-      case if p.off > 0 then A.index box (p.off - 1) else Nothing of
+      let { group, lo } = scope box p.off
+      if p.off <= lo then case group of
+        Just g -> Just p { off = g.open }
         Nothing -> left line p
-        Just it -> Just p { off = runStart box (p.off - 1) (isOperator it) }
+      else
+        let first = unitStart box p.off
+        in Just p { off = runStart box lo first (unitIsOp box first) }
   where
-  runStart box i op = case A.index box (i - 1) of
-    Just it | isOperator it == op -> runStart box (i - 1) op
-    _ -> i
+  runStart box lo i op =
+    let prev = unitStart box i
+    in if i > lo && unitIsOp box prev == op then runStart box lo prev op else i
+
+-- | Matching parentheses in a container.
+type Group = { open :: Int, close :: Int }
+
+groups :: Box -> Array Group
+groups box = go 0 [] []
+  where
+  go i stack acc = case A.index box i of
+    Nothing -> acc
+    Just it
+      | it == ch '(' -> go (i + 1) (A.cons i stack) acc
+      | it == ch ')' -> case A.uncons stack of
+          Just { head: o, tail } -> go (i + 1) tail (A.snoc acc { open: o, close: i })
+          Nothing -> go (i + 1) stack acc
+      | otherwise -> go (i + 1) stack acc
+
+-- | Where option steps from off may go: inside the innermost group around
+-- | it, or the whole container.
+scope :: Box -> Int -> { group :: Maybe Group, lo :: Int, hi :: Int }
+scope box off = case A.last (A.sortWith _.open (A.filter (\g -> g.open < off && off <= g.close) (groups box))) of
+  Just g -> { group: Just g, lo: g.open + 1, hi: g.close }
+  Nothing -> { group: Nothing, lo: 0, hi: A.length box }
+
+-- | What the steps cross: a whole group, or one item.
+unitEnd :: Box -> Int -> Int
+unitEnd box i = maybe (i + 1) (\g -> g.close + 1) (A.find (\g -> g.open == i) (groups box))
+
+unitStart :: Box -> Int -> Int
+unitStart box i = maybe (i - 1) _.open (A.find (\g -> g.close == i - 1) (groups box))
+
+unitIsOp :: Box -> Int -> Boolean
+unitIsOp box i
+  | isJust (A.find (\g -> g.open == i) (groups box)) = false
+  | otherwise = maybe false isOperator (A.index box i)
 
 -- ---------------------------------------------------------------------------
 -- Selection shape

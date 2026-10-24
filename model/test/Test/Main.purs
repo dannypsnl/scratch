@@ -8,7 +8,7 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Effect (Effect)
 import Effect.Console (log)
 import Gen (genLine)
-import Model (Box, Pos, containerAt, inFormula, isOperator, kind, left, nameOf, replaceIn, rewrites, right, selectTerm, shape, showBox, slotsOf, stops, termLeft, termRight, betweenPair)
+import Model (Box, Pos, containerAt, inFormula, scope, unitIsOp, unitStart, kind, left, nameOf, replaceIn, rewrites, right, selectTerm, shape, showBox, slotsOf, stops, termLeft, termRight, betweenPair)
 import Test.QuickCheck (Result(..), quickCheckGen')
 
 -- the first failure among the cases, or Success
@@ -45,16 +45,32 @@ main = do
     let next = A.catMaybes [ right line p, left line p ]
     in every next \q -> check (not (inFormula q) || A.elem q (stops line)) (showBox line <> ": " <> showPos p <> " -> " <> showPos q)
 
-  law "option steps stop where a term meets an operator" \line -> every (A.filter inFormula (stops line)) \p ->
+  law "option steps stop where a term meets an operator, or at a group's edge" \line -> every (A.filter inFormula (stops line)) \p ->
     case termRight line p, containerAt line p.path of
-      Just q, Just box | q.path == p.path -> check
-        (q.off > p.off && (q.off == A.length box || map isOperator (A.index box q.off) /= map isOperator (A.index box (q.off - 1))))
-        (showBox line <> ": option-right " <> showPos p <> " -> " <> showPos q)
+      Just q, Just box | q.path == p.path ->
+        let sc = scope box p.off
+            outOfGroup = map (\g -> g.close + 1) sc.group == Just q.off && p.off == sc.hi
+            boundary = q.off == sc.hi || unitIsOp box q.off /= unitIsOp box (unitStart box q.off)
+        in check (q.off > p.off && (outOfGroup || boundary)) (showBox line <> ": option-right " <> showPos p <> " -> " <> showPos q)
       _, _ -> Success
+
+  law "option steps from inside a group never pass its parentheses" \line -> every (A.filter inFormula (stops line)) \p ->
+    case containerAt line p.path of
+      Just box | Just g <- (scope box p.off).group ->
+        let r = termRight line p
+            l = termLeft line p
+            okR = case r of
+              Just q | q.path == p.path -> q.off <= g.close || (p.off == g.close && q.off == g.close + 1)
+              _ -> true
+            okL = case l of
+              Just q | q.path == p.path -> q.off > g.open || (p.off == g.open + 1 && q.off == g.open)
+              _ -> true
+        in check (okR && okL) (showBox line <> ": from " <> showPos p <> " right " <> show (map showPos r) <> " left " <> show (map showPos l))
+      _ -> Success
 
   law "option left undoes option right within a run" \line -> every (A.filter inFormula (stops line)) \p ->
     case termRight line p, containerAt line p.path of
-      Just q, Just box | q.path == p.path && runStart box p.off -> check (termLeft line q == Just p) (showBox line <> ": " <> showPos p <> " -> " <> showPos q <> " -> " <> show (map showPos (termLeft line q)))
+      Just q, Just box | q.path == p.path && runStart box p.off && q.off <= (scope box p.off).hi -> check (termLeft line q == Just p) (showBox line <> ": " <> showPos p <> " -> " <> showPos q <> " -> " <> show (map showPos (termLeft line q)))
       _, _ -> Success
 
   law "shape is idempotent and keeps both ends in one container" \line ->
@@ -83,9 +99,7 @@ main = do
     Just box -> s.anchor /= s.head || not (betweenPair box s.head.off)
     Nothing -> false
   -- a run starts at p: nothing of the same kind just before it
-  runStart box off = case A.index box (off - 1), A.index box off of
-    Just a, Just b -> isOperator a /= isOperator b
-    _, _ -> true
+  runStart box off = off <= (scope box off).lo || unitIsOp box (unitStart box off) /= unitIsOp box off
 
 -- | Every position, stops or not (between pairs too): what a click may give.
 allPositions :: Box -> Array Pos

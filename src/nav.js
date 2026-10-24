@@ -534,7 +534,7 @@ function items($p) {
   let pos = $p.start();
   $p.parent.forEach((child) => {
     if (child.isText) {
-      for (const c of child.text) out.push({ from: pos, to: ++pos, op: OP_CHARS.has(c) });
+      for (const c of child.text) out.push({ from: pos, to: ++pos, op: OP_CHARS.has(c), ch: c });
     } else {
       out.push({ from: pos, to: (pos += child.nodeSize), op: isOperator(child) });
     }
@@ -544,8 +544,11 @@ function items($p) {
 
 // Option moves term by term. Each press crosses either a run of operators or
 // one term: everything up to the next operator, a structure counting as part
-// of the term (it is entered only with Up/Down or plain arrows). At a
-// container edge, step out.
+// of the term (it is entered only with Up/Down or plain arrows). Parentheses
+// make a scope: inside a group the steps stay between ( and ), and from its
+// inner edge the next press steps out past the parenthesis; from outside, a
+// whole group is part of its term (h(m_2) is one). At a container edge, step
+// out. (model/src/Model.purs: termRight, termLeft)
 export const term = (dir) => (state, dispatch) => {
   const sel = state.selection;
   if (!inMath(sel.$head)) {
@@ -562,19 +565,38 @@ export const term = (dir) => (state, dispatch) => {
 };
 
 function termStep($p, dir) {
-  const list = items($p);
-  if (dir > 0) {
-    let k = list.findIndex((it) => it.from >= $p.pos);
-    if (k < 0) return stepRight($p);
-    const op = list[k].op;
-    while (k < list.length && list[k].op === op) k++;
-    return list[k - 1].to;
+  const list = items($p), pos = $p.pos;
+  // matching parentheses, both ways
+  const match = new Map(), open = [];
+  list.forEach((it, i) => {
+    if (it.ch === "(") open.push(i);
+    else if (it.ch === ")" && open.length) { const o = open.pop(); match.set(o, i).set(i, o); }
+  });
+  // the innermost group around the caret bounds the steps
+  let lo = 0, hi = list.length, group = null;
+  for (const [o, c] of match) {
+    if (o < c && list[o].to <= pos && pos <= list[c].from && (!group || o > group[0])) group = [o, c];
   }
-  let k = list.findLastIndex((it) => it.to <= $p.pos);
-  if (k < 0) return stepLeft($p);
-  const op = list[k].op;
-  while (k >= 0 && list[k].op === op) k--;
-  return list[k + 1].from;
+  if (group) [lo, hi] = [group[0] + 1, group[1]];
+  // a unit: a whole group from its "(", or one item
+  const end = (i) => (list[i].ch === "(" && match.has(i) ? match.get(i) + 1 : i + 1);
+  const start = (i) => (list[i - 1].ch === ")" && match.has(i - 1) ? match.get(i - 1) : i - 1);
+  const isOp = (i) => !(list[i].ch === "(" && match.has(i)) && list[i].op;
+  if (dir > 0) {
+    let k = list.findIndex((it) => it.from >= pos);
+    if (k < 0 || k >= hi) return group ? list[group[1]].to : stepRight($p);
+    const op = isOp(k);
+    let next = end(k);
+    while (next < hi && isOp(next) === op) next = end(next);
+    return list[next - 1].to;
+  }
+  let k = list.findIndex((it) => it.from >= pos); // the item after the caret
+  if (k < 0) k = list.length;
+  if (k <= lo) return group ? list[group[0]].from : stepLeft($p);
+  let first = start(k);
+  const op = isOp(first);
+  while (first > lo && isOp(start(first)) === op) first = start(first);
+  return list[first].from;
 }
 
 // Option-Shift: the same steps, extending the selection. Both ends stay in
