@@ -1,7 +1,7 @@
 import { Plugin, TextSelection, NodeSelection } from "prosemirror-state";
 import { Fragment } from "prosemirror-model";
 import { schema, isMathContainer } from "./schema.js";
-import { structSpec, SYMBOLS, STRUCTS, SHORTHANDS, X_ARROW } from "./specs.js";
+import { structSpec, SYMBOLS, STRUCTS, SHORTHANDS, X_ARROWS } from "./specs.js";
 import { scriptPartner } from "./stack.js";
 
 // Inside a formula every caret move is computed from the model, never left to
@@ -73,6 +73,10 @@ export function shapeSelection(doc, anchor, head) {
     const i = $h.index();
     return scriptPartner($h.parent, i - 1) === i ? [head - $h.nodeBefore.nodeSize, head - $h.nodeBefore.nodeSize] : null;
   }
+  // a selection begun in a formula goes no further than its edge
+  const $a0 = doc.resolve(anchor), md = mathDepth($a0);
+  if (md > 0 && (head < $a0.start(md) || head > $a0.end(md))) head = head < anchor ? $a0.start(md) : $a0.end(md);
+  if (anchor === head) return [anchor, head];
   const $a = doc.resolve(anchor), $h = doc.resolve(head);
   let d = $a.sharedDepth(head);
   while (d > 0 && !(isMathContainer($a.node(d).type) || $a.node(d).isTextblock)) d--;
@@ -80,7 +84,7 @@ export function shapeSelection(doc, anchor, head) {
   let a = anchor, h = head;
   if ($a.depth > d) a = anchor < head ? $a.before(d + 1) : $a.after(d + 1);
   if ($h.depth > d) h = head < anchor ? $h.before(d + 1) : $h.after(d + 1);
-  return a === anchor && h === head ? null : [a, h];
+  return [a, h];
 }
 
 export const selectionShape = new Plugin({
@@ -89,43 +93,27 @@ export const selectionShape = new Plugin({
     const sel = state.selection;
     if (!(sel instanceof TextSelection)) return null;
     const shaped = shapeSelection(state.doc, sel.anchor, sel.head);
-    return shaped && state.tr.setSelection(TextSelection.create(state.doc, ...shaped)).setMeta(navGuard, true);
+    if (!shaped || (shaped[0] === sel.anchor && shaped[1] === sel.head)) return null;
+    return state.tr.setSelection(TextSelection.create(state.doc, ...shaped)).setMeta(navGuard, true);
   },
 });
 
-// ---------- labelled arrows ----------
-
-// A label over a lone arrow is written as the arrow that stretches to fit it:
-// \overset{l}{\to} becomes \xrightarrow{l} in the document itself, so LaTeX
-// made from it stretches too. A caret in the label stays there; one on the
-// arrow (now gone) goes after the new x-arrow. (model: normalize, normalizePos)
-export function labelledArrows(state) {
+// For a while a labelled arrow was stored as an \xrightarrow structure, its
+// arrow not a slot. Such notes become \overset again on load.
+export function xArrowsToOverset(state) {
   const found = [];
   state.doc.descendants((node, pos) => {
-    if (node.type !== T.struct || !["overset", "stackrel"].includes(node.attrs.name) || node.childCount !== 2) return true;
-    const base = node.child(1);
-    const x = base.childCount === 1 && base.firstChild.type === T.sym ? X_ARROW[base.firstChild.attrs.name] : null;
-    if (x) found.push({ pos, node, x });
-    return true;
+    if (node.type === T.struct && X_ARROWS[node.attrs.name] && node.childCount === 1) found.push(pos);
   });
   if (!found.length) return null;
   const tr = state.tr;
-  const { anchor, head } = state.selection;
-  const onArrow = (p) => found.find(({ pos, node }) => p > pos + 1 + node.child(0).nodeSize && p < pos + node.nodeSize - 1);
-  // last first, so earlier positions hold; the node is read again from the
-  // document as changed so far (an arrow in its label may have changed)
-  for (const { pos, x } of [...found].reverse()) {
-    const node = tr.doc.nodeAt(pos), start = pos + 1 + node.child(0).nodeSize;
-    tr.delete(start, start + node.child(1).nodeSize).setNodeMarkup(pos, null, { name: x });
+  for (const pos of found.reverse()) {
+    const node = tr.doc.nodeAt(pos);
+    const arrow = T.slot.create(null, T.sym.create({ name: X_ARROWS[node.attrs.name].sym }));
+    tr.replaceWith(pos, pos + node.nodeSize, T.struct.create({ name: "overset" }, [node.child(0), arrow]));
   }
-  const place = (p) => { const s = onArrow(p); return s ? tr.mapping.map(s.pos + s.node.nodeSize) : tr.mapping.map(p); };
-  if (onArrow(anchor) || onArrow(head)) tr.setSelection(TextSelection.create(tr.doc, place(anchor), place(head)));
   return tr;
 }
-
-export const arrowShape = new Plugin({
-  appendTransaction: (trs, _old, state) => (trs.some((tr) => tr.docChanged) ? labelledArrows(state) : null),
-});
 
 // ---------- Left / Right ----------
 
@@ -163,7 +151,7 @@ function stepLeft($p) {
   if (isScript($p.parent)) {
     const d = $p.depth;
     const idx = $p.index(d - 1);
-    if (scriptPartner($p.node(d - 1), idx) === idx - 1) return $p.before() - 1;
+    if (idx > 0 && scriptPartner($p.node(d - 1), idx) === idx - 1) return $p.before() - 1; // (-1 also means none)
   }
   return $p.before();
 }
@@ -269,9 +257,8 @@ export const vertical = (dir) => (state, dispatch, view) => {
   const sel = state.selection;
   const $p = sel.$head;
   if (!inMath($p)) return view && sel.empty ? intoLine(view, dir) : false;
-  if (!view) return true;
-  const x = view.coordsAtPos($p.pos).left;
-  const go = (node, contentStart) => caret(state, dispatch, nearestX(view, node, contentStart, x));
+  const x = view?.coordsAtPos($p.pos).left;
+  const go = (node, contentStart) => (view ? caret(state, dispatch, nearestX(view, node, contentStart, x)) : true);
 
   // 1. move between rows of the innermost struct that has a row in that direction
   for (let d = $p.depth; d > 0; d--) {
@@ -311,7 +298,7 @@ export const vertical = (dir) => (state, dispatch, view) => {
     if ((n.type === T.sup && dir < 0) || (n.type === T.sub && dir > 0)) return go(n, pos + 1);
   }
   // 3. on to the next line; never let the browser move the caret inside a formula
-  if (sel.empty) intoLine(view, dir);
+  if (sel.empty && view) intoLine(view, dir);
   return true;
 };
 
@@ -322,6 +309,14 @@ function unwrap(state, dispatch, node, pos) {
   const parts = [];
   if (node.type === T.struct) node.forEach((slot) => slot.forEach((c) => parts.push(c)));
   else node.forEach((c) => parts.push(c));
+  // \text's words go into the formula without their spaces (a formula has none)
+  if (STRUCTS[node.attrs?.name]?.text) {
+    for (let k = parts.length - 1; k >= 0; k--) {
+      if (!parts[k].isText) continue;
+      const t = parts[k].text.replace(/\s+/g, "");
+      if (t) parts[k] = schema.text(t); else parts.splice(k, 1);
+    }
+  }
   if (dispatch) {
     const tr = state.tr.replaceWith(pos, pos + node.nodeSize, Fragment.fromArray(parts));
     dispatch(tr.setSelection(TextSelection.create(tr.doc, pos)).scrollIntoView());
@@ -423,9 +418,31 @@ function insertNode(state, dispatch, node, offset) {
 // A selection within one container becomes the struct's main argument
 // (\overset's base, a fraction's numerator); the caret then goes to the first
 // slot still empty, or after the struct when none is.
+// \text{…} holds plain text: no structure, script or symbol goes in it
+export const inText = ($p) => $p.parent.type === T.slot && !!STRUCTS[$p.node($p.depth - 1).attrs.name]?.text;
+
 export function insertStruct(state, dispatch, name, arity) {
   const { from, to, $from, $to, empty } = state.selection;
-  const content = !empty && $from.sameParent($to) ? state.doc.slice(from, to).content : Fragment.empty;
+  if (inText($from)) return false;
+  // \xrightarrow and kin are how an \overset over a lone arrow is written:
+  // from the menu, that \overset, the caret in its label
+  const arrow = X_ARROWS[name];
+  if (arrow) {
+    const label = !empty && $from.sameParent($to) ? state.doc.slice(from, to).content : Fragment.empty;
+    const node = T.struct.create({ name: "overset" }, [T.slot.create(null, label), T.slot.create(null, T.sym.create({ name: arrow.sym }))]);
+    return insertNode(state, dispatch, node, label.size ? node.nodeSize : 2);
+  }
+  let content = !empty && $from.sameParent($to) ? state.doc.slice(from, to).content : Fragment.empty;
+  // \text wraps a selection only of plain characters; otherwise it goes after it
+  if (STRUCTS[name]?.text && content.size) {
+    let plain = true;
+    content.forEach((n) => { if (!n.isText) plain = false; });
+    if (!plain) {
+      const slots = Array.from({ length: arity }, () => T.slot.create());
+      if (dispatch) { const tr = state.tr.insert(to, T.struct.create({ name }, slots)); dispatch(tr.setSelection(TextSelection.create(tr.doc, to + 2)).scrollIntoView()); }
+      return true;
+    }
+  }
   const main = structSpec(name, arity).wrap ?? 0;
   const slots = Array.from({ length: arity }, (_, k) => T.slot.create(null, k === main ? content : null));
   const node = T.struct.create({ name }, slots);
@@ -439,11 +456,13 @@ export function insertStruct(state, dispatch, name, arity) {
 
 // \mathbb{R} and friends: one struct around one letter, caret after it.
 export function insertLetterStruct(state, dispatch, name, letter) {
+  if (inText(state.selection.$from)) return false;
   const node = T.struct.create({ name }, T.slot.create(null, schema.text(letter)));
   return insertNode(state, dispatch, node, node.nodeSize);
 }
 
 export function insertSym(state, dispatch, name) {
+  if (inText(state.selection.$from)) return false;
   return insertNode(state, dispatch, T.sym.create({ name }), 1);
 }
 
@@ -479,6 +498,11 @@ function insertFrac(state, dispatch, undo = {}) {
 // Returns false only when the character should open the command palette.
 export function typeInMath(view, ch) {
   const { state, dispatch } = view;
+  // in \text{…} every key is a character (no scripts, fractions or commands)
+  if (inText(state.selection.$head) && ch !== "$") {
+    if (ch !== "\\") dispatch(state.tr.insertText(ch).scrollIntoView());
+    return true;
+  }
   switch (ch) {
     case "\\": return false;
     case "^": return insertNode(state, dispatch, T.sup.create(), 1);
@@ -492,11 +516,6 @@ export function typeInMath(view, ch) {
     case "$": return exitMath(state, dispatch);
     case " ": {
       const $p = state.selection.$head;
-      // in \text{…} a space is a space
-      if ($p.parent.type === T.slot && STRUCTS[$p.node($p.depth - 1).attrs.name]?.text) {
-        dispatch(state.tr.insertText(" ").scrollIntoView());
-        return true;
-      }
       // at the end of a slot or script, Space finishes it: on to the next
       // slot, or out after the box, so the rest is not typed into the base
       if (state.selection.empty && $p.parent.type !== T.math && !$p.nodeAfter) caret(state, dispatch, stepRight($p));
@@ -563,7 +582,6 @@ const OP_SYM = new Set(["bin", "rel"]);
 function isOperator(node) {
   if (node.isText) return node.text.length === 1 && OP_CHARS.has(node.text); // a lone =, + … under a label
   if (node.type === T.sym) return OP_SYM.has(SYMBOLS[node.attrs.name]?.cls);
-  if (node.type === T.struct && STRUCTS[node.attrs.name]?.layout === "xarrow") return true;
   if (node.type !== T.struct || !["overset", "underset"].includes(node.attrs.name)) return false;
   const base = node.child(1).content;
   return base.childCount === 1 && isOperator(base.firstChild);
@@ -639,6 +657,24 @@ function termStep($p, dir) {
   while (first > lo && isOp(start(first)) === op) first = start(first);
   return list[first].from;
 }
+
+// Shift + Left / Right: a plain step, extending the selection; Shift + Cmd:
+// to the formula's edge. The shape rules keep it within the formula and take
+// a structure in whole. (model: selectStep, selectEdge)
+export const selectStep = (dir) => (state, dispatch) => {
+  const sel = state.selection;
+  if (!inMath(sel.$anchor) || !isMathContainer(sel.$head.parent.type)) return false;
+  const head = dir > 0 ? stepRight(sel.$head) : stepLeft(sel.$head);
+  if (dispatch) dispatch(state.tr.setSelection(TextSelection.create(state.doc, sel.anchor, head)).setMeta(navGuard, true).scrollIntoView());
+  return true;
+};
+
+export const selectEdge = (dir) => (state, dispatch) => {
+  const $a = state.selection.$anchor, d = mathDepth($a);
+  if (d < 0) return false;
+  if (dispatch) dispatch(state.tr.setSelection(TextSelection.create(state.doc, $a.pos, dir > 0 ? $a.end(d) : $a.start(d))).setMeta(navGuard, true).scrollIntoView());
+  return true;
+};
 
 // Option-Shift: the same steps, extending the selection. Both ends stay in
 // one container of the formula; an end inside a structure grows to take in

@@ -8,7 +8,7 @@
 import { EditorState, TextSelection, NodeSelection } from "prosemirror-state";
 import { schema } from "../src/schema.js";
 import { SYMBOLS } from "../src/specs.js";
-import { horizontal, term, selectTerm, navGuard, selectionShape, labelledArrows } from "../src/nav.js";
+import { horizontal, term, selectTerm, selectStep, selectEdge, navGuard, selectionShape } from "../src/nav.js";
 import { notationActions } from "../src/notation.js";
 import * as M from "../model/output/Model/index.js";
 import * as G from "../model/output/Gen/index.js";
@@ -91,7 +91,13 @@ function run(cmd, st) {
 const key = (p) => JSON.stringify(p);
 const same = (a, b) => key(a) === key(b);
 const fails = [];
-const fail = (kind, line, detail) => fails.push({ kind, line: M.showBox(line), ...detail });
+// the container a position is in, written out, the position marked with |
+function where(line, p) {
+  if (!p?.path) return null;
+  const box = maybe(M.containerAt(line)(p.path));
+  return box && M.showBox(box.slice(0, p.off)) + "|" + M.showBox(box.slice(p.off));
+}
+const fail = (kind, line, detail) => fails.push({ kind, ...detail, at: where(line, detail.from), wantAt: where(line, detail.want?.head ?? detail.want), gotAt: where(line, detail.got?.head ?? detail.got), line: M.showBox(line) });
 
 const lines = G.samples(SEED)(LINES);
 let checks = 0;
@@ -120,28 +126,17 @@ for (const line of lines) {
       const head = posOf(got.selection.head);
       if (!same(head, want) || !got.selection.empty) fail(name, line, { from: p, want, got: head });
     }
-    for (const dir of [1, -1]) {
-      const want = maybe(M.selectTerm(dir)(line)({ anchor: p, head: p }));
-      const got = run(selectTerm(dir), state(doc, caret));
-      checks++;
-      if (want === null) continue;
-      if (got === null) { fail(`option-shift ${dir}: left to the browser`, line, { from: p, want }); continue; }
-      const sel = { anchor: posOf(got.selection.anchor), head: posOf(got.selection.head) };
-      if (!same(sel, want)) fail(`option-shift ${dir}`, line, { from: p, want, got: sel });
+    for (const [name, cmd, model] of [["option-shift", selectTerm, M.selectTerm], ["shift", selectStep, M.selectStep], ["shift-cmd", selectEdge, M.selectEdge]]) {
+      for (const dir of [1, -1]) {
+        const want = maybe(model(dir)(line)({ anchor: p, head: p }));
+        const got = run(cmd(dir), state(doc, caret));
+        checks++;
+        if (want === null) continue;
+        if (got === null) { fail(`${name} ${dir}: left to the browser`, line, { from: p, want }); continue; }
+        const sel = { anchor: posOf(got.selection.anchor), head: posOf(got.selection.head) };
+        if (!same(sel, want)) fail(`${name} ${dir}`, line, { from: p, want, got: sel });
+      }
     }
-  }
-
-  // ---- labelled arrows become x-arrows: the document, and the caret from every stop
-  const normal = M.normalize(line);
-  for (const p of stops) {
-    const tr = labelledArrows(state(doc, TextSelection.create(doc, toPM(line, p))));
-    checks++;
-    if (!tr) { if (!same(normal, line)) fail("labelled arrows: nothing done", line, { want: M.showBox(normal) }); break; }
-    const got = lineOf(tr.doc);
-    if (!same(got, normal)) { fail("labelled arrows: document", line, { want: M.showBox(normal), got: M.showBox(got) }); break; }
-    const want = M.normalizePos(line)(p);
-    const head = positionTable(normal).get(tr.selection.head) ?? { pm: tr.selection.head };
-    if (!same(head, want) || !tr.selection.empty) fail("labelled arrows: caret", line, { from: p, want, got: head });
   }
 
   // ---- shape: every pair of positions inside the line (a drag, a click)
@@ -189,6 +184,9 @@ const byKind = Object.groupBy(fails, (x) => x.kind);
 console.log(`${lines.length} lines, ${checks} checks, ${fails.length} disagreements`);
 for (const [kind, xs] of Object.entries(byKind)) {
   console.log(`\n${kind}: ${xs.length}`);
-  for (const x of xs.slice(0, 4)) console.log("  " + JSON.stringify(x));
+  for (const x of xs.slice(0, Number(process.env.SHOW ?? 4))) {
+    const { kind: _, line, ...rest } = x;
+    console.log("  " + JSON.stringify(rest) + (process.env.LINES ? "\n    in " + line : ""));
+  }
 }
 if (fails.length) process.exitCode = 1;

@@ -190,55 +190,15 @@ isOperator it = case kind it of
   "ch" -> elem (nameOf it) [ "+", "-", "*", "=", "<", ">", ",", ";" ]
   "sym" -> let Item i = it in i.cls == "rel" || i.cls == "bin"
   "struct"
-    | isXArrow (nameOf it) -> true
     | nameOf it == "overset" || nameOf it == "underset" -> case A.index (slotsOf it) 1 of
         Just [ base ] -> isOperator base
         _ -> false
   _ -> false
 
--- ---------------------------------------------------------------------------
--- Labelled arrows
-
--- | A label over a lone arrow is written as the arrow that stretches to fit
--- | its label: \overset{l}{\to} (or \stackrel) is \xrightarrow{l}, in the document itself,
--- | so LaTeX made from it stretches too. Applied after every edit.
-xArrowOf :: String -> Maybe String
-xArrowOf = case _ of
-  "to" -> Just "xrightarrow"
-  "rightarrow" -> Just "xrightarrow"
-  "leftarrow" -> Just "xleftarrow"
-  "mapsto" -> Just "xmapsto"
-  "twoheadrightarrow" -> Just "xtwoheadrightarrow"
-  _ -> Nothing
-
-isXArrow :: String -> Boolean
-isXArrow name = elem name [ "xrightarrow", "xleftarrow", "xmapsto", "xtwoheadrightarrow" ]
-
--- | The base, when an item is a label over a lone arrow: the x-arrow it becomes.
-xArrowFor :: Item -> Maybe String
-xArrowFor (Item i) = case i.kind, i.name, i.slots of
-  "struct", "overset", [ _, [ Item b ] ] | b.kind == "sym" -> xArrowOf b.name
-  "struct", "stackrel", [ _, [ Item b ] ] | b.kind == "sym" -> xArrowOf b.name
-  _, _, _ -> Nothing
-
-normalize :: Box -> Box
-normalize = map one
-  where
-  one it@(Item i) = case xArrowFor it of
-    Just x -> struct x [ normalize (fromMaybe [] (A.index i.slots 0)) ]
-    Nothing -> Item i { slots = map normalize i.slots }
-
--- | Where a position ends up: in the label it stays; in the arrow it was
--- | (now gone) it goes after the new x-arrow.
-normalizePos :: Box -> Pos -> Pos
-normalizePos line p = go line 0
-  where
-  go box d = case A.index p.path d of
-    Nothing -> p
-    Just step -> case A.index box step.item of
-      Just it | isJust (xArrowFor it) && step.slot == 1 -> { path: A.take d p.path, off: step.item + 1 }
-      Just it -> go (fromMaybe [] (A.index (slotsOf it) step.slot)) (d + 1)
-      Nothing -> p
+-- A label over a lone arrow (N \overset{f}{\to} M) is an \overset like any
+-- other here: rows to move between, an arrow to retype. That it is drawn
+-- stretched to its label, and written out as \xrightarrow{f}, is the
+-- editor's drawing and LaTeX, not a different structure.
 
 -- | Each press crosses one run of operators or one term (a structure counts
 -- | as part of the term it sits in). Parentheses make a scope: inside a
@@ -321,19 +281,32 @@ unitIsOp box i
 -- ---------------------------------------------------------------------------
 -- Selection shape
 
--- | Every selection is put in this shape, however it was made: both ends in
+-- | Every selection is put in this shape, however it was made: a selection
+-- | begun in a formula goes no further than the formula's edge; both ends in
 -- | one container (an end inside a formula or a structure grows to take in
--- | the whole of it), and a caret never between a pair of scripts (it goes
+-- | the whole of it); and a caret never between a pair of scripts (it goes
 -- | before the pair).
 shape :: Box -> Sel -> Sel
-shape line s
-  | s.anchor == s.head = let c = shapeCaret line s.head in { anchor: c, head: c }
-  | otherwise = { anchor: lift s.anchor (before s.anchor s.head), head: lift s.head (before s.head s.anchor) }
-      where
-      common = commonSteps s.anchor.path s.head.path
-      lift p isFirst = case A.index p.path common of
-        Just step -> { path: A.take common p.path, off: if isFirst then step.item else step.item + 1 }
-        Nothing -> p
+shape line s0 =
+  let
+    s = { anchor: s0.anchor, head: clampToFormula line s0.anchor s0.head }
+    common = commonSteps s.anchor.path s.head.path
+    lift p isFirst = case A.index p.path common of
+      Just step -> { path: A.take common p.path, off: if isFirst then step.item else step.item + 1 }
+      Nothing -> p
+  in
+    if s.anchor == s.head then let c = shapeCaret line s.head in { anchor: c, head: c }
+    else { anchor: lift s.anchor (before s.anchor s.head), head: lift s.head (before s.head s.anchor) }
+
+-- | The head, kept within the formula the anchor is in.
+clampToFormula :: Box -> Pos -> Pos -> Pos
+clampToFormula line anchor head = case A.head anchor.path of
+  Nothing -> head
+  Just top
+    | A.head head.path == Just top -> head
+    | otherwise ->
+        let edge = { path: [ top ], off: if before head anchor then 0 else A.length (fromMaybe [] (containerAt line [ top ])) }
+        in edge
 
 shapeCaret :: Box -> Pos -> Pos
 shapeCaret line p = case containerAt line p.path of
@@ -346,6 +319,23 @@ commonSteps a b = go 0
   go d = case A.index a d, A.index b d of
     Just x, Just y | x == y -> go (d + 1)
     _, _ -> d
+
+-- | Shift + Left / Right: the head takes a plain step (over a structure as a
+-- | whole, the shape takes care of that), Shift + Cmd: to the formula's edge;
+-- | either way no further than the formula. Nothing when the anchor is not in
+-- | a formula (the browser selects).
+selectStep :: Int -> Box -> Sel -> Maybe Sel
+selectStep dir line s
+  | not (inFormula s.anchor) = Nothing
+  | otherwise = do
+      head <- (if dir > 0 then right else left) line s.head
+      Just (shape line { anchor: s.anchor, head })
+
+selectEdge :: Int -> Box -> Sel -> Maybe Sel
+selectEdge dir line s = do
+  top <- A.head s.anchor.path
+  formula <- containerAt line [ top ]
+  Just (shape line { anchor: s.anchor, head: { path: [ top ], off: if dir > 0 then A.length formula else 0 } })
 
 -- | Option + Shift: the head takes a term step, the anchor stays, and the
 -- | selection keeps its shape and never leaves the formula. Nothing when the
@@ -372,7 +362,7 @@ type Rewrite = { id :: String, replace :: Box }
 rewrites :: Box -> Array Step -> Int -> Int -> Array Rewrite
 rewrites line path from to = case containerAt line path of
   Nothing -> []
-  Just _ | not (inFormula { path, off: 0 }) || to <= from -> []
+  Just _ | not (inFormula { path, off: 0 }) || to <= from || inText line path -> []
   Just box ->
     let
       xs = A.slice from to box
@@ -380,7 +370,9 @@ rewrites line path from to = case containerAt line path of
         [ it ] | kind it /= "ch" -> Just it
         _ -> Nothing
       slash = case one of
-        Just it | kind it == "struct" && (nameOf it == "frac" || nameOf it == "dfrac") ->
+        -- a/b only when both sides' parentheses pair up: otherwise the ones
+        -- added around a side could not be told apart on the way back
+        Just it | kind it == "struct" && (nameOf it == "frac" || nameOf it == "dfrac") && balanced (slot 0 it) && balanced (slot 1 it) ->
           [ { id: "slash", replace: paren (slot 0 it) <> [ ch '/' ] <> paren (slot 1 it) } ]
         _ -> []
       frac = case slashAt xs of
@@ -397,6 +389,14 @@ rewrites line path from to = case containerAt line path of
       slash <> frac <> power <> scripts
   where
   slot k it = fromMaybe [] (A.index (slotsOf it) k)
+
+-- | \text{…} and kin hold plain text: nothing is rewritten in them.
+inText :: Box -> Array Step -> Boolean
+inText line path = fromMaybe false do
+  { init, last } <- A.unsnoc path
+  box <- containerAt line init
+  it <- A.index box last.item
+  pure (kind it == "struct" && elem (nameOf it) [ "text", "textrm", "textbf", "textit", "textsf", "texttt" ])
 
 -- | Replace from..to of the container at path.
 replaceIn :: Box -> Array Step -> Int -> Int -> Box -> Box
@@ -437,6 +437,17 @@ unparen xs =
       | it == ch '(' -> closesEarly (i + 1) (depth + 1)
       | it == ch ')' -> (depth == 1 && i < A.length xs - 1) || closesEarly (i + 1) (depth - 1)
       | otherwise -> closesEarly (i + 1) depth
+
+-- | Every ")" closes a "(" before it, and every "(" is closed.
+balanced :: Box -> Boolean
+balanced xs = go 0 0
+  where
+  go i depth = case A.index xs i of
+    Nothing -> depth == 0
+    Just it
+      | it == ch '(' -> go (i + 1) (depth + 1)
+      | it == ch ')' -> depth > 0 && go (i + 1) (depth - 1)
+      | otherwise -> go (i + 1) depth
 
 -- | The first "/" outside parentheses.
 slashAt :: Box -> Maybe Int

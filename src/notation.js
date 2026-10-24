@@ -3,6 +3,7 @@ import { Fragment } from "prosemirror-model";
 import { schema, isMathContainer } from "./schema.js";
 import { t } from "./i18n.js";
 import { toCas, runCas } from "./cas.js";
+import { inText } from "./nav.js";
 
 const T = schema.nodes;
 
@@ -40,6 +41,15 @@ function slashAt(frag) {
   return found;
 }
 
+// every ")" closes a "(" before it, and every "(" is closed
+function balanced(frag) {
+  let depth = 0, ok = true;
+  frag.forEach((n) => {
+    if (n.isText) for (const c of n.text) { if (c === "(") depth++; else if (c === ")" && --depth < 0) ok = false; }
+  });
+  return ok && depth === 0;
+}
+
 // (a+b) -> a+b, when the outer parentheses enclose all of it
 function unparen(frag) {
   const s = frag.size;
@@ -60,7 +70,7 @@ function unparen(frag) {
 function selected(state) {
   const sel = state.selection;
   // within one container (a slot itself, node-selected, is not a selection here)
-  if (sel.empty || !isMathContainer(sel.$from.parent.type) || !sel.$from.sameParent(sel.$to)) return null;
+  if (sel.empty || !isMathContainer(sel.$from.parent.type) || !sel.$from.sameParent(sel.$to) || inText(sel.$from)) return null;
   const content = state.doc.slice(sel.from, sel.to).content;
   const node = sel instanceof NodeSelection ? sel.node : content.childCount === 1 && !content.firstChild.isText ? content.firstChild : null;
   return { from: sel.from, to: sel.to, content, node };
@@ -75,7 +85,9 @@ export function notationActions(state) {
   if (!s) return [];
   const { content, node } = s;
   const out = [];
-  if (isFrac(node)) {
+  // a/b only when both sides' parentheses pair up: otherwise the ones added
+  // around a side could not be told apart on the way back
+  if (isFrac(node) && balanced(node.child(0).content) && balanced(node.child(1).content)) {
     const num = node.child(0).content, den = node.child(1).content;
     out.push({ id: "slash", tex: "a/b", label: t("notation.slash"), hint: true, replace: paren(num).append(Fragment.from(text("/"))).append(paren(den)) });
   }

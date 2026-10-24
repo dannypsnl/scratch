@@ -1,5 +1,5 @@
 import { schema } from "./schema.js";
-import { SYMBOLS, STRUCTS } from "./specs.js";
+import { SYMBOLS, STRUCTS, X_ARROWS, ARROW_X } from "./specs.js";
 
 // ---------- LaTeX -> nodes ----------
 
@@ -22,6 +22,18 @@ export function parseMath(src) {
     let name = "";
     while (i < src.length && /[a-zA-Z]/.test(src[i])) name += src[i++];
     if (SYMBOLS[name]) return [schema.nodes.sym.create({ name })];
+    const S = schema.nodes, slot = (c) => S.slot.create(null, c);
+    // \sqrt[n]{x}: the index a slot of its own
+    if (name === "sqrt") {
+      const index = parseOptional();
+      if (index) return [S.struct.create({ name: "root" }, [slot(index), slot(parseArg())])];
+    }
+    // \xrightarrow[g]{f}: the \overset it stands for, \overset{f}{\underset{g}{\to}}
+    if (X_ARROWS[name]) {
+      const below = parseOptional(), above = parseArg(), arrow = S.sym.create({ name: X_ARROWS[name].sym });
+      const base = below ? S.struct.create({ name: "underset" }, [slot(below), slot([arrow])]) : arrow;
+      return [S.struct.create({ name: "overset" }, [slot(above), slot([base])])];
+    }
     const slots = [];
     if (STRUCTS[name]?.text) {
       for (let k = 0; k < STRUCTS[name].arity; k++) slots.push(parseTextArg());
@@ -37,6 +49,23 @@ export function parseMath(src) {
       if (slots.length === 0) return [schema.nodes.sym.create({ name })];
     }
     return [schema.nodes.struct.create({ name }, slots.map((c) => schema.nodes.slot.create(null, c)))];
+  }
+
+  // [ … ] after a command: its optional argument, or null
+  function parseOptional() {
+    const save = i;
+    ws();
+    if (src[i] !== "[") { i = save; return null; }
+    let depth = 0, k = i + 1;
+    for (; k < src.length; k++) {
+      if (src[k] === "\\") { k++; continue; }
+      if (src[k] === "{") depth++;
+      else if (src[k] === "}") depth--;
+      else if (src[k] === "]" && depth === 0) break;
+    }
+    const inner = parseMath(src.slice(i + 1, k));
+    i = k + 1;
+    return inner;
   }
 
   // \text{…}: the words as written, spaces kept (\{ \} \\ … unescaped)
@@ -132,10 +161,16 @@ function writeFragment(fragment, out) {
       case "sym":
         out.emit("\\" + node.attrs.name);
         break;
-      case "struct":
-        out.emit("\\" + node.attrs.name);
-        node.forEach((slot) => out.emit("{" + serializeMath(slot.content) + "}"));
+      case "struct": {
+        const x = xArrow(node);
+        if (x) out.emit(`\\${x.name}` + (x.below ? `[${serializeMath(x.below)}]` : "") + `{${serializeMath(x.above)}}`);
+        else if (node.attrs.name === "root") out.emit(`\\sqrt[${serializeMath(node.child(0).content)}]{${serializeMath(node.child(1).content)}}`);
+        else {
+          out.emit("\\" + node.attrs.name);
+          node.forEach((slot) => out.emit("{" + serializeMath(slot.content) + "}"));
+        }
         break;
+      }
       case "sup":
       case "sub": {
         const body = serializeMath(node.content);
@@ -144,6 +179,24 @@ function writeFragment(fragment, out) {
       }
     }
   });
+}
+
+// An \overset over a lone arrow is written \xrightarrow{label} (and kin), so
+// it stretches wherever the LaTeX goes; over an \underset of one,
+// \xrightarrow[below]{above}; an \underset of one alone, \xrightarrow[below]{}.
+function xArrow(node) {
+  const lone = (slot) => (slot.childCount === 1 ? slot.firstChild : null);
+  const arrowName = (n) => (n?.type.name === "sym" ? ARROW_X[n.attrs.name] : null);
+  if (node.childCount !== 2) return null;
+  const [label, base] = [node.child(0), node.child(1)];
+  if (node.attrs.name === "overset") {
+    const b = lone(base);
+    if (arrowName(b)) return { name: arrowName(b), above: label.content };
+    if (b?.type.name === "struct" && b.attrs.name === "underset" && b.childCount === 2 && arrowName(lone(b.child(1))))
+      return { name: arrowName(lone(b.child(1))), above: label.content, below: b.child(0).content };
+  }
+  if (node.attrs.name === "underset" && arrowName(lone(base))) return { name: arrowName(lone(base)), above: base.type.schema.nodes.slot.create().content, below: label.content };
+  return null;
 }
 
 function isSingleToken(node) {

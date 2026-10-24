@@ -3,7 +3,7 @@
 // (\Z, \Hom, …) are not KaTeX's and only get the round trip.
 import katex from "katex";
 import { schema } from "../src/schema.js";
-import { SYMBOLS, STRUCTS } from "../src/specs.js";
+import { SYMBOLS, STRUCTS, X_ARROWS } from "../src/specs.js";
 import { parseMath, serializeMath } from "../src/latex.js";
 
 const MACROS = new Set(["N", "Z", "Q", "R", "C", "F", "P", "rank", "hom", "Hom", "End", "Aut", "id", "im", "coker", "lcm", "tr", "cosec", "cotg", "arcctg"]);
@@ -11,7 +11,10 @@ const write = (tex) => serializeMath(schema.nodes.math.create(null, parseMath(te
 
 const cases = [
   ...Object.keys(SYMBOLS).map((name) => [name, `a\\${name} b`]),
-  ...Object.entries(STRUCTS).map(([name, s]) => [name, `\\${name}` + ["{x}", "{y}", "{z}"].slice(0, s.arity).join("")]),
+  ...Object.entries(STRUCTS).filter(([name]) => name !== "root").map(([name, s]) => [name, `\\${name}` + ["{x}", "{y}", "{z}"].slice(0, s.arity).join("")]),
+  ["root", "\\sqrt[x]{y}"],
+  // labelled arrows, with and without a label below
+  ...Object.keys(X_ARROWS).flatMap((name) => [[name, `\\${name}{x}`], [name, `\\${name}[y]{x}`]]),
   ["text", "\\text{long label}"],
   ["texttt", "\\texttt{a b}"],
   ["thin space", "a\\,b\\:c\;d\\!e\\quad f"],

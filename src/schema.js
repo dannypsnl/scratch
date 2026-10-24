@@ -134,11 +134,6 @@ export const schema = new Schema({
             const { accent, stretch } = STRUCTS[node.attrs.name];
             return ["span", { class: `${cls} pm-accent-${node.attrs.name}` + (stretch ? ` pm-xarrow-${stretch}` : "") }, deco(accent), ["span", { class: "pm-args" }, 0]];
           }
-          case "xarrow": {
-            // the label, then the arrow: a glyph for the head, a drawn shaft
-            const { glyph, dir, bar } = STRUCTS[node.attrs.name].arrow;
-            return ["span", { class: `${cls} pm-xarrow-${dir}${bar ? " pm-xarrow-bar" : ""}` }, ["span", { class: "pm-args" }, 0], deco(glyph)];
-          }
           case "generic":
             return ["span", { class: cls }, deco("\\" + node.attrs.name), ["span", { class: "pm-args" }, 0]];
           default:

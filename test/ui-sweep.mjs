@@ -18,7 +18,7 @@ const FORMULAS = [
   "(a+b)^3",
   "\\mathbb{R}\\times\\mathcal{C}",
 ];
-const KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Alt+ArrowLeft", "Alt+ArrowRight", "ControlOrMeta+ArrowLeft", "ControlOrMeta+ArrowRight", "Shift+Alt+ArrowLeft", "Shift+Alt+ArrowRight", "Space"];
+const KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Alt+ArrowLeft", "Alt+ArrowRight", "ControlOrMeta+ArrowLeft", "ControlOrMeta+ArrowRight", "Shift+Alt+ArrowLeft", "Shift+Alt+ArrowRight", "Shift+ArrowLeft", "Shift+ArrowRight", "Shift+ControlOrMeta+ArrowLeft", "Shift+ControlOrMeta+ArrowRight", "Space"];
 // Option + arrow from one end of the formula: the LaTeX left of the caret at
 // each stop. A relation over a label (\overset{f}{\to}) splits terms like a bare one.
 const PATHS = [
@@ -35,16 +35,32 @@ const INSIDE = [
   ["h(m_1)-h(m_2)", "h(", "Alt+ArrowRight", ["h(m_1", "h(m_1)", "h(m_1)-"]],
   ["(a+b)^3", "(a", "Alt+ArrowRight", ["(a+", "(a+b", "(a+b)"]],
 ];
-// A label over a lone arrow is rewritten to the x-arrow that stretches to it,
-// in the document; drawn, the arrow is at least as wide as its label, and a
-// short label leaves it at a bare arrow's length.
-// [formula, its LaTeX afterwards, expectation for the first x-arrow]
+// A label over a lone arrow stays an \overset (both boxes editable), is drawn
+// with its arrow at least as wide as the label (a short label leaves it at a
+// bare arrow's length), and is written out as the \xrightarrow that stretches.
+// [formula, its LaTeX afterwards, expectation for its labelled arrow]
 const XARROWS = [
   ["N\\overset{n\\mapsto(n,0)}{\\to}P", "N\\xrightarrow{n\\mapsto(n,0)}P", "stretched"],
   ["A\\overset{f}{\\to}B\\to C", "A\\xrightarrow{f}B\\to C", "natural"],
   ["A\\overset{(n,p)}{\\leftarrow}B", "A\\xleftarrow{(n,p)}B", "stretched"],
-  ["A\\overset{ghij}{\\mapsto}B", "A\\xmapsto{ghij}B", "stretched"],
+  ["A\\xRightarrow{abcd}B", "A\\xRightarrow{abcd}B", "stretched"],
+  ["A\\xrightarrow[below]{above}B", "A\\xrightarrow[below]{above}B", "stretched"],
   ["x\\overset{\\mathrm{def}}{=}y", "x\\overset{\\mathrm{def}}{=}y", "none"],
+];
+// Every box of every structure with more than one row is reached with Up and
+// Down: [formula, the text of the box the caret starts in, keys, the text of
+// the box it ends in]
+const BOXES = [
+  ["\\overset{ab}{cd}", "ab", ["ArrowDown"], "cd"],
+  ["\\overset{ab}{cd}", "cd", ["ArrowUp"], "ab"],
+  ["\\underset{ab}{cd}", "ab", ["ArrowUp"], "cd"],
+  ["\\stackrel{ab}{cd}", "ab", ["ArrowDown"], "cd"],
+  ["\\frac{ab}{cd}", "ab", ["ArrowDown"], "cd"],
+  ["\\binom{ab}{cd}", "ab", ["ArrowDown"], "cd"],
+  ["\\sqrt[ab]{cd}", "ab", ["ArrowDown"], "cd"],
+  ["\\sqrt[ab]{cd}", "cd", ["ArrowUp"], "ab"],
+  ["\\xrightarrow{ab}", "ab", ["ArrowDown"], "\\to"],
+  ["\\xrightarrow[cd]{ab}", "ab", ["ArrowDown", "ArrowDown"], "cd"],
 ];
 const HINTED = ["slash", "frac", "power"]; // the actions the hint under a selection offers
 const ONLY = process.argv[2] ? process.argv[2].split(",").map(Number) : null;
@@ -96,7 +112,7 @@ async function fresh(f) {
       setCaret: (pos) => { v.focus(); v.dispatch(v.state.tr.setSelection(S.TextSelection.create(v.state.doc, pos)).setMeta("pointer", true)); },
       setRange: (a, b) => { v.focus(); v.dispatch(v.state.tr.setSelection(S.TextSelection.create(v.state.doc, a, b)).setMeta("pointer", true)); },
       setNode: (pos) => { v.focus(); v.dispatch(v.state.tr.setSelection(S.NodeSelection.create(v.state.doc, pos)).setMeta("pointer", true)); },
-      sel: () => { const s = v.state.selection; return { head: s.head, empty: s.empty, parent: s.$head.parent.type.name, sameParent: s.$from.sameParent(s.$to), docSize: v.state.doc.content.size }; },
+      sel: () => { const s = v.state.selection, p = math(), end = p + v.state.doc.nodeAt(p).nodeSize; const inside = (x) => x > p && x < end; return { head: s.head, empty: s.empty, parent: s.$head.parent.type.name, sameParent: s.$from.sameParent(s.$to), inFormula: inside(s.anchor) && inside(s.head), docSize: v.state.doc.content.size }; },
       caret: () => { const c = document.querySelector(".pm-caret"); if (!c || c.hidden) return null; const r = c.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; },
       // where the caret should sit vertically: its container's box in a
       // formula, a neighbouring character's glyph box in text
@@ -124,13 +140,26 @@ async function fresh(f) {
       // the formula's LaTeX left of the caret, when the caret is directly in it
       leftOf: () => { const $h = v.state.selection.$head, p = math(); if ($h.parent !== v.state.doc.nodeAt(p)) return null; return L.serializeMath(v.state.doc.slice(p + 1, $h.pos).content); },
       // the caret where the formula's LaTeX left of it is `prefix`
-      // the first x-arrow drawn: its label's width, its arrow's, and a bare →'s
+      // the first labelled arrow drawn: its label's width, its arrow's, and a bare →'s
       xarrow: () => {
-        const o = document.querySelector(".layout-xarrow");
+        const o = document.querySelector(".pm-xarrow");
         if (!o) return null;
         const bare = [...document.querySelectorAll(".pm-math > .pm-sym.pm-rel")].find((e) => e.textContent === "→");
-        return { label: o.querySelector(".pm-slot").getBoundingClientRect().width, arrow: o.querySelector(":scope > .pm-deco").getBoundingClientRect().width, bare: bare?.getBoundingClientRect().width ?? null };
+        const label = o.querySelector(":scope > .pm-slot").getBoundingClientRect().width;
+        const arrow = o.querySelector(":scope > .pm-slot:last-child").getBoundingClientRect().width;
+        return { label, arrow, bare: bare?.getBoundingClientRect().width ?? null };
       },
+      // the text of the slot (or script) the caret is in
+      slotText: () => L.serializeMath(v.state.selection.$head.parent.content),
+      // what the eye gets of where the caret is: the drawn caret, and the box
+      // framed around it
+      visual: () => {
+        const c = document.querySelector(".pm-caret"), f = document.querySelector(".pm-here");
+        const r = (e) => { if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]; };
+        return JSON.stringify({ caret: r(c), frame: r(f) });
+      },
+      // the caret one character into the box (slot or script) holding exactly `text`
+      caretIn: (text) => { let at = null; v.state.doc.descendants((n, p) => { if (at === null && ["slot", "sup", "sub"].includes(n.type.name) && n.textContent === text) at = p + 2; }); window.__h.setCaret(at); },
       caretAfter: (prefix) => { const p = math(), n = v.state.doc.nodeAt(p); for (let x = p + 1; x < p + n.nodeSize; x++) if (v.state.doc.resolve(x).parent === n && L.serializeMath(v.state.doc.slice(p + 1, x).content) === prefix) return window.__h.setCaret(x); throw new Error("no caret after " + prefix); },
       edge: (end) => { const p = math(); return end ? p + v.state.doc.nodeAt(p).nodeSize - 1 : p + 1; },
       reparse: () => { const s = window.__h.ser(); const again = L.serializeMath(v.state.schema.nodes.math.create(null, L.parseMath(s)).content); return s === again ? null : [s, again]; },
@@ -167,6 +196,14 @@ if (!ONLY) for (const [f, latex, expect] of XARROWS) {
   if (!ok) fails.push({ kind: "label over an arrow", f, latex, got, expect, m });
   console.log(`arrow: ${f}`);
 }
+if (!ONLY) for (const [f, from, keys, expect] of BOXES) {
+  await fresh(f);
+  await H("caretIn", from); await pause(30);
+  for (const k of keys) { await pg.keyboard.press(k); await pause(60); }
+  const got = await H("slotText");
+  if (got !== expect) fails.push({ kind: "a box not reached with up / down", f, from, keys, expect, got });
+  console.log(`box: ${f} ${keys.join(" ")}`);
+}
 if (!ONLY) for (const [f, from, key, expect] of INSIDE) {
   await fresh(f);
   await H("caretAfter", from); await pause(30);
@@ -193,6 +230,7 @@ for (const [fi, f] of FORMULAS.entries()) {
       const before = await H("sel");
       if (key === "Space" && before.parent === "line") continue; // that is typing a space
       await H("close");
+      const seenBefore = await H("visual");
       await pg.keyboard.press(key); await pause(60);
       const s = await H("sel");
       if (s.docSize !== before.docSize || (await H("ser")) !== original) {
@@ -203,8 +241,12 @@ for (const [fi, f] of FORMULAS.entries()) {
       }
       if (key.startsWith("Shift")) {
         if (!s.sameParent) await fail("selection ends in different containers", f, { key, pos });
+        if (before.parent !== "line" && !s.inFormula) await fail("a selection begun in the formula left it", f, { key, pos });
         if (before.parent !== "line" && s.empty && !(await H("atEdge", pos, key.endsWith("Left") ? -1 : 1))) await fail("shift selected nothing", f, { key, pos });
       }
+      // a caret that moved must be seen to move: two places drawn alike feel
+      // like a key that was swallowed
+      if (s.empty && before.empty && s.head !== before.head && (await H("visual")) === seenBefore) await fail("moved, but nothing on screen changed", f, { key, pos, head: s.head });
       if (s.empty) {
         const shown = await H("hint");
         if (shown) await fail("hint still on screen with no selection", f, { key, pos, shown });

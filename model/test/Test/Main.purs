@@ -4,11 +4,12 @@ module Test.Main where
 import Prelude hiding (sub)
 
 import Data.Array as A
+import Data.Foldable (all)
 import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Effect (Effect)
 import Effect.Console (log)
 import Gen (genLine)
-import Model (Box, Item, Pos, normalize, normalizePos, xArrowFor, containerAt, inFormula, scope, unitIsOp, unitStart, kind, left, nameOf, replaceIn, rewrites, right, selectTerm, shape, showBox, slotsOf, stops, termLeft, termRight, betweenPair)
+import Model (Box, Pos, balanced, selectStep, selectEdge, containerAt, inFormula, scope, unitIsOp, unitStart, kind, left, nameOf, replaceIn, rewrites, right, selectTerm, shape, showBox, slotsOf, stops, termLeft, termRight, betweenPair)
 import Test.QuickCheck (Result(..), quickCheckGen')
 
 -- the first failure among the cases, or Success
@@ -79,22 +80,27 @@ main = do
       let s = shape line { anchor: a, head: h }
       in check (shape line s == s && s.anchor.path == s.head.path && notBetween line s) (showBox line <> ": " <> showSel { anchor: a, head: h } <> " -> " <> showSel s)
 
+  law "a selection begun in a formula ends in it, however far the other end goes" \line ->
+    let ps = allPositions line
+    in every (A.filter inFormula ps) \a -> every ps \h ->
+      let r = shape line { anchor: a, head: h }
+      in check (A.head r.anchor.path == A.head a.path && A.head r.head.path == A.head a.path) (showBox line <> ": " <> showSel { anchor: a, head: h } <> " -> " <> showSel r)
+
+  law "shift and shift-cmd selections are in shape and stay in the formula" \line -> every (A.filter inFormula (stops line)) \p ->
+    every [ 1, -1 ] \dir ->
+      let sels = A.catMaybes [ selectStep dir line { anchor: p, head: p }, selectEdge dir line { anchor: p, head: p } ]
+      in every sels \r -> check (shape line r == r && A.head r.head.path == A.head p.path) (showBox line <> ": " <> showPos p <> " -> " <> showSel r)
+
   law "option-shift selections are in shape and stay in the formula" \line -> every (A.filter inFormula (stops line)) \p ->
     every [ 1, -1 ] \dir -> case selectTerm dir line { anchor: p, head: p } of
       Just s -> check (shape line s == s && inFormula s.head) (showBox line <> ": " <> showPos p <> " -> " <> showSel s)
       Nothing -> Failed (showBox line <> ": no selection from " <> showPos p)
 
-  law "a labelled arrow becomes an x-arrow, once and for all" \line ->
-    let n = normalize line
-    in check (normalize n == n && A.null (A.filter (isJust <<< xArrowFor) (everything n))) (showBox line <> " -> " <> showBox n)
-
-  law "after the rewrite to x-arrows the caret is still on a stop" \line ->
-    let n = normalize line
-    in every (stops line) \p -> let q = normalizePos line p in check (A.elem q (stops n) || not (inFormula q)) (showBox line <> ": " <> showPos p <> " -> " <> showPos q <> " in " <> showBox n)
-
   law "a fraction made a/b and back is the same fraction" \line -> every (fracs line) \{ path, i } ->
     case A.find (\r -> r.id == "slash") (rewrites line path i (i + 1)) of
-      Nothing -> Failed (showBox line <> ": no a/b for the fraction at " <> show i)
+      -- none only when a side's parentheses do not pair up
+      Nothing -> check (not (all balanced (fromMaybe [] (map slotsOf (containerAt line path >>= \b -> A.index b i)))))
+        (showBox line <> ": no a/b for the fraction at " <> show i)
       Just r ->
         let line' = replaceIn line path i (i + 1) r.replace
             back = A.find (\r' -> r'.id == "frac") (rewrites line' path i (i + A.length r.replace))
@@ -123,7 +129,3 @@ fracs line = go [] line
   go path box = A.concat (A.mapWithIndex (\i it ->
     (if kind it == "struct" && nameOf it == "frac" && not (A.null path) then [ { path, i } ] else [])
       <> A.concat (A.mapWithIndex (\k s -> go (A.snoc path { item: i, slot: k }) s) (slotsOf it))) box)
-
--- | Every item, at any depth.
-everything :: Box -> Array Item
-everything box = box <> A.concatMap (\it -> A.concatMap everything (slotsOf it)) box

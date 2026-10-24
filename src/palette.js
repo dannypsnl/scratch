@@ -1,5 +1,5 @@
 import katex from "katex";
-import { SYMBOLS, STRUCTS } from "./specs.js";
+import { SYMBOLS, STRUCTS, X_ARROWS } from "./specs.js";
 import { insertStruct, insertSym, insertLetterStruct } from "./nav.js";
 import { place } from "./popover.js";
 import { notationActions, applyNotation } from "./notation.js";
@@ -11,6 +11,8 @@ import { t } from "./i18n.js";
 const ENTRIES = [
   ...Object.entries(STRUCTS).map(([name, s]) => ({ name, kind: "struct", arity: s.arity, tex: s.example, note: t("palette.slots", s.arity) })),
   ...Object.entries(SYMBOLS).map(([name, s]) => ({ name, kind: "sym", tex: s.preview ?? "\\" + name })),
+  // \xrightarrow and kin: an \overset over the arrow (nav.js insertStruct)
+  ...Object.keys(X_ARROWS).map((name) => ({ name, kind: "struct", arity: 1, tex: `\\${name}{f}`, note: t("palette.slots", 2) })),
 ];
 
 // Rendered preview of what the entry inserts.
@@ -53,7 +55,7 @@ export function openPalette(view, initial = "") {
     close();
     if (item.kind === "action") applyNotation(view, item.action);
     else if (item.kind === "sym") insertSym(view.state, view.dispatch, item.name);
-    else if (item.kind === "struct" && STRUCTS[item.name].letter && view.state.selection.empty) openLetter(view, item.name);
+    else if (item.kind === "struct" && STRUCTS[item.name]?.letter && view.state.selection.empty) openLetter(view, item.name);
     else if (item.kind === "struct") insertStruct(view.state, view.dispatch, item.name, item.arity);
     else if (item.kind === "generic") {
       // second stage: how many argument slots

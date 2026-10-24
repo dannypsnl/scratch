@@ -20,7 +20,9 @@ const canonical = [
   "e^{i\\pi}+1=0",
   "x_i^2",
   "\\sum_{k=0}^nk",
-  "\\overset{f}{\\to}",
+  "\\xrightarrow{f}",
+  "\\xleftarrow[g]{f}", // an \\overset over an \\underset over the arrow
+  "\\sqrt[3]{x}",
   "\\foo{x}{y}",
   "\\foo{}",
   "\\unknownsym x",
@@ -37,6 +39,7 @@ const normalizing = [
   ["x^{2}", "x^2"],
   ["\\alpha  x", "\\alpha x"],
   ["{a}{b}", "ab"],
+  ["\\overset{f}{\\to}", "\\xrightarrow{f}"], // written so that it stretches
   ["a\\\\b", "ab"], // a line break means nothing in an inline formula
 ];
 

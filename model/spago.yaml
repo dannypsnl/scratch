@@ -2,7 +2,10 @@ package:
   name: formula-model
   dependencies:
     - arrays
+    - console
+    - effect
     - foldable-traversable
+    - integers
     - lcg
     - maybe
     - prelude

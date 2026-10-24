@@ -7,7 +7,7 @@ import { history, undo, redo } from "prosemirror-history";
 import { schema } from "./schema.js";
 import { parseMath, serializeMath } from "./latex.js";
 import { parseInline, parseOutline, serializeInline, serializeOutline } from "./outline-io.js";
-import { horizontal, vertical, term, selectTerm, formula, selectionShape, arrowShape, labelledArrows, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
+import { horizontal, vertical, term, selectTerm, selectStep, selectEdge, formula, selectionShape, xArrowsToOverset, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
 import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, toggleFoldAt, blockIds, outlineDecorations } from "./outline.js";
 import { openPalette } from "./palette.js";
 import { openPicker } from "./picker.js";
@@ -30,6 +30,10 @@ const mathKeys = keymap({
   ArrowRight: horizontal(1),
   "Alt-ArrowLeft": term(-1),
   "Alt-ArrowRight": term(1),
+  "Shift-ArrowLeft": selectStep(-1),
+  "Shift-ArrowRight": selectStep(1),
+  "Shift-Mod-ArrowLeft": selectEdge(-1),
+  "Shift-Mod-ArrowRight": selectEdge(1),
   "Shift-Alt-ArrowLeft": selectTerm(-1),
   "Shift-Alt-ArrowRight": selectTerm(1),
   "Mod-ArrowLeft": formula(-1),
@@ -257,12 +261,12 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   let state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, arrowShape, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
+    plugins: [compositionCommit, history(), mathKeys, ...plugins, outlineKeys, keymap(baseKeymap), blockIds, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint],
   });
-  // notes written before x-arrows: their labelled arrows become x-arrows too
+  // notes saved while labelled arrows were x-arrow structures: \overset again
   // (saved with the next edit)
-  const arrows = labelledArrows(state);
-  if (arrows) state = state.apply(arrows.setMeta("addToHistory", false));
+  const upgrade = xArrowsToOverset(state);
+  if (upgrade) state = state.apply(upgrade.setMeta("addToHistory", false));
   const view = new EditorView(mount, {
     state,
     // no macOS autocorrect / capitalisation bubbles or spell squiggles:

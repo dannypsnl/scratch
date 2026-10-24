@@ -2,20 +2,64 @@ import { Plugin } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import { isMathContainer } from "./schema.js";
 import { inMath } from "./nav.js";
+import { X_ARROWS, ARROW_X, SYMBOLS } from "./specs.js";
 
 // caret inside a code block or between two characters of inline code
 // (always a boolean: classList.toggle(name, undefined) flips instead)
 const isCode = (n) => !!n?.marks.some((m) => m.type.name === "code");
 const inCode = ($p) => !!$p.parent.type.spec.code || $p.marks().some((m) => m.type.name === "code") || (isCode($p.nodeBefore) && isCode($p.nodeAfter));
 
-// Glyph classes for plain characters typed into a formula.
+// Glyph classes for plain characters typed into a formula. + - * are done
+// below, with their neighbours (atomClasses).
 const CHAR_CLASSES = [
   [/[0-9.]+/g, "pm-upright"],
-  [/[+\-*]/g, "pm-upright pm-bin"],
   [/[=<>]/g, "pm-upright pm-rel"],
-  [/[()[\]|!']/g, "pm-upright"],
+  [/[()[\]{}|!']/g, "pm-upright"],
   [/[,;]/g, "pm-upright pm-punct"],
 ];
+
+// TeX's atoms, for spacing: a binary operator is spaced as one only between
+// two things it can join; at the start, after an opening bracket, a comma, a
+// relation, another operator or a large operator (-x, (-x), x = -y), or before
+// a closing bracket, a comma or a relation, it is an ordinary symbol.
+const CHAR_ATOM = { "+": "bin", "-": "bin", "*": "bin", "=": "rel", "<": "rel", ">": "rel", "(": "open", "[": "open", "{": "open", ")": "close", "]": "close", "}": "close", ",": "punct", ";": "punct" };
+const SYM_ATOM = { rel: "rel", bin: "bin", op: "op", opname: "op", punct: "punct" };
+function atomClasses(container, start, decos) {
+  const atoms = []; // { kind, from, node }
+  let pos = start;
+  container.forEach((n) => {
+    if (n.isText) for (const c of n.text) { atoms.push({ kind: CHAR_ATOM[c] ?? "ord", from: pos, char: c }); pos++; }
+    else {
+      // a script belongs to what it is on
+      if (n.type.name !== "sup" && n.type.name !== "sub") atoms.push({ kind: n.type.name === "sym" ? SYM_ATOM[SYMBOLS[n.attrs.name]?.cls] ?? "ord" : "ord", from: pos, node: n });
+      pos += n.nodeSize;
+    }
+  });
+  atoms.forEach((a, k) => {
+    if (a.kind !== "bin") return;
+    const prev = atoms[k - 1]?.kind, next = atoms[k + 1]?.kind;
+    const unary = !prev || ["bin", "rel", "open", "punct", "op"].includes(prev) || !next || ["rel", "close", "punct"].includes(next);
+    const minus = a.char === "-" ? " pm-minus" : "";
+    if (a.node) { if (unary) decos.push(Decoration.node(a.from, a.from + 1, { class: "pm-unary" })); }
+    else decos.push(Decoration.inline(a.from, a.from + 1, { class: `pm-upright${unary ? "" : " pm-bin"}${minus}` }));
+  });
+}
+
+// A label over (or under) a lone arrow: the arrow stretches to the label's
+// width, as the \xrightarrow it is written as does (draw in specs.js); one over
+// an \underset of an arrow lets that \underset take its whole width.
+function arrowDraw(slot) {
+  const n = slot.childCount === 1 ? slot.firstChild : null;
+  return n?.type.name === "sym" ? X_ARROWS[ARROW_X[n.attrs.name]]?.draw ?? null : null;
+}
+function labelledArrow(node) {
+  if (node.type.name !== "struct" || !["overset", "underset", "stackrel"].includes(node.attrs.name) || node.childCount !== 2) return null;
+  const base = node.child(1), draw = arrowDraw(base);
+  if (draw) return `pm-xarrow pm-xarrow-${draw}`;
+  const under = base.childCount === 1 ? base.firstChild : null;
+  if (node.attrs.name === "overset" && under?.type.name === "struct" && under.attrs.name === "underset" && under.childCount === 2 && arrowDraw(under.child(1))) return "pm-xarrow pm-xarrow-over";
+  return null;
+}
 
 // CJK auto-spacing: a quarter-em gap where CJK meets Latin letters, digits
 // or a formula, drawn as a margin (no space characters in the text). The gap
@@ -62,9 +106,12 @@ function staticDecos(doc) {
   doc.descendants((node, pos, parent) => {
     if (node.type.name === "line") cjkSpacing(node, pos + 1, decos);
     if (node.isText && parent?.type.name === "line") webLinks(node, pos, decos);
+    const xarrow = labelledArrow(node);
+    if (xarrow) decos.push(Decoration.node(pos, pos + node.nodeSize, { class: xarrow }));
     if (isMathContainer(node.type) && node.content.size === 0) {
       decos.push(Decoration.node(pos, pos + node.nodeSize, { class: "pm-empty" }));
     }
+    if (isMathContainer(node.type)) atomClasses(node, pos + 1, decos);
     if (node.isText && parent && isMathContainer(parent.type)) {
       for (const [re, cls] of CHAR_CLASSES) {
         for (const m of node.text.matchAll(re)) {
@@ -181,8 +228,12 @@ export const mathDecorations = new Plugin({
       const $h = state.selection.$head;
       for (let d = $h.depth; d > 0; d--) {
         if ($h.node(d).type.name !== "math") continue;
-        // highlight the formula being edited
-        return set.add(state.doc, [Decoration.node($h.before(d), $h.after(d), { class: "pm-active" })]);
+        // the formula being edited gets a tint; the box the caret is in (a
+        // slot, a script) a dashed frame, as TeXmacs does, so the end of a box
+        // and the place just after it look different
+        const decos = [Decoration.node($h.before(d), $h.after(d), { class: "pm-active" })];
+        if ($h.depth > d) decos.push(Decoration.node($h.before(), $h.after(), { class: "pm-here" }));
+        return set.add(state.doc, decos);
       }
       return set;
     },

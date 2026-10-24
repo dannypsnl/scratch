@@ -395,6 +395,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 }
 /* the formula being edited keeps a quiet tint; the red caret marks it */
 .pm-math.pm-active { background: var(--slot); }
+.pm-math .pm-here { outline: 1px dashed color-mix(in srgb, var(--fg) 45%, transparent); outline-offset: 1px; border-radius: 1px; }
 .pm-math ::selection, .pm-math::selection { background: color-mix(in srgb, var(--hot) 30%, transparent); }
 .pm-upright, .pm-sym, .pm-deco { font-family: KaTeX_Main, serif; font-style: normal; }
 .pm-sym.pm-italic { font-family: KaTeX_Math, serif; font-style: italic; }
@@ -403,6 +404,11 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .pm-unknown { color: var(--muted); font-size: .8em; }
 .pm-sym.pm-opname { margin: 0 .17em; }
 .pm-bin { margin: 0 .22em; }
+.pm-math .pm-sym.pm-bin.pm-unary { margin: 0; } /* -x, (-x): an ordinary symbol (decorations.js) */
+/* a typed - is drawn as the minus KaTeX writes for it: the hyphen widened to
+   a minus's .778em (the LaTeX stays -) */
+.pm-minus { display: inline-block; transform: scaleX(2.33); margin: 0 .222em; }
+.pm-minus.pm-bin { margin: 0 .442em; }
 .pm-rel { margin: 0 .28em; }
 .pm-punct { margin-right: .17em; }
 
@@ -445,22 +451,35 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-overset > .pm-slot:first-child { margin-bottom: -.3em; }
 .layout-underset > .pm-slot:first-child { order: 1; margin-top: -.15em; }
 
-/* \xrightarrow and kin: the label over an arrow as wide as it. The glyph
-   draws the head; a drawn shaft fills the rest, at KaTeX_Main's own shaft
-   (measured: .235em to .275em above the baseline). The glyph's line is the
-   last in the box, so the arrow sits on the text baseline. */
-.layout-xarrow { display: inline-block; text-align: center; margin: 0 .28em; }
-.layout-xarrow > .pm-args { display: block; }
-.layout-xarrow .pm-slot { display: block; width: fit-content; margin: 0 auto -.3em; padding: 0 .3em; font-size: .7em; line-height: 1; }
-.layout-xarrow > .pm-deco { display: flex; align-items: baseline; }
-.pm-xarrow-right > .pm-deco::before, .pm-xarrow-left > .pm-deco::after {
+/* a label over (or under) a lone arrow: the arrow as wide as the label, as
+   the \xrightarrow it is written as (decorations.js). The glyph draws the head,
+   a drawn shaft the rest, at KaTeX_Main's own shafts (measured above the
+   baseline: one .235em to .275em; a double one .14 to .175 and .33 to .365) */
+.pm-xarrow { margin: 0 .28em; } /* a relation's spacing, which the arrow gives up */
+.pm-xarrow > .pm-slot:first-child { padding: 0 .3em; }
+.pm-xarrow > .pm-slot:last-child { width: auto; align-self: stretch; }
+.pm-xarrow > .pm-slot:last-child > .pm-sym { display: flex; align-items: baseline; margin: 0; }
+.pm-xarrow-right > .pm-slot:last-child > .pm-sym::before, .pm-xarrow-right2 > .pm-slot:last-child > .pm-sym::before,
+.pm-xarrow-left > .pm-slot:last-child > .pm-sym::after, .pm-xarrow-left2 > .pm-slot:last-child > .pm-sym::after {
   content: ""; flex: 1; min-width: .4em; height: .4em; position: relative; top: -.055em;
   background: linear-gradient(currentColor, currentColor) 0 50% / 100% .04em no-repeat;
 }
+.pm-xarrow-right2 > .pm-slot:last-child > .pm-sym::before, .pm-xarrow-left2 > .pm-slot:last-child > .pm-sym::after {
+  background:
+    linear-gradient(currentColor, currentColor) 0 calc(100% - .085em) / 100% .035em no-repeat,
+    linear-gradient(currentColor, currentColor) 0 calc(100% - .275em) / 100% .035em no-repeat;
+}
 /* the shaft runs into the glyph's own; its min-width cancels that overlap */
-.pm-xarrow-right > .pm-deco::before { margin-right: -.4em; }
-.pm-xarrow-left > .pm-deco::after { margin-left: -.4em; }
-.pm-xarrow-bar > .pm-deco::before { border-left: .04em solid currentColor; }
+.pm-xarrow-right > .pm-slot:last-child > .pm-sym::before, .pm-xarrow-right2 > .pm-slot:last-child > .pm-sym::before { margin-right: -.4em; }
+.pm-xarrow-left > .pm-slot:last-child > .pm-sym::after, .pm-xarrow-left2 > .pm-slot:last-child > .pm-sym::after { margin-left: -.4em; }
+/* \xrightarrow[below]{above}: the \underset of the arrow fills the \overset */
+.pm-xarrow-over > .pm-slot:last-child > .layout-underset { display: flex; margin: 0; }
+
+/* \sqrt[n]{x}: the index small and raised before the radical */
+.layout-root { align-items: baseline; margin: 0 .1em; }
+.layout-root > .pm-slot:first-child { font-size: .55em; vertical-align: .9em; position: relative; bottom: .9em; margin-right: -.45em; }
+.layout-root > .pm-slot:last-child { border-top: .06em solid currentColor; padding: .05em .1em 0; margin-left: .75em; position: relative; }
+.layout-root > .pm-slot:last-child::before { content: "√"; position: absolute; right: 100%; bottom: 0; font-family: KaTeX_Main, serif; font-style: normal; font-size: 1.1em; }
 
 .layout-overline > .pm-slot { border-top: .06em solid currentColor; }
 .layout-font-bb > .pm-slot { font-family: KaTeX_AMS, serif; font-style: normal; }

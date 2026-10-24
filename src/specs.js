@@ -109,11 +109,8 @@ export const STRUCTS = {
   textit: { arity: 1, layout: "font-textit", rows: [[0]], example: "\\textit{if}", text: true },
   textsf: { arity: 1, layout: "font-sf", rows: [[0]], example: "\\textsf{if}", text: true },
   texttt: { arity: 1, layout: "font-tt", rows: [[0]], example: "\\texttt{if}", text: true },
-  // arrows that stretch to their label; \overset{f}{\to} becomes one (nav.js)
-  xrightarrow: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xrightarrow{f}", arrow: { glyph: "→", dir: "right" } },
-  xleftarrow: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xleftarrow{f}", arrow: { glyph: "←", dir: "left" } },
-  xmapsto: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xmapsto{f}", arrow: { glyph: "→", dir: "right", bar: true } },
-  xtwoheadrightarrow: { arity: 1, layout: "xarrow", rows: [[0]], example: "\\xtwoheadrightarrow{f}", arrow: { glyph: "↠", dir: "right" } },
+  // \sqrt[n]{x}: the index is a slot of its own
+  root: { arity: 2, layout: "root", rows: [[0], [1]], wrap: 1, example: "\\sqrt[n]{x}" },
 };
 
 function accents(marks) {
@@ -121,8 +118,23 @@ function accents(marks) {
     [name, { arity: 1, layout: "accent", rows: [[0]], example: `\\${name}{x}`, accent }]));
 }
 
-// The x-arrow a label over a lone arrow becomes.
-export const X_ARROW = { to: "xrightarrow", rightarrow: "xrightarrow", leftarrow: "xleftarrow", mapsto: "xmapsto", twoheadrightarrow: "xtwoheadrightarrow" };
+// \xrightarrow{f} and kin are how an \overset over a lone arrow is written in
+// LaTeX (latex.js), \xrightarrow[g]{f} one over an \underset{g}{\to}: in the
+// document it is that \overset, every label and the arrow a slot of its own.
+// draw: how the editor stretches the arrow to its labels (decorations.js;
+// one shaft, or two for a double arrow); without it the glyph is drawn as is.
+export const X_ARROWS = {
+  xrightarrow: { sym: "to", draw: "right" }, xleftarrow: { sym: "leftarrow", draw: "left" },
+  xRightarrow: { sym: "Rightarrow", draw: "right2" }, xLeftarrow: { sym: "Leftarrow", draw: "left2" },
+  xleftrightarrow: { sym: "leftrightarrow" }, xLeftrightarrow: { sym: "Leftrightarrow" },
+  xhookleftarrow: { sym: "hookleftarrow" }, xhookrightarrow: { sym: "hookrightarrow" }, xmapsto: { sym: "mapsto" },
+  xtwoheadrightarrow: { sym: "twoheadrightarrow", draw: "right" }, xtwoheadleftarrow: { sym: "twoheadleftarrow", draw: "left" },
+  xrightharpoonup: { sym: "rightharpoonup", draw: "right" }, xrightharpoondown: { sym: "rightharpoondown", draw: "right" },
+  xleftharpoonup: { sym: "leftharpoonup", draw: "left" }, xleftharpoondown: { sym: "leftharpoondown", draw: "left" },
+  xrightleftharpoons: { sym: "rightleftharpoons" }, xleftrightharpoons: { sym: "leftrightharpoons" },
+};
+// the arrow symbol -> its x-arrow (\rightarrow is written as \to's)
+export const ARROW_X = { rightarrow: "xrightarrow", ...Object.fromEntries(Object.entries(X_ARROWS).map(([x, a]) => [a.sym, x])) };
 
 // ASCII shorthands typed inside a formula, turned into a symbol as soon as
 // they are complete. A sequence may continue a symbol made by a shorter one:
