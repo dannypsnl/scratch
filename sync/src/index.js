@@ -1,26 +1,25 @@
 import { DurableObject } from "cloudflare:workers";
+import { LoroDoc, VersionVector, decodeImportBlobMeta } from "loro-crdt/bundler";
+import { notebook } from "./core.js";
 
-// Sync relay for one person's notebook.
-//
-// The server never looks inside the data: every Loro update a device sends is
-// appended to a log with a sequence number and broadcast to the other
-// devices. A device that (re)connects says the last sequence it has seen and
-// gets everything after it. Loro imports are idempotent, so resending is safe.
-//
-// Wire format
-//   client -> server  text   {"type":"hello","since":<seq>}
-//                     binary [u32 id][loro update]          (acked by id)
-//   server -> client  binary [u8 1][u64 seq][loro update]
-//                     text   {"type":"ack","id":<id>,"seq":<seq>}
-//                     text   {"type":"synced","seq":<latest seq>}
+// Sync relay for one person's notebook: one Durable Object per notebook,
+// holding the notebook as a Loro document (core.js has the protocol). Every
+// update is appended to a log and broadcast to the other devices; a snapshot
+// now and then saves replaying the whole log when the object wakes.
 
 export class Notebook extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
+    const sql = ctx.storage.sql;
     ctx.blockConcurrencyWhile(async () => {
-      ctx.storage.sql.exec(
-        "CREATE TABLE IF NOT EXISTS updates (seq INTEGER PRIMARY KEY AUTOINCREMENT, data BLOB NOT NULL)",
-      );
+      sql.exec("CREATE TABLE IF NOT EXISTS updates (seq INTEGER PRIMARY KEY AUTOINCREMENT, data BLOB NOT NULL)");
+      sql.exec("CREATE TABLE IF NOT EXISTS snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), seq INTEGER NOT NULL, data BLOB NOT NULL)");
+      this.nb = notebook({ LoroDoc, VersionVector, decodeImportBlobMeta }, {
+        rows: (after) => sql.exec("SELECT seq, data FROM updates WHERE seq > ? ORDER BY seq", after),
+        append: (data) => sql.exec("INSERT INTO updates (data) VALUES (?) RETURNING seq", data).one().seq,
+        snapshot: () => sql.exec("SELECT seq, data FROM snapshot WHERE id = 1").toArray()[0] ?? null,
+        saveSnapshot: (seq, data) => sql.exec("INSERT OR REPLACE INTO snapshot (id, seq, data) VALUES (1, ?, ?)", seq, data),
+      });
     });
   }
 
@@ -33,43 +32,21 @@ export class Notebook extends DurableObject {
   async webSocketMessage(ws, message) {
     if (typeof message === "string") {
       const msg = JSON.parse(message);
-      if (msg.type === "hello") this.sendSince(ws, Number(msg.since) || 0);
+      if (msg.type === "hello") for (const out of this.nb.hello(msg)) ws.send(out);
       return;
     }
     const id = new DataView(message).getUint32(0);
-    const update = message.slice(4);
-    const { seq } = this.ctx.storage.sql
-      .exec("INSERT INTO updates (data) VALUES (?) RETURNING seq", update)
-      .one();
-    const frame = updateFrame(seq, update);
+    const { frame, ack } = this.nb.update(id, message.slice(4));
     for (const other of this.ctx.getWebSockets()) {
       if (other !== ws) other.send(frame);
     }
-    ws.send(JSON.stringify({ type: "ack", id, seq }));
+    ws.send(ack);
   }
 
+  // 1005 and 1006 (no code, dropped) are reported, never sent
   async webSocketClose(ws, code, reason) {
-    ws.close(code, reason);
+    ws.close(code === 1005 || code === 1006 ? 1000 : code, reason);
   }
-
-  sendSince(ws, since) {
-    let last = since;
-    for (const row of this.ctx.storage.sql.exec("SELECT seq, data FROM updates WHERE seq > ? ORDER BY seq", since)) {
-      ws.send(updateFrame(row.seq, row.data));
-      last = row.seq;
-    }
-    ws.send(JSON.stringify({ type: "synced", seq: last }));
-  }
-}
-
-function updateFrame(seq, update) {
-  const bytes = new Uint8Array(update);
-  const frame = new Uint8Array(9 + bytes.length);
-  const view = new DataView(frame.buffer);
-  view.setUint8(0, 1);
-  view.setBigUint64(1, BigInt(seq));
-  frame.set(bytes, 9);
-  return frame;
 }
 
 // Images live in R2, named by the SHA-256 of their bytes, under the

@@ -1,21 +1,17 @@
 // The sync server on a machine of your own: the same relay as the Cloudflare
 // Worker (src/index.js), same wire format, so the app needs only its URL.
-// Updates go to one SQLite file, images to files named by their hash.
+// Updates go to one SQLite file, images to files named by their hash; the
+// protocol is in src/core.js.
 //
 //   SYNC_TOKEN=… PORT=8787 DATA_DIR=./data node server.mjs
-//
-// Wire format
-//   client -> server  text   {"type":"hello","since":<seq>}
-//                     binary [u32 id][loro update]          (acked by id)
-//   server -> client  binary [u8 1][u64 seq][loro update]
-//                     text   {"type":"ack","id":<id>,"seq":<seq>}
-//                     text   {"type":"synced","seq":<latest seq>}
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { WebSocketServer } from "ws";
+import * as Loro from "loro-crdt/nodejs";
+import { notebook } from "./src/core.js";
 
 const TOKEN = process.env.SYNC_TOKEN;
 const PORT = Number(process.env.PORT ?? 8787);
@@ -30,9 +26,27 @@ fs.mkdirSync(path.join(DATA, "blobs"), { recursive: true });
 const db = new DatabaseSync(path.join(DATA, "updates.sqlite"));
 db.exec("PRAGMA journal_mode = WAL");
 db.exec("CREATE TABLE IF NOT EXISTS updates (notebook TEXT NOT NULL, seq INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (notebook, seq))");
+db.exec("CREATE TABLE IF NOT EXISTS snapshots (notebook TEXT PRIMARY KEY, seq INTEGER NOT NULL, data BLOB NOT NULL)");
 const lastSeq = db.prepare("SELECT COALESCE(MAX(seq), 0) AS seq FROM updates WHERE notebook = ?");
 const insert = db.prepare("INSERT INTO updates (notebook, seq, data) VALUES (?, ?, ?)");
 const since = db.prepare("SELECT seq, data FROM updates WHERE notebook = ? AND seq > ? ORDER BY seq");
+const snapshotOf = db.prepare("SELECT seq, data FROM snapshots WHERE notebook = ?");
+const saveSnapshot = db.prepare("INSERT OR REPLACE INTO snapshots (notebook, seq, data) VALUES (?, ?, ?)");
+
+// one Loro document per notebook, loaded on first use
+const notebooks = new Map();
+const open = (name) => {
+  if (!notebooks.has(name)) {
+    notebooks.set(name, notebook(Loro, {
+      rows: (after) => since.iterate(name, after),
+      // one process, synchronous SQLite: no two inserts race for a number
+      append: (data) => { const seq = lastSeq.get(name).seq + 1; insert.run(name, seq, data); return seq; },
+      snapshot: () => snapshotOf.get(name) ?? null,
+      saveSnapshot: (seq, data) => saveSnapshot.run(name, seq, data),
+    }, { snapshotEvery: Number(process.env.SNAPSHOT_EVERY) || undefined }));
+  }
+  return notebooks.get(name);
+};
 
 // the notebook name also names a directory: keep it to plain characters
 const NOTEBOOK = /^[A-Za-z0-9_-]{1,64}$/;
@@ -45,34 +59,16 @@ const tokenOk = (given) => {
 
 const rooms = new Map(); // notebook -> Set of sockets
 
-function updateFrame(seq, update) {
-  const frame = Buffer.alloc(9 + update.length);
-  frame.writeUInt8(1, 0);
-  frame.writeBigUInt64BE(BigInt(seq), 1);
-  update.copy(frame, 9);
-  return frame;
-}
-
-function onMessage(ws, notebook, message, isBinary) {
+function onMessage(ws, name, message, isBinary) {
+  const nb = open(name);
   if (!isBinary) {
     const msg = JSON.parse(message.toString());
-    if (msg.type !== "hello") return;
-    let last = Number(msg.since) || 0;
-    for (const row of since.iterate(notebook, last)) {
-      ws.send(updateFrame(row.seq, Buffer.from(row.data)));
-      last = row.seq;
-    }
-    ws.send(JSON.stringify({ type: "synced", seq: last }));
+    if (msg.type === "hello") for (const out of nb.hello(msg)) ws.send(out);
     return;
   }
-  const id = message.readUInt32BE(0);
-  const update = message.subarray(4);
-  // one process, synchronous SQLite: no two inserts race for a number
-  const seq = lastSeq.get(notebook).seq + 1;
-  insert.run(notebook, seq, update);
-  const frame = updateFrame(seq, update);
-  for (const other of rooms.get(notebook)) if (other !== ws && other.readyState === other.OPEN) other.send(frame);
-  ws.send(JSON.stringify({ type: "ack", id, seq }));
+  const { frame, ack } = nb.update(message.readUInt32BE(0), message.subarray(4));
+  for (const other of rooms.get(name)) if (other !== ws && other.readyState === other.OPEN) other.send(frame);
+  ws.send(ack);
 }
 
 // ---- images: content-addressed, so a PUT never changes an existing one

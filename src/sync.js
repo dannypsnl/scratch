@@ -1,17 +1,16 @@
 import { VersionVector } from "loro-crdt/base64";
 import { doc } from "./loro.js";
-import { flush, importRemote, getMeta, saveMeta, saveProgress } from "./store.js";
+import { flush, importRemote, getMeta, saveMeta } from "./store.js";
 import { flushUploads } from "./images.js";
 
-// Client side of the sync relay (sync/src/index.js).
+// Client side of the sync relay (sync/src/core.js has the protocol).
 //
-// Progress is two numbers kept in meta:
-//   seq     the last server sequence received, sent in "hello" on connect
-//   acked   the Loro version the server is known to have from us; on connect
-//           everything newer is sent, which covers edits made offline
-// Both are kept only once the snapshot holding what they count is saved
-// (store.js). An update that waits on changes this device lacks means some
-// were lost all the same: the whole log is asked for again, once.
+// Nothing about progress is kept. On connect the device says what its
+// document has, as a Loro version vector, and gets exactly what it lacks;
+// the reply carries the server's version, and what the server lacks is sent
+// from it, which covers edits made offline. An update that cannot apply (it
+// waits on changes this device lacks) is answered with another hello, and an
+// ack saying what the server needs with that.
 //
 // Live, every local Loro change is sent as it is committed and acked by id.
 
@@ -24,20 +23,23 @@ let ws = null;
 let retry = 0;
 let timer = null;
 let nextId = 1;
-const inflight = new Map(); // id -> version vector bytes at send time
+const inflight = new Set(); // ids of updates sent and not yet acked
 
-const b64 = (bytes) => btoa(String.fromCharCode(...bytes));
+const b64 = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
 export const config = () => getMeta().sync ?? null;
 
-// A different server or notebook starts from scratch: everything is sent
-// and everything is received.
 export function configure(sync) {
-  const old = config();
-  const same = old && old.url === sync.url && (old.notebook ?? "main") === sync.notebook;
-  saveMeta(same ? { sync } : { sync, seq: 0, acked: null });
+  saveMeta({ sync });
   connect();
+}
+
+// everything this device has that a document at `from` lacks (an update
+// with nothing in it is still a few bytes: compare instead)
+function sendNewer(from) {
+  if (!from) return send(doc.export({ mode: "update" }));
+  if (![0, -1].includes(doc.oplogVersion().compare(from))) send(doc.export({ mode: "update", from }));
 }
 
 export function connect() {
@@ -53,36 +55,32 @@ export function connect() {
   const sock = new WebSocket(url);
   sock.binaryType = "arraybuffer";
   ws = sock;
-  // hellos not yet answered by "synced": until then the log may have a gap
-  // below what arrives, so progress waits for the last "synced"
-  let hellos = 0, resent = false;
-  const hello = (since) => { hellos++; sock.send(JSON.stringify({ type: "hello", since })); };
-  const advance = (seq) => { if (!hellos) saveProgress({ seq: Math.max(getMeta().seq ?? 0, seq) }); };
+  // a hello not yet answered: what arrives meanwhile may not apply yet
+  let asking = false;
+  const hello = () => {
+    asking = true;
+    sock.send(JSON.stringify({ type: "hello", vv: b64(doc.oplogVersion().encode()) }));
+  };
+  const version = (s) => (s ? VersionVector.decode(unb64(s)) : undefined);
 
   sock.onopen = () => {
     retry = 0;
     setStatus({ state: "syncing" });
-    hello(getMeta().seq ?? 0);
-    // everything the server has not acknowledged from us, including offline edits
     flush();
-    const acked = getMeta().acked;
-    const from = acked ? VersionVector.decode(unb64(acked)) : undefined;
-    if (!from || doc.oplogVersion().compare(from) !== 0) send(doc.export(from ? { mode: "update", from } : { mode: "update" }));
+    hello();
   };
 
   sock.onmessage = (ev) => {
     if (typeof ev.data === "string") {
       const msg = JSON.parse(ev.data);
       if (msg.type === "ack") {
-        const vv = inflight.get(msg.id);
         inflight.delete(msg.id);
-        saveProgress({ acked: vv ? b64(vv) : getMeta().acked });
-        advance(msg.seq);
+        if (msg.need) sendNewer(version(msg.need));
         if (!inflight.size && status.state === "synced") setStatus({ state: "synced" });
       } else if (msg.type === "synced") {
-        hellos--;
-        advance(msg.seq);
-        if (hellos) return;
+        asking = false;
+        // (a relay from before version vectors sends none: send everything)
+        sendNewer(version(msg.vv));
         setStatus({ state: "synced" });
         flushUploads();
       }
@@ -90,14 +88,7 @@ export function connect() {
     }
     const view = new DataView(ev.data);
     if (view.getUint8(0) !== 1) return;
-    const seq = Number(view.getBigUint64(1));
-    if (!importRemote(new Uint8Array(ev.data, 9)) && !resent) {
-      resent = true;
-      saveProgress({ seq: 0 });
-      hello(0);
-      return;
-    }
-    advance(seq);
+    if (!importRemote(new Uint8Array(ev.data, 9)) && !asking) hello();
   };
 
   sock.onclose = (ev) => {
@@ -122,7 +113,7 @@ export function unauthorized() {
 function send(update) {
   if (!ws || ws.readyState !== WebSocket.OPEN || !update.length) return;
   const id = nextId++;
-  inflight.set(id, doc.oplogVersion().encode());
+  inflight.add(id);
   const frame = new Uint8Array(4 + update.length);
   new DataView(frame.buffer).setUint32(0, id);
   frame.set(update, 4);
@@ -130,5 +121,5 @@ function send(update) {
 }
 
 // Local commits go out as they happen; while offline they wait in the
-// snapshot and are sent from `acked` on the next connect.
+// snapshot, and the next connect sends whatever the server lacks.
 doc.subscribeLocalUpdates((update) => send(update));

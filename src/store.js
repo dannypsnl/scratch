@@ -18,11 +18,6 @@ const named = new Map(); // id -> { title, doc, fields }
 const base = new Map(); // page -> doc as last read from / written to Loro
 const dirty = new Set(); // pages edited since the last flush
 let meta = {};
-// Sync progress (seq, acked) waits here until a snapshot holding everything
-// it counts is on disk; only then is it written to meta. Written at once, it
-// ran ahead of a snapshot cut short by quitting, and what it counted as
-// received was never asked for again.
-let progress = {};
 
 export const isDate = (id) => /^\d{4}-\d\d-\d\d$/.test(id);
 
@@ -102,24 +97,15 @@ function scheduleSnapshot() {
 }
 // one at a time, so two never write the same temporary file
 function saveSnapshot() {
-  const done = progress, notebook = meta.sync;
   const bytes = doc.export({ mode: "snapshot" });
-  saving = saving.then(async () => {
-    await persistence.saveSnapshot(bytes);
-    if (Object.keys(done).length && meta.sync === notebook) { meta = { ...meta, ...done }; await persistence.saveMeta(meta); }
-  }).catch((e) => console.error("saving the notebook failed", e));
+  saving = saving.then(() => persistence.saveSnapshot(bytes)).catch((e) => console.error("saving the notebook failed", e));
   return saving;
 }
 
-export const getMeta = () => ({ ...meta, ...progress });
+export const getMeta = () => meta;
 export function saveMeta(patch) {
   meta = { ...meta, ...patch };
-  progress = Object.fromEntries(Object.entries(progress).filter(([k]) => !(k in patch)));
   persistence.saveMeta(meta);
-}
-export function saveProgress(patch) {
-  progress = { ...progress, ...patch };
-  scheduleSnapshot();
 }
 
 export async function load() {

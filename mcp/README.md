@@ -44,6 +44,6 @@ Text is the app's outline form (`src/outline-io.js`): `- ` per block, two spaces
 
 ## Not done yet
 
-- It keeps nothing on disk, so every start downloads the whole update log, and a change the server has not acknowledged is lost if the server process exits.
+- It keeps nothing on disk, so every start downloads the whole notebook, and a change the server has not acknowledged is lost if the server process exits.
 - Search is a plain word match; it can move to the app's search module once there is one.
 - Images are not read or written.

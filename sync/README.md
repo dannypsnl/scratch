@@ -5,13 +5,13 @@ The sync server for scratch, in two forms that speak the same protocol, so the a
 - **Cloudflare:** a Worker with one Durable Object per notebook (`src/index.js`), images in R2.
 - **Self-hosted:** a plain Node server (`server.mjs`) for a machine of your own: updates in one SQLite file, images as files. No Cloudflare account needed. See [Self-hosted](#self-hosted).
 
-The server never looks inside the data. It:
+The server holds each notebook as a Loro document of its own (`src/core.js`, shared by both forms). It:
 
-- numbers every Loro update a device sends and stores it in the Durable Object's SQLite,
+- stores every Loro update a device sends in a log (the Durable Object's SQLite), with a snapshot now and then so a restart need not replay all of it,
 - forwards each update to the other connected devices,
 - keeps images in R2 (`PUT` / `GET /blob/<sha256>.<ext>`). The file name is the hash of the content, so an image is stored once and never overwritten.
 
-A device that reconnects sends the last sequence number it has seen, and the server replays everything after it. Merging is done by Loro on each device.
+A device that connects says what its document has, as a Loro version vector, and gets exactly what it lacks; the reply carries the server's version, and the device sends what the server lacks, edits made offline included. Neither side keeps any record of progress, so nothing can claim more than the document holds. A device that gets an update it cannot apply (it waits on a change the device lacks) simply asks again. Devices from before version vectors say the last sequence number they have seen and get the log after it.
 
 ## Local development
 
@@ -55,7 +55,7 @@ npm install
 SYNC_TOKEN=<a long random string> PORT=8787 DATA_DIR=./data npm run serve
 ```
 
-Everything it keeps is under `DATA_DIR`: `updates.sqlite` (the update log of every notebook) and `blobs/<notebook>/` (images, named by their SHA-256). Back that directory up and you have backed up the server.
+Everything it keeps is under `DATA_DIR`: `updates.sqlite` (the update log and latest snapshot of every notebook) and `blobs/<notebook>/` (images, named by their SHA-256). Back that directory up and you have backed up the server.
 
 Or with Docker:
 
@@ -83,4 +83,4 @@ Devices still holding the old token are refused on their next connect (WebSocket
 
 ## Not done yet
 
-- **Log compaction:** updates accumulate forever. A client could upload a snapshot to replace the old log.
+- **Log compaction:** the log is kept whole, for devices from before version vectors; snapshots only shorten a restart.

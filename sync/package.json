@@ -6,12 +6,13 @@
     "dev": "wrangler dev --port 8787",
     "deploy": "wrangler deploy",
     "serve": "node server.mjs",
-    "test": "node test/standalone.mjs"
+    "test": "node test/standalone.mjs && node test/vv.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.152.0"
   },
   "dependencies": {
+    "loro-crdt": "^1.17.1",
     "ws": "^8.22.0"
   }
 }
