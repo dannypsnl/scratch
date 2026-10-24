@@ -264,11 +264,15 @@ export const backspace = (state, dispatch) => {
   const sel = state.selection;
   if (!sel.empty) return false; // default deleteSelection
   const $p = sel.$head;
-  // right after a shorthand turned into a symbol: give back the typed text
+  // right after a shorthand turned into a symbol, or "/" into a fraction:
+  // give back what was typed
   if (lastShorthand && lastShorthand.doc === state.doc && lastShorthand.at === $p.pos) {
-    const { from, text } = lastShorthand;
+    const { from, to = $p.pos, text, content = Fragment.from(schema.text(text)) } = lastShorthand;
     lastShorthand = null;
-    if (dispatch) dispatch(state.tr.replaceWith(from, $p.pos, schema.text(text)).scrollIntoView());
+    if (dispatch) {
+      const tr = state.tr.replaceWith(from, to, content);
+      dispatch(tr.setSelection(TextSelection.create(tr.doc, from + content.size)).scrollIntoView());
+    }
     return true;
   }
   if (!isMathContainer($p.parent.type)) {
@@ -363,7 +367,8 @@ export function insertSym(state, dispatch, name) {
 }
 
 // "/" turns the selection, or the token just before the caret, into a numerator.
-function insertFrac(state, dispatch) {
+// `undo` is filled with what Backspace needs to make it a plain "/" again.
+function insertFrac(state, dispatch, undo = {}) {
   const sel = state.selection;
   let from = sel.from, to = sel.to, num = Fragment.empty;
   if (!sel.empty && sel.$from.sameParent(sel.$to)) {
@@ -382,6 +387,7 @@ function insertFrac(state, dispatch) {
   const frac = T.struct.create({ name: "frac" }, [numSlot, T.slot.create()]);
   if (dispatch) {
     const tr = state.tr.replaceWith(from, to, frac);
+    Object.assign(undo, { from, to: from + frac.nodeSize, content: num.append(Fragment.from(schema.text("/"))) });
     const caretPos = num.size ? from + 1 + numSlot.nodeSize + 1 : from + 2;
     dispatch(tr.setSelection(TextSelection.create(tr.doc, caretPos)).scrollIntoView());
   }
@@ -396,7 +402,12 @@ export function typeInMath(view, ch) {
     case "\\": return false;
     case "^": return insertNode(state, dispatch, T.sup.create(), 1);
     case "_": return insertNode(state, dispatch, T.sub.create(), 1);
-    case "/": return insertFrac(state, dispatch);
+    case "/": {
+      const undo = {};
+      insertFrac(state, dispatch, undo);
+      lastShorthand = { ...undo, doc: view.state.doc, at: view.state.selection.head };
+      return true;
+    }
     case "$": return exitMath(state, dispatch);
     case " ": {
       // at the end of a slot or script, Space finishes it: on to the next
@@ -418,7 +429,7 @@ export function typeInMath(view, ch) {
 // Turn a completed shorthand ("->", "<=", …) before the caret into its symbol.
 // The tokens are the container's characters and symbols ("\\to") up to the
 // caret. Returns what Backspace needs to take the conversion back, or null.
-let lastShorthand = null; // { doc, from, at, text }
+let lastShorthand = null; // { doc, from, at, text } or, for a fraction, { doc, from, to, at, content }
 function shorthands(tr) {
   let undo = null;
   for (;;) {
