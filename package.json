@@ -11,7 +11,8 @@
     "dev:app": "node scripts/dev-app.mjs",
     "dist": "npm run build && neu build --release --embed-resources --clean && node scripts/bundle-mac.mjs",
     "test:ui": "node test/ui-sweep.mjs",
-    "test:model": "cd model && spago test && cd .. && node test/model-diff.mjs"
+    "test:model": "cd model && spago test && cd .. && node test/model-diff.mjs",
+    "test:fuzz": "cd model && spago run --main Fuzz"
   },
   "dependencies": {
     "@neutralinojs/lib": "^6.10.0",
