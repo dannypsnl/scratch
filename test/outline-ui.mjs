@@ -359,6 +359,33 @@ async function dragCase(x, y, where, gesture, expectShape) {
   console.log("top level: Mod-Shift-Enter");
 }
 
+// ---- Backspace at the start of a line
+
+{
+  // [outline, block, caret offset, the outline afterwards, the caret's block]
+  const cases = [
+    // an empty block above goes; this one keeps its children
+    ["- \n- S\n  - a\n  - b\n    - c", "S", 0, "- S\n  - a\n  - b\n    - c", "S"],
+    ["- A\n  - \n- S\n  - a", "S", 0, "- A\n- S\n  - a", "S"],
+    // a line above with text: this line joins it, its children step out
+    ["- A\n- S\n  - a", "S", 0, "- AS\n- a", "AS"],
+    // the line above is a child's (x): joined to it, as before; an empty
+    // block above with a task: joined, as before
+    ["- \n  - x\n- S", "S", 0, "- \n  - xS", "xS"],
+    ["- TODO \n- S\n  - a", "S", 0, "- TODO S\n- a", "S"],
+  ];
+  for (const [text, name, o, expect, at] of cases) {
+    await H("load", text);
+    await H("caretAt", name, o);
+    await pg.keyboard.press("Backspace"); await pause(30);
+    const got = await pg.evaluate(async () => (await import("/src/outline-io.js")).serializeOutline(window.view.state.doc));
+    const head = await H("head");
+    if (got !== expect) fail("Backspace at a line's start", { text, expect, got });
+    else if (head.name !== at) fail("Backspace left the caret elsewhere", { text, at, head });
+  }
+  console.log("Backspace at a line's start");
+}
+
 console.log(`\n${fails.length} failures`);
 for (const x of fails.slice(0, 20)) console.log("  " + JSON.stringify(x));
 for (const e of new Set(pageErrors)) console.log(`page error: ${e}`);

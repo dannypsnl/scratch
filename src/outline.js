@@ -159,6 +159,13 @@ export const joinBackward = (state, dispatch) => {
   const start = $p.before(d), end = $p.after(d);
   const prev = TextSelection.findFrom(state.doc.resolve(start), -1, true);
   if (!prev) return true;
+  // the line above is an empty block of its own (no text, no children, no
+  // task): it goes, and this block stays as it is, children and all
+  const $q = prev.$from, above = $q.node($q.depth - 1);
+  if ($q.parent.type === T.line && !$q.parent.content.size && above.type === T.block && above.childCount === 1 && !above.attrs.task && !above.attrs.deadline) {
+    if (dispatch) dispatch(state.tr.delete($q.before($q.depth - 1), $q.after($q.depth - 1)).scrollIntoView());
+    return true;
+  }
   if (dispatch) {
     const block = $p.node(d);
     const children = block.content.cut(block.firstChild.nodeSize);
