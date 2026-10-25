@@ -24,6 +24,7 @@ import { notationHint } from "./notation.js";
 import { formatBar } from "./formatbar.js";
 import { derivations } from "./chain.js";
 import { scriptStacking } from "./stack.js";
+import { inCode, typeInCode, leaveCode, enterInCode, codeStep, exitCodeBlock } from "./code.js";
 import { t } from "./i18n.js";
 
 const T = schema.nodes;
@@ -60,6 +61,14 @@ const mathKeys = typedKeys({
   Delete: deleteForward,
   Enter: exitMath,
   Escape: exitMath,
+});
+
+// Code keys next: in and out of inline code, out of a code block (code.js).
+const codeKeys = typedKeys({
+  ArrowLeft: codeStep(-1),
+  ArrowRight: codeStep(1),
+  Enter: enterInCode,
+  Escape: (state, dispatch) => leaveCode(state, dispatch) || exitCodeBlock(state, dispatch),
 });
 
 const outlineKeys = typedKeys({
@@ -158,10 +167,9 @@ function startLink(view, tag, initial = "") {
 // `rest` is what follows ch in the same input event; menus receive it.
 function typed(view, ch, rest = "") {
   const $head = view.state.selection.$head;
-  // code is plain text: no formulas, links or tags
-  if ($head.parent.type.spec.code || inCode($head)) return false;
-  if ((ch === "$" || ch === "`") && wrapSelection(view, ch)) return true;
-  if (ch === "`" && closeInlineCode(view)) return true;
+  // code is plain text (brackets wrap a selection, ` leaves); ` starts it
+  if (inCode(view.state) || (ch === "`" && !inMath($head))) return typeInCode(view, ch);
+  if (ch === "$" && wrapSelection(view)) return true;
   if (!inMath($head)) {
     if (ch === "$") return insertMath(view.state, view.dispatch);
     const before = $head.nodeBefore?.isText ? $head.nodeBefore.text.slice(-1) : "";
@@ -191,41 +199,24 @@ function typed(view, ch, rest = "") {
   return true;
 }
 
-const inCode = ($p) => $p.marks().some((m) => m.type === schema.marks.code) ||
-  ($p.nodeBefore?.marks.some((m) => m.type === schema.marks.code) && $p.nodeAfter?.marks.some((m) => m.type === schema.marks.code));
-
-// $ or ` over a plain-text selection (within one line) turns it into a
-// formula (the text read as LaTeX) or inline code, caret after it.
-function wrapSelection(view, ch) {
+// $ over a plain-text selection (within one line) turns it into a formula
+// (the text read as LaTeX), caret after it. (` is the same for code: code.js)
+function wrapSelection(view) {
   const { from, to, $from, $to, empty } = view.state.selection;
   if (empty || inMath($from) || $from.parent !== $to.parent || !$from.parent.inlineContent) return false;
   let plain = true;
   view.state.doc.nodesBetween(from, to, (n) => { if (n.isInline && !n.isText) plain = false; });
   if (!plain) return false;
-  const text = view.state.doc.textBetween(from, to);
-  const node = ch === "$"
-    ? T.math.create(null, parseMath(text))
-    : schema.text(text, [schema.marks.code.create()]);
+  const node = T.math.create(null, parseMath(view.state.doc.textBetween(from, to)));
   const tr = view.state.tr.replaceWith(from, to, node);
   tr.setSelection(TextSelection.create(tr.doc, from + node.nodeSize));
   view.dispatch(tr.setStoredMarks([]).scrollIntoView());
   return true;
 }
 
-// `…` closes into inline code: the text since the opening backtick (in the
-// same plain run, not empty) becomes code.
-function closeInlineCode(view) {
-  const { $head, empty } = view.state.selection;
-  const run = $head.nodeBefore;
-  if (!empty || !run?.isText || run.marks.length) return false;
-  const text = run.text; // nodeBefore is already cut at the caret
-  const open = text.lastIndexOf("`");
-  if (open < 0 || open === text.length - 1) return false;
-  const from = $head.pos - (text.length - open);
-  const tr = view.state.tr.replaceWith(from, $head.pos, schema.text(text.slice(open + 1), [schema.marks.code.create()]));
-  view.dispatch(tr.setStoredMarks([]).scrollIntoView());
-  return true;
-}
+// Text copied from inside a line of this editor, as it reads: marks
+// dropped, formulas as $…$, links by title (for pasting into code).
+const unmarked = (text) => parseInline(text).map((n) => (n.isText ? n.text : serializeInline(Fragment.from(n)))).join("");
 
 // Copy writes the outline text format (lossless apart from block ids), and
 // paste reads it back, so structure, formulas and task states survive.
@@ -340,7 +331,7 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   let state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), suggest, mathKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint, formatBar, derivations],
+    plugins: [compositionCommit, history(), suggest, mathKeys, codeKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint, formatBar, derivations],
   });
   // notes saved while labelled arrows were x-arrow structures: \overset again
   // (saved with the next edit)
@@ -368,13 +359,13 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
       beforeinput(view, ev) {
         if (ev.inputType !== "insertText" || !ev.data) return false;
         const $h = view.state.selection.$head;
-        if (!inMath($h) && !besideSpecial($h) && !/[$#[`]/.test(ev.data)) return false;
+        if (!inMath($h) && !besideSpecial($h) && !inCode(view.state) && !/[$#[`]/.test(ev.data)) return false;
         ev.preventDefault();
         const chars = [...ev.data];
         for (let k = 0; k < chars.length; k++) {
           const rest = chars.slice(k + 1).join("");
           if (!typed(view, chars[k], rest)) view.dispatch(view.state.tr.insertText(chars[k]));
-          else if (document.querySelector(".palette")) break; // a menu took the rest
+          else if (document.querySelector(".palette:not([hidden])")) break; // a menu took the rest (the suggestion box waits hidden)
         }
         return true;
       },
@@ -388,8 +379,10 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
       const text = ev.clipboardData?.getData("text/plain");
       if (!text) return false;
       const { from, to, $head } = view.state.selection;
-      if ($head.parent.type === T.codeblock || inCode($head)) {
-        const plain = $head.parent.type === T.codeblock ? text.replace(/\r/g, "") : text.replace(/\s*\n\s*/g, " ");
+      if (inCode(view.state)) {
+        // (copied from inside a line here: `…` and the like are not code)
+        const raw = copiedFromOneLine(ev.clipboardData.getData("text/html")) ? unmarked(text) : text;
+        const plain = $head.parent.type === T.codeblock ? raw.replace(/\r/g, "") : raw.replace(/\s*\n\s*/g, " ");
         view.dispatch(view.state.tr.insertText(plain, from, to).scrollIntoView());
         return true;
       }

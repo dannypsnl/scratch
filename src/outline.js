@@ -4,6 +4,7 @@ import { Fragment } from "prosemirror-model";
 import { schema, lookup } from "./schema.js";
 import { hooks } from "./editor.js";
 import { newId } from "./outline-io.js";
+import { blockAfterCode } from "./code.js";
 import { openDeadlinePicker } from "./deadline.js";
 import { today, md } from "./dates.js";
 import { fieldsForBlock } from "./store.js";
@@ -87,14 +88,8 @@ function codeEnter(state, dispatch, asChild) {
     return true;
   }
   if (!dispatch) return true;
-  const d = $from.depth - 1;
   const tr = state.tr.delete($from.pos - 1, $from.pos);
-  const $p = tr.doc.resolve($from.pos - 1);
-  const block = $p.node(d);
-  const intoChildren = asChild || (block.childCount > 1 && !block.attrs.folded);
-  const at = intoChildren ? $p.after() : $p.after(d);
-  tr.insert(at, T.block.create({ id: newId() }, T.line.create()));
-  dispatch(tr.setSelection(TextSelection.create(tr.doc, at + 2)).scrollIntoView());
+  dispatch(blockAfterCode(tr, tr.doc.resolve($from.pos - 1), asChild));
   return true;
 }
 

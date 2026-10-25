@@ -173,8 +173,8 @@ export const schema = new Schema({
     underline: { toDOM: () => ["u", 0], parseDOM: [{ tag: "u" }, { tag: "ins" }] },
     strike: { toDOM: () => ["s", 0], parseDOM: [{ tag: "s" }, { tag: "del" }, { tag: "strike" }] },
     highlight: { toDOM: () => ["mark", 0], parseDOM: [{ tag: "mark" }] },
-    // `inline code`: typing past its end leaves it
-    code: { excludes: "_", inclusive: false, toDOM: () => ["code", { class: "pm-icode" }, 0], parseDOM: [{ tag: "code" }] },
+    // `inline code`: ` starts it, ` or Escape leaves it (code.js)
+    code: { excludes: "_", toDOM: () => ["code", { class: "pm-icode" }, 0], parseDOM: [{ tag: "code" }] },
   },
 });
 
