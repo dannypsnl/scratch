@@ -11,14 +11,14 @@ const CHAR_CLASSES = [
   [/[0-9.]+/g, "pm-upright"],
   [/[=<>]/g, "pm-upright pm-rel"],
   [/[()[\]{}|!']/g, "pm-upright"],
-  [/[,;]/g, "pm-upright pm-punct"],
+  [/[,;:]/g, "pm-upright pm-punct"], // (: as TeX's \colon, f: A → B: no space before, a little after)
 ];
 
 // TeX's atoms, for spacing: a binary operator is spaced as one only between
 // two things it can join; at the start, after an opening bracket, a comma, a
 // relation, another operator or a large operator (-x, (-x), x = -y), or before
 // a closing bracket, a comma or a relation, it is an ordinary symbol.
-const CHAR_ATOM = { "+": "bin", "-": "bin", "*": "bin", "=": "rel", "<": "rel", ">": "rel", "(": "open", "[": "open", "{": "open", ")": "close", "]": "close", "}": "close", ",": "punct", ";": "punct" };
+const CHAR_ATOM = { "+": "bin", "-": "bin", "*": "bin", "=": "rel", "<": "rel", ">": "rel", "(": "open", "[": "open", "{": "open", ")": "close", "]": "close", "}": "close", ",": "punct", ";": "punct", ":": "punct" };
 const SYM_ATOM = { rel: "rel", bin: "bin", op: "op", opname: "op", punct: "punct" };
 function atomClasses(container, start, decos) {
   const atoms = []; // { kind, from, node }
