@@ -6,7 +6,7 @@ import { mountOutline } from "./page.js";
 import { t } from "./i18n.js";
 
 // Heptabase-style journal: a week strip on top, one day below it; ‹ › move a
-// week, Today plus a calendar dropdown.
+// week (to its Monday), Today plus a calendar dropdown.
 //
 // What a day holds, marked under it: a dot, something written; a ring, a
 // TODO / DOING task still open (written that day, or due that day); a red
@@ -77,8 +77,10 @@ export function renderJournal(root, ctx) {
 
   const go = (day) => ctx.openPage(day);
   root.querySelectorAll(".week [data-day]").forEach((b) => { b.onclick = () => go(b.dataset.day); });
-  root.querySelector(".wk-prev").onclick = () => go(addDays(date, -7));
-  root.querySelector(".wk-next").onclick = () => go(addDays(date, 7));
+  // moving a week lands on its first day, not the same weekday: from a
+  // Sunday, › opens the Monday right after it
+  root.querySelector(".wk-prev").onclick = () => go(addDays(start, -7));
+  root.querySelector(".wk-next").onclick = () => go(addDays(start, 7));
   root.querySelector(".today-btn").onclick = () => go(now);
   const calBtn = root.querySelector(".cal-btn");
   calBtn.onclick = () => openCalendar(calBtn, date, mark, go);
