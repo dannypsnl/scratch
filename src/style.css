@@ -598,8 +598,9 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
   border-left: 2px solid var(--fg);
   pointer-events: none;
 }
-.pm-caret.in-math { border-left-color: var(--hot); }
-.pm-caret.in-code { border-left-color: var(--ok); }
+/* in a formula or in code (inline or a block) the caret is red: what is
+   typed next is not prose; the two are told apart by their boxes */
+.pm-caret:is(.in-math, .in-code) { border-left-color: var(--hot); }
 .pm-caret.blink { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { border-color: transparent; } }
 
