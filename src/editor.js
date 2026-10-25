@@ -355,6 +355,23 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
       return typed(view, ev.key);
     },
     handleDOMEvents: {
+      // An input method that composes the backtick (macOS 注音 takes ` for
+      // its symbols) commits it as text, with no key press to be seen:
+      // once it is in, it is taken back and ` is typed as it would have been
+      compositionend(view, ev) {
+        if (ev.data !== "`") return false;
+        setTimeout(() => {
+          const { $head, empty } = view.state.selection;
+          const before = $head.nodeBefore;
+          if (!empty || view.composing || !before?.isText || !before.text.endsWith("`")) return;
+          const tr = view.state.tr.delete($head.pos - 1, $head.pos);
+          // (composed into code just started, with nothing else in it: still in it, so `` is a backtick)
+          if (before.text === "`" && before.marks.some((m) => m.type === schema.marks.code)) tr.setStoredMarks([schema.marks.code.create()]);
+          view.dispatch(tr);
+          typed(view, "`");
+        }, 80);
+        return false;
+      },
       // fallback for input that bypasses keypress (autocorrect, dictation)
       beforeinput(view, ev) {
         if (ev.inputType !== "insertText" || !ev.data) return false;
