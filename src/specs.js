@@ -23,8 +23,9 @@ export const LIMITS = new Set(["sum", "prod", "coprod", "bigcup", "bigcap", "big
   "bigodot", "bigoplus", "bigotimes", "biguplus", "lim", "liminf", "limsup", "max", "min", "sup", "inf", "det",
   "gcd", "Pr", "injlim", "projlim", "varliminf", "varlimsup", "varinjlim", "varprojlim"]);
 
-export const SYMBOLS = {
-  ...fromKatex,
+// The commands written out here come first when the \ menu lists a family
+// (every arrow for "arrow"): the common ones, in this order.
+const COMMON = {
   // lowercase Greek
   alpha: sym("α", "ord", true), beta: sym("β", "ord", true), gamma: sym("γ", "ord", true),
   delta: sym("δ", "ord", true), epsilon: sym("ϵ", "ord", true), varepsilon: sym("ε", "ord", true),
@@ -48,7 +49,13 @@ export const SYMBOLS = {
   subset: sym("⊂", "rel"), subseteq: sym("⊆", "rel"), supseteq: sym("⊇", "rel"),
   to: sym("→", "rel"), rightarrow: sym("→", "rel"), leftarrow: sym("←", "rel"),
   leftrightarrow: sym("↔", "rel"), mapsto: sym("↦", "rel"), Rightarrow: sym("⇒", "rel"), iff: sym("⟺", "rel"),
-  hookrightarrow: sym("↪", "rel"), twoheadrightarrow: sym("↠", "rel"), vdash: sym("⊢", "rel"),
+  hookrightarrow: sym("↪", "rel"), rightarrowtail: sym("↣", "rel"), twoheadrightarrow: sym("↠", "rel"), vdash: sym("⊢", "rel"),
+  // ⇸, a partial map: in no KaTeX font and not a KaTeX command. Drawn as \to
+  // with a short bar over its middle (schema.js); the preview kerns the bar
+  // back over \to (not in a \mathrel: KaTeX's MathML for that nests <mo>,
+  // which the HTML parser mangles, taking the visible HTML with it). Written
+  // as Z notation's \pfun, a macro the publisher needs like \Z.
+  pfun: { char: "⇸", cls: "rel", italic: false, drawn: ["→", "∣"], preview: "\\to\\mkern-11.5mu\\shortmid\\mkern6.5mu" },
   // number systems
   N: bb("N"), Z: bb("Z"), Q: bb("Q"), R: bb("R"), C: bb("C"), F: bb("F"), P: bb("P"),
   // misc
@@ -66,6 +73,15 @@ export const SYMBOLS = {
     "arcsin", "arccos", "arctan", "sinh", "cosh", "tanh", "coth", "cot", "csc", "sec", "lg", "liminf", "limsup",
     "sh", "ch", "th", "cth", "tg", "ctg", "cotg", "cosec", "arctg", "arcctg"),
   bigcup: sym("⋃", "op"), bigcap: sym("⋂", "op"), bigoplus: sym("⨁", "op"), bigotimes: sym("⨂", "op"),
+};
+export const SYMBOLS = { ...fromKatex, ...Object.fromEntries(Object.entries(COMMON).map(([name, s], rank) => [name, { ...s, rank }])) };
+
+// A family of symbols, told by the glyph: the \ menu lists every member for
+// the family's name. "arrow" is the Unicode arrow blocks (so \to, \mapsto,
+// \iff and the harpoons are arrows, whatever their names), and \multimap.
+const ARROW_BLOCKS = [[0x2190, 0x21FF], [0x27F0, 0x27FF], [0x2900, 0x297F], [0x2B00, 0x2BFF]];
+export const FAMILIES = {
+  arrow: (char) => ARROW_BLOCKS.some(([lo, hi]) => char.codePointAt(0) >= lo && char.codePointAt(0) <= hi) || char === "⊸",
 };
 
 // Commands with arguments. rows lists slot indices top-to-bottom, used for Up/Down;
@@ -159,14 +175,27 @@ export const ARROW_X = { rightarrow: "xrightarrow", ...Object.fromEntries(Object
 
 // ASCII shorthands typed inside a formula, turned into a symbol as soon as
 // they are complete. A sequence may continue a symbol made by a shorter one:
-// "<=" is ≤ once "=" lands, and a following ">" makes it ⟺.
-// Backspace right after a conversion gives back what was typed.
+// "<=" is ≤ once "=" lands, and a following ">" makes it ⟺; "|-" is ⊢, and
+// "|->" ↦ through it. A closing bar starts none: |x|-1 keeps its minus
+// (nav.js shorthands). Backspace right after a conversion gives back what
+// was typed, so |-1| is |, -, Backspace, 1, |.
 export const SHORTHANDS = [
   [["-", ">"], "to"],
-  [["|", "\\to"], "mapsto"],
+  [["-", "\\to"], "longrightarrow"], // -->
+  [["|", "-"], "vdash"], // |-
+  [["|", "="], "models"], // |=
+  [["\\vdash", ">"], "mapsto"], // |->
+  [["\\vdash", "\\to"], "longmapsto"], // |-->
+  [["-", "\\mapsto"], "pfun"], // -|->
+  [[">", "\\to"], "rightarrowtail"], // >->
+  [["\\to", ">"], "twoheadrightarrow"], // ->>
+  [["~", ">"], "rightsquigarrow"], // ~>
   [["<", "-"], "leftarrow"],
   [["\\leftarrow", ">"], "leftrightarrow"],
+  [["\\leftarrow", "<"], "leftarrowtail"], // <-<
+  [["<", "\\leftarrow"], "twoheadleftarrow"], // <<-
   [["=", ">"], "Rightarrow"],
+  [["\\equiv", ">"], "Longrightarrow"], // ==>
   [["\\le", ">"], "iff"],
   [["<", "="], "le"],
   [[">", "="], "ge"],

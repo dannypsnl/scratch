@@ -6,7 +6,7 @@ import { schema } from "../src/schema.js";
 import { SYMBOLS, STRUCTS, X_ARROWS } from "../src/specs.js";
 import { parseMath, serializeMath } from "../src/latex.js";
 
-const MACROS = new Set(["N", "Z", "Q", "R", "C", "F", "P", "rank", "hom", "Hom", "End", "Aut", "id", "im", "coker", "lcm", "tr", "cosec", "cotg", "arcctg"]);
+const MACROS = new Set(["N", "Z", "Q", "R", "C", "F", "P", "pfun", "rank", "hom", "Hom", "End", "Aut", "id", "im", "coker", "lcm", "tr", "cosec", "cotg", "arcctg"]);
 const write = (tex) => serializeMath(schema.nodes.math.create(null, parseMath(tex)).content);
 
 const cases = [

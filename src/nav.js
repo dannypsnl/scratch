@@ -697,7 +697,11 @@ function shorthands(tr) {
     let pos = $p.start();
     $p.parent.forEach((child) => {
       if (pos >= $p.pos) return;
-      if (child.isText) for (const c of child.text.slice(0, $p.pos - pos)) toks.push({ tok: c, pos: pos++, text: c });
+      if (child.isText) for (const c of child.text.slice(0, $p.pos - pos)) {
+        // a closing bar (|x|-1, |x|=1) is no start of a shorthand
+        const closing = c === "|" && lastOpen($p.parent, pos - $p.start() + 1, "|", "|") < 0;
+        toks.push({ tok: closing ? "|)" : c, pos: pos++, text: c });
+      }
       else {
         const name = child.type === T.sym ? child.attrs.name : null;
         toks.push({ tok: name && "\\" + name, pos, text: name && lastText(name) });

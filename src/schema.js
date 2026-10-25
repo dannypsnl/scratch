@@ -113,6 +113,8 @@ export const schema = new Schema({
       toDOM: (node) => {
         const s = SYMBOLS[node.attrs.name];
         if (!s) return ["span", { class: "pm-sym pm-unknown" }, "\\" + node.attrs.name];
+        // a glyph KaTeX's fonts lack: a base glyph with another laid over its middle (⇸)
+        if (s.drawn) return ["span", { class: `pm-sym pm-${s.cls} pm-drawn` }, ["span", { class: "pm-over" }, s.drawn[1]], s.drawn[0]];
         return ["span", { class: `pm-sym pm-${s.cls}${s.italic ? " pm-italic" : ""}${s.bb ? " pm-bb" : ""}${s.ams ? " pm-ams" : ""}` }, s.char];
       },
     },

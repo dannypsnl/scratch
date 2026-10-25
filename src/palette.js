@@ -1,5 +1,5 @@
 import katex from "katex";
-import { SYMBOLS, STRUCTS, X_ARROWS } from "./specs.js";
+import { SYMBOLS, STRUCTS, X_ARROWS, FAMILIES } from "./specs.js";
 import { insertStruct, insertSym, insertLetterStruct } from "./nav.js";
 import { place } from "./popover.js";
 import { selectionActions, applyNotation } from "./notation.js";
@@ -10,9 +10,10 @@ import { t } from "./i18n.js";
 
 export const ENTRIES = [
   ...Object.entries(STRUCTS).map(([name, s]) => ({ name, kind: "struct", arity: s.arity, tex: s.example, note: t("palette.slots", s.arity) })),
-  ...Object.entries(SYMBOLS).map(([name, s]) => ({ name, kind: "sym", tex: s.preview ?? "\\" + name })),
+  ...Object.entries(SYMBOLS).map(([name, s]) => ({ name, kind: "sym", tex: s.preview ?? "\\" + name,
+    rank: s.rank, ams: s.ams, family: Object.keys(FAMILIES).find((f) => FAMILIES[f](s.char)) })),
   // \xrightarrow and kin: an \overset over the arrow (nav.js insertStruct)
-  ...Object.keys(X_ARROWS).map((name) => ({ name, kind: "struct", arity: 1, tex: `\\${name}{f}`, note: t("palette.slots", 2) })),
+  ...Object.keys(X_ARROWS).map((name) => ({ name, kind: "struct", arity: 1, tex: `\\${name}{f}`, note: t("palette.slots", 2), family: "arrow" })),
 ];
 
 // Rendered preview of what the entry inserts.
@@ -22,7 +23,7 @@ export function preview(tex) {
   return previews.get(tex);
 }
 
-// subsequence match; lower is better, null = no match
+// subsequence match on the name; lower is better, null = no match
 function score(name, q) {
   if (!q) return 0;
   if (name === q) return -2;
@@ -32,6 +33,23 @@ function score(name, q) {
     if (name[k] === q[i]) { if (last >= 0) gaps += k - last - 1; last = k; i++; }
   }
   return i === q.length ? gaps + name.length / 100 : null;
+}
+
+// A family's name ("arrow") matches every member too: the common ones
+// (specs.js COMMON) first in their order, then those whose names match, then
+// the rest, KaTeX's own before the AMS ones.
+function rank(e, q) {
+  const s = score(e.name, q);
+  if (e.family !== q) return s;
+  if (e.rank !== undefined) return -1.5 + e.rank / 1000;
+  return s ?? 50 + (e.ams ? 1 : 0);
+}
+
+// The entries the menu lists for a query, best first: the first 8, or every
+// match when the query names a family (the list scrolls).
+export function ranked(entries, q) {
+  const all = entries.map((e) => ({ e, s: rank(e, q) })).filter((x) => x.s !== null).sort((a, b) => a.s - b.s).map((x) => x.e);
+  return FAMILIES[q] ? all : all.slice(0, 8);
 }
 
 // The \ menu of commands; or, actionsOnly, the menu Space opens on a
@@ -63,12 +81,8 @@ export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
 
   function render() {
     const q = input.value.replace(/^\\/, "");
-    items = (actionsOnly ? actions : [...actions, ...ENTRIES]).map((e) => ({ e, s: score(e.name, q) }))
-      .filter((x) => x.s !== null)
-      .sort((a, b) => a.s - b.s)
-      .slice(0, 8)
-      .map((x) => x.e);
-    if (!actionsOnly && /^[a-zA-Z]+$/.test(q) && !items.some((e) => e.name === q)) {
+    items = ranked(actionsOnly ? actions : [...actions, ...ENTRIES], q);
+    if (!actionsOnly && !FAMILIES[q] && /^[a-zA-Z]+$/.test(q) && !items.some((e) => e.name === q)) {
       items.push({ name: q, kind: "generic", note: t("palette.generic") });
     }
     active = Math.min(active, Math.max(items.length - 1, 0));
@@ -85,6 +99,7 @@ export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
       li.onmousedown = (ev) => { ev.preventDefault(); run(it); };
       return li;
     }));
+    list.children[active]?.scrollIntoView({ block: "nearest" });
   }
 
   input.addEventListener("input", () => { active = 0; render(); });

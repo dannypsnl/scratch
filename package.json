@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5178 --strictPort",
-    "test": "node test/roundtrip.mjs && node test/commands.mjs && node test/typing.mjs && node test/code.mjs && node test/mcp.mjs",
+    "test": "node test/roundtrip.mjs && node test/commands.mjs && node test/typing.mjs && node test/code.mjs && node test/palette.mjs && node test/mcp.mjs",
     "mcp": "node mcp/server.mjs",
     "build": "vite build",
     "app": "neu run",

@@ -43,7 +43,28 @@ const CASES = [
   ["|", "[1/n]", "\\left[\\frac{1}{n}\\right]", ""],
   ["|", "|1/2|", "\\left|\\frac{1}{2}\\right|", ""],
   ["|", "|x|+(a)", "|x|+(a)", ""],
+  // ASCII shorthands (specs.js SHORTHANDS), chained through shorter ones
+  ["|", "x->y", "x\\to y", ""],
+  ["|", "x-->y", "x\\longrightarrow y", ""],
+  ["|", "x|-y", "x\\vdash y", ""],
+  ["|", "x|=y", "x\\models y", ""],
   ["|", "x|->y", "x\\mapsto y", ""],
+  ["|", "x|-->y", "x\\longmapsto y", ""],
+  ["|", "x-|->y", "x\\pfun y", ""],
+  ["|", "x>->y", "x\\rightarrowtail y", ""],
+  ["|", "x->>y", "x\\twoheadrightarrow y", ""],
+  ["|", "x~>y", "x\\rightsquigarrow y", ""],
+  ["|", "x<-y", "x\\leftarrow y", ""],
+  ["|", "x<->y", "x\\leftrightarrow y", ""],
+  ["|", "x<-<y", "x\\leftarrowtail y", ""],
+  ["|", "x<<-y", "x\\twoheadleftarrow y", ""],
+  ["|", "x=>y", "x\\Rightarrow y", ""],
+  ["|", "x==>y", "x\\Longrightarrow y", ""],
+  ["|", "x<=>y", "x\\iff y", ""],
+  // a closing bar starts no shorthand: the minus after an absolute value stays
+  ["|", "|x|-1", "|x|-1", ""],
+  ["|", "|x|=1", "|x|=1", ""],
+  ["|", "|x|->y", "|x|\\to y", ""],
   ["|", "(x^(1/2))", "(x^{\\left(\\frac{1}{2}\\right)})", ""], // a script is not taller than a line
   ["|", "1/n)", "\\frac{1}{n)}", ""],
   // a/b/c is (a/b)/c; a slash after more than one term in a denominator takes the last
