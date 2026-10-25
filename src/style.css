@@ -386,7 +386,10 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .deadline-picker .row button { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 3px 10px; cursor: pointer; }
 
 .cjk-gap { margin-left: .25em; }
-.no-cjk-gap .cjk-gap { margin-left: 0; }
+/* the gap before inline code goes on its box, not inside it */
+.pm-icode > .cjk-gap { margin-left: 0; }
+.pm-icode:has(> .cjk-gap) { margin-left: .25em; }
+.no-cjk-gap .cjk-gap, .no-cjk-gap .pm-icode:has(> .cjk-gap) { margin-left: 0; }
 
 /* ---------- formulas ---------- */
 

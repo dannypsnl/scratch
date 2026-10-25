@@ -58,18 +58,26 @@ function labelledArrow(node) {
   return null;
 }
 
-// CJK auto-spacing: a quarter-em gap where CJK meets Latin letters, digits
-// or a formula, drawn as a margin (no space characters in the text). The gap
-// sits on the right-hand item of each pair.
+// CJK auto-spacing: a quarter-em gap where CJK meets Latin letters, digits,
+// a formula or inline code, drawn as a margin (no space characters in the
+// text). The gap sits on the right-hand item of each pair. Inline code is
+// one item, as a formula is (its text is as written, with no gaps inside),
+// and a gap before it goes on its box (style.css).
 const CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/;
 const LATIN = /[A-Za-z0-9]/;
 const kind = (ch) => (CJK.test(ch) ? "cjk" : LATIN.test(ch) ? "latin" : null);
 const gapBetween = (a, b) => a && b && a !== b && (a === "cjk" || b === "cjk");
 
 function cjkSpacing(line, start, decos) {
-  let prev = null; // "cjk" | "latin" | "math" | null
+  let prev = null; // "cjk" | "latin" | "math" | "code" | null
   let pos = start;
   line.forEach((child) => {
+    if (child.isText && child.marks.some((m) => m.type.name === "code")) {
+      if (prev === "cjk") decos.push(Decoration.inline(pos, pos + child.nodeSize, { class: "cjk-gap" }));
+      prev = "code";
+      pos += child.nodeSize;
+      return;
+    }
     if (child.isText) {
       for (const ch of child.text) {
         const k = kind(ch);
