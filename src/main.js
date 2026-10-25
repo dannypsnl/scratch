@@ -64,14 +64,23 @@ function render() {
 }
 
 // ---------- sidebar: ☰ or ⌘\ collapses it; narrow windows start collapsed ----------
+// A wide window keeps what the user chose: growing back from narrow does not
+// reopen a sidebar they had closed. Toggling on a narrow window (where the
+// sidebar floats over the page) is only for the moment and leaves it alone.
 const shell = document.querySelector(".app");
 const narrow = window.matchMedia("(max-width: 860px)");
+let wideCollapsed = false;
 const setCollapsed = (on) => shell.classList.toggle("side-collapsed", on);
+const toggleSide = () => {
+  const on = !shell.classList.contains("side-collapsed");
+  if (!narrow.matches) wideCollapsed = on;
+  setCollapsed(on);
+};
 setCollapsed(narrow.matches);
-narrow.addEventListener("change", (e) => setCollapsed(e.matches));
-document.querySelector(".side-toggle").onclick = () => setCollapsed(!shell.classList.contains("side-collapsed"));
+narrow.addEventListener("change", (e) => setCollapsed(e.matches || wideCollapsed));
+document.querySelector(".side-toggle").onclick = toggleSide;
 document.addEventListener("keydown", (e) => {
-  if (e.key === "\\" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); setCollapsed(!shell.classList.contains("side-collapsed")); }
+  if (e.key === "\\" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); toggleSide(); }
 });
 // on a narrow window the sidebar floats over the page: pick something, it goes away
 document.querySelector(".sidebar").addEventListener("click", (e) => {
