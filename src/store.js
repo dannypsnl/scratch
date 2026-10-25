@@ -163,7 +163,7 @@ export function createPage(title) {
   return id;
 }
 
-// Point every link to `from` at `to` instead.
+// Point every link and tag to `from` at `to` instead.
 function relink(from, to) {
   for (const [page, d] of [...pagesAll()]) {
     let tr = null;
@@ -171,6 +171,10 @@ function relink(from, to) {
       if (n.type === T.link && n.attrs.page === from) {
         tr ??= new Transform(d);
         tr.setNodeMarkup(pos, null, { ...n.attrs, page: to });
+      }
+      if (n.type === T.block && n.attrs.tags.includes(from)) {
+        tr ??= new Transform(d);
+        tr.setNodeMarkup(pos, null, { ...n.attrs, tags: n.attrs.tags.map((p) => (p === from ? to : p)) });
       }
     });
     if (tr) savePage(page, tr.doc);
@@ -208,14 +212,8 @@ export function savePageFields(page, fields) {
   setFields(page, fields);
 }
 
-// The fields a block offers: those of every page its line tags, in order.
-export function fieldsForBlock(block) {
-  const out = [];
-  block.firstChild.forEach((n) => {
-    if (n.type === T.link && n.attrs.tag) for (const f of getFields(n.attrs.page)) out.push(f);
-  });
-  return out;
-}
+// The fields a block offers: those of every page it is tagged with, in order.
+export const fieldsForBlock = (block) => block.attrs.tags.flatMap(getFields);
 
 export function fieldById(id) {
   for (const p of named.values()) for (const f of p.fields ?? []) if (f.id === id) return f;
@@ -259,10 +257,11 @@ function* blocks() {
   }
 }
 
-const linksIn = (line) => {
+// The pages a block's line links to, then those it is tagged with.
+export const linksIn = (block) => {
   const out = [];
-  line.forEach((n) => { if (n.type === T.link) out.push(n.attrs.page); });
-  return out;
+  block.firstChild.forEach((n) => { if (n.type === T.link) out.push(n.attrs.page); });
+  return [...out, ...block.attrs.tags];
 };
 
 function locate(id) {
@@ -315,15 +314,15 @@ export function allTasks() {
       ...b.node.attrs,
       date: isDate(b.page) ? b.page : null,
       completed: completedAt(b.node.attrs),
-      links: linksIn(b.node.firstChild).map(titleOf),
+      links: linksIn(b.node).map(titleOf),
     });
   }
   return out;
 }
 
-// Blocks whose own line links to `page`.
+// Blocks whose own line links to `page`, or that are tagged with it.
 export function backlinks(page) {
-  return [...blocks()].filter((b) => linksIn(b.node.firstChild).includes(page));
+  return [...blocks()].filter((b) => linksIn(b.node).includes(page));
 }
 
 export const getViews = () => (settings.get("views") ? JSON.parse(settings.get("views")) : null);

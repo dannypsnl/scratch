@@ -4,13 +4,15 @@ import { schema } from "./schema.js";
 // The notebook as one Loro document: the CRDT that is persisted and synced.
 //
 //   tree "blocks"   roots are pages     data { page, title? }
-//                   below them, blocks  data { bid, line, task, deadline, log, folded, props }
+//                   below them, blocks  data { bid, line, task, deadline, log, folded, props, tags }
 //   page roots also carry `fields`: the field definitions of a tag page (JSON)
 //   map "settings"  views (saved task views, JSON)
 //
 // Structure (parent, order) lives in the tree, so concurrent moves merge.
 // Each block field is a separate map entry; `line` (the block's inline
-// content as JSON) is last-writer-wins per block.
+// content as JSON) is last-writer-wins per block. `line` and `tags` are
+// written together: a line from before tags were the block's own still
+// holds them inline (see liftTags).
 //
 // ProseMirror docs are kept as the working copy. writePage() pushes only what
 // changed since `base` (the version last read or written), so it never
@@ -22,7 +24,7 @@ const tree = doc.getTree("blocks");
 tree.enableFractionalIndex(0);
 export const settings = doc.getMap("settings");
 
-const FIELDS = ["line", "task", "deadline", "log", "folded", "props"];
+const FIELDS = ["line", "task", "deadline", "log", "folded", "props", "tags"];
 
 // ---------- reading ----------
 
@@ -40,12 +42,37 @@ function rootsByPage() {
   return out;
 }
 
+// Tags were once inline links ({ page, tag: true }) drawn at the row's end.
+// Read out of a line's JSON, they join the block's tags; the spaces they
+// sat between close up, as they were drawn.
+export function liftTags(json, tags) {
+  if (!json.content?.some((n) => n.type === "link" && n.attrs?.tag)) return json;
+  const out = [];
+  let lifted = false;
+  for (const n of json.content) {
+    if (n.type === "link" && n.attrs?.tag) {
+      if (!tags.includes(n.attrs.page)) tags.push(n.attrs.page);
+      lifted = true;
+      continue;
+    }
+    const prev = out[out.length - 1];
+    // spaces on both sides (or at the line's start): the ones after go
+    if (lifted && n.type === "text" && (!prev || (prev.type === "text" && /\s$/.test(prev.text)))) out.push({ ...n, text: n.text.replace(/^\s+/, "") });
+    else out.push(n);
+    lifted = false;
+  }
+  const last = out[out.length - 1];
+  if (last?.type === "text") out[out.length - 1] = { ...last, text: last.text.replace(/\s+$/, "") };
+  return { ...json, content: out.filter((n) => n.type !== "text" || n.text) };
+}
+
 function readBlock(node) {
   const d = node.data;
-  const line = d.get("line") ? schema.nodeFromJSON(JSON.parse(d.get("line"))) : T.line.create();
+  const tags = JSON.parse(d.get("tags") ?? "[]");
+  const line = d.get("line") ? schema.nodeFromJSON(liftTags(JSON.parse(d.get("line")), tags)) : T.line.create();
   const children = (node.children() ?? []).map(readBlock);
   return T.block.create(
-    { id: d.get("bid"), task: d.get("task") ?? null, deadline: d.get("deadline") ?? null, log: JSON.parse(d.get("log") ?? "[]"), folded: !!d.get("folded"), props: JSON.parse(d.get("props") ?? "{}") },
+    { id: d.get("bid"), task: d.get("task") ?? null, deadline: d.get("deadline") ?? null, log: JSON.parse(d.get("log") ?? "[]"), folded: !!d.get("folded"), props: JSON.parse(d.get("props") ?? "{}"), tags },
     [line, ...children],
   );
 }
@@ -92,7 +119,7 @@ function flatten(pmDoc) {
       const a = b.attrs;
       out.set(a.id, {
         parent, prev,
-        fields: { line: JSON.stringify(b.firstChild.toJSON()), task: a.task, deadline: a.deadline, log: JSON.stringify(a.log), folded: a.folded || null, props: Object.keys(a.props).length ? JSON.stringify(a.props) : null },
+        fields: { line: JSON.stringify(b.firstChild.toJSON()), task: a.task, deadline: a.deadline, log: JSON.stringify(a.log), folded: a.folded || null, props: Object.keys(a.props).length ? JSON.stringify(a.props) : null, tags: a.tags.length ? JSON.stringify(a.tags) : null },
       });
       prev = a.id;
       const kids = [];
@@ -127,9 +154,10 @@ export function writePage(page, base, next) {
     } else if (!old || old.parent !== info.parent || old.prev !== info.prev) {
       place(n, info);
     }
+    const lineOrTags = old && (old.fields.line !== info.fields.line || old.fields.tags !== info.fields.tags);
     for (const f of FIELDS) {
       const v = info.fields[f];
-      if (!old || old.fields[f] !== v) {
+      if (!old || old.fields[f] !== v || (lineOrTags && (f === "line" || f === "tags"))) {
         if (v === null || v === undefined) n.data.delete(f);
         else n.data.set(f, v);
       }

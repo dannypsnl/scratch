@@ -18,22 +18,10 @@ export function mathDepth($pos) {
 export const inMath = ($pos) => mathDepth($pos) > 0;
 
 // Inline things the browser cannot place a caret around reliably: formulas
-// and atoms (links, tags, block refs, images). Beside one of them, moving,
+// and atoms (links, block refs, images). Beside one of them, moving,
 // typing and deleting are done here, never by contenteditable.
 export const isSpecialInline = (n) => !!n && !n.isText && n.isInline;
 export const besideSpecial = ($p) => isSpecialInline($p.nodeBefore) || isSpecialInline($p.nodeAfter);
-
-// Tags are drawn at the end of the block's row, not in the line: as far as
-// the caret is concerned they have no width, so moves pass over them.
-export const isTag = (n) => !!n && n.type === T.link && n.attrs.tag;
-export function skipTags(doc, pos, dir) {
-  for (;;) {
-    const $p = doc.resolve(pos);
-    const n = dir > 0 ? $p.nodeAfter : $p.nodeBefore;
-    if (!isTag(n)) return pos;
-    pos += dir * n.nodeSize;
-  }
-}
 
 const isScript = (n) => n.type === T.sub || n.type === T.sup;
 
@@ -179,12 +167,10 @@ export const horizontal = (dir) => (state, dispatch) => {
       if ((dir > 0 ? $n.nodeAfter : $n.nodeBefore)?.type === T.math) return caret(state, dispatch, next);
     }
     if (!besideSpecial($p)) return false;
-    const from = skipTags(state.doc, $p.pos, dir);
-    const $f = state.doc.resolve(from);
-    const n = dir > 0 ? $f.nodeAfter : $f.nodeBefore;
-    if (!n) return from === $p.pos ? false : caret(state, dispatch, from); // line edge: the browser goes on to the next line
-    if (n.type === T.math) return caret(state, dispatch, from + dir); // into the formula
-    return caret(state, dispatch, skipTags(state.doc, from + dir * (n.isText ? 1 : n.nodeSize), dir));
+    const n = dir > 0 ? $p.nodeAfter : $p.nodeBefore;
+    if (!n) return false; // line edge: the browser goes on to the next line
+    if (n.type === T.math) return caret(state, dispatch, $p.pos + dir); // into the formula
+    return caret(state, dispatch, $p.pos + dir * (n.isText ? 1 : n.nodeSize));
   }
   return caret(state, dispatch, dir > 0 ? stepRight($p) : stepLeft($p));
 };

@@ -3,7 +3,7 @@
 An outliner notebook with math: a journal day for every date, named pages, tasks and deadlines, and formulas you type as structure. The desktop app built on [Neutralino](https://neutralino.js.org), with optional sync between devices.
 
 - **Outline:** blocks nest with ⇥ / ⇧⇥, fold with ⌘↑ / ⌘↓; bold, italic, underline, strikethrough, highlight, inline code and code blocks.
-- **Journal and pages:** one page per day, with a week strip and a calendar that marks days written, with an open task, or overdue; named pages linked with `[[page]]` or `#tag`, with backlinks.
+- **Journal and pages:** one page per day, with a week strip and a calendar that marks days written, with an open task, or overdue; named pages linked with `[[page]]` in a line, or tagged on a block with `#tag` (shown at the row's end), with backlinks.
 - **Tasks:** ⌘↵ cycles none → TODO → DOING → DONE; ⌘⇧D sets a deadline. Agenda and Tasks tabs gather them from every page.
 - **Formulas:** `$` starts one. `^`, `_`, `/` build scripts and fractions in place, `\` opens a command menu (`\arrow` lists every arrow), typed `->`, `|->`, `|-`, `>->`, `->>` and kin become their symbols, brackets grow around tall structures, and a selection can be simplified, factored or expanded (through [Nerdamer](https://nerdamer.com)). Rendered with KaTeX.
 - **Search:** ⌘K across every page and journal day.

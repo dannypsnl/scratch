@@ -244,6 +244,23 @@ goOnline();
 check(await until(() => appText("Topology").includes("(edited in the app)") && appText("Topology").includes("written through MCP while the app was offline")), "an offline app edit and an MCP edit both survive in the app");
 check(await until(async () => strip(body(await call("read_page", { page: "Topology" }))).includes("sets (edited in the app)")), "the app's edit reaches the MCP server");
 
+// ---------- tags an older version kept in the line ----------
+
+{
+  appWrite("Old tags", "- heff");
+  const bid = idOf("heff");
+  // the line as an older version wrote it: the tag a link inside it
+  const node = [...doc.getTree("blocks").nodes()].find((n) => n.data.get("bid") === bid);
+  node.data.set("line", JSON.stringify({ type: "line", content: [{ type: "text", text: "heff " }, { type: "link", attrs: { page: "?Project", tag: true } }] }));
+  doc.commit();
+  same(appText("Old tags"), "- heff #Project", "an older line's inline tag is read as the block's");
+  // only the tags change: the line is written too, or the old one brings the tag back
+  appRead();
+  const id = appFind("Old tags"), d = app.get(id).doc;
+  writePage(id, d, new Transform(d).setNodeMarkup(0, null, { ...d.firstChild.attrs, tags: [] }).doc);
+  same(appText("Old tags"), "- heff", "a tag taken off an older line stays off");
+}
+
 // ---------- without sync: read the app's local snapshot, refuse to write ----------
 
 const local = path.join(tmp, "local");

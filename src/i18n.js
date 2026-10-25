@@ -375,7 +375,7 @@ const en = {
     ]],
     ["Links", [
       ["Link to a page", [["[", "["]]],
-      ["Tag (the same kind of link as [[)", [["#"]]],
+      ["Tag the block (shown at its row's end)", [["#"]]],
     ]],
     ["Formulas", [
       ["Start / leave a formula", [["$"]]],

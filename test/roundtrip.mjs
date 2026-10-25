@@ -64,7 +64,7 @@ const outlineSrc = [
   "- no state $x_i^2$",
   "- ![board](images/0f343b0931126a20f133d67c2b018a3b8b2b8f0e2e0d8b6b8c6d3c2a1b0c9d8e.png)",
   "- ![board|320](images/0f343b0931126a20f133d67c2b018a3b8b2b8f0e2e0d8b6b8c6d3c2a1b0c9d8e.png) drawn 320px wide",
-  "- read [[Mac Lane]], #topology, #[[algebraic topology]], see ((abc123)) and [[2026-10-23]]",
+  "- read [[Mac Lane]], see ((abc123)) and [[2026-10-23]] #topology #[[algebraic topology]]",
   "- fold a crane #origami",
   "  difficulty:: medium",
   "  paper:: 15 cm square",
@@ -82,6 +82,19 @@ const outlineSrc = [
 const outlineOut = serializeOutline(parseOutline(outlineSrc));
 if (outlineOut !== outlineSrc) { fail++; console.log("FAIL outline\n" + outlineOut); }
 
-const total = canonical.length + normalizing.length + 1;
+// tags are the block's: read anywhere in the line, written after it, the
+// spaces they sat between closing up
+const tagged = [
+  ["- a #t b", "- a b #t"],
+  ["- #t b DEADLINE: <2026-10-30>", "- b #t DEADLINE: <2026-10-30>"],
+  ["- #a #[[b c]]", "- #a #[[b c]]"],
+  ["- ```js #t\n  x\n  ```", "- ```js #t\n  x\n  ```"],
+];
+for (const [src, want] of tagged) {
+  const got = serializeOutline(parseOutline(src));
+  if (got !== want) { fail++; console.log(`FAIL tags: ${JSON.stringify(src)} -> ${JSON.stringify(got)}, want ${JSON.stringify(want)}`); }
+}
+
+const total = canonical.length + normalizing.length + 1 + tagged.length;
 console.log(fail ? `${fail}/${total} failed` : `all ${total} passed`);
 process.exit(fail ? 1 : 0);

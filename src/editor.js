@@ -8,7 +8,7 @@ import { schema } from "./schema.js";
 import { parseMath, serializeMath } from "./latex.js";
 import { parseInline, parseOutline, serializeInline, serializeOutline } from "./outline-io.js";
 import { horizontal, vertical, term, selectTerm, selectStep, selectEdge, formula, selectionShape, xArrowsToOverset, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
-import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, newTopBlock, blockIds, outlineDecorations } from "./outline.js";
+import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, newTopBlock, blockIds, outlineDecorations, addTags } from "./outline.js";
 import { blockDrag } from "./drag.js";
 import { openPalette } from "./palette.js";
 import { suggest } from "./suggest.js";
@@ -133,7 +133,8 @@ function rank(title, q) {
   return t.includes(k) ? 2 : null;
 }
 
-// [[ or #: pick a page or create one. Cancelling leaves the typed text.
+// [[ or #: pick a page or create one, to link to in the line or to tag the
+// block with. Cancelling leaves the typed text.
 function startLink(view, tag, initial = "") {
   openPicker(view, {
     placeholder: tag ? t("picker.tag") : t("picker.page"),
@@ -156,7 +157,8 @@ function startLink(view, tag, initial = "") {
     },
     onPick(item, q) {
       const page = item.value ?? createPage(q);
-      insertInline(view, schema.nodes.link.create({ page, tag }));
+      if (tag) view.dispatch(addTags(view.state.tr, view.state.selection.from, [page]));
+      else insertInline(view, schema.nodes.link.create({ page }));
     },
     // Backspace on the empty menu takes back what opened it ([[ or #)
     onCancel: (q, how) => { if (how !== "backspace") insertText(view, (tag ? "#" : "[[") + q); },
@@ -407,8 +409,11 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
         view.dispatch(view.state.tr.replaceWith(from, to, parseMath(text.replace(/^\$|\$$/g, ""))).scrollIntoView());
         return true;
       }
+      // (its #tags go on the block)
       const inline = (s) => {
-        view.dispatch(view.state.tr.replaceWith(from, to, Fragment.fromArray(parseInline(s))).scrollIntoView());
+        const tags = [];
+        const tr = view.state.tr.replaceWith(from, to, Fragment.fromArray(parseInline(s, tags)));
+        view.dispatch(addTags(tr, tr.mapping.map(from), tags).scrollIntoView());
         return true;
       };
       // copied from inside a line: it goes in at the caret, spaces and all,

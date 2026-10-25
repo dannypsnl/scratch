@@ -9,6 +9,7 @@ export function renderOutgoing(container, page, doc) {
   const seen = new Set();
   doc.descendants((n) => {
     if (n.type.name === "link" && n.attrs.page !== page) seen.add(n.attrs.page);
+    if (n.type.name === "block") for (const p of n.attrs.tags) if (p !== page) seen.add(p);
     return true;
   });
   const key = [...seen].join("|");

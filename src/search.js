@@ -29,7 +29,7 @@ function entry(block, page, pageTitle) {
       case "text": text += n.text; break;
       case "link":
         links.push(n.attrs.page);
-        text += (n.attrs.tag ? "#" : "") + pageTitle(n.attrs.page);
+        text += pageTitle(n.attrs.page);
         break;
       case "math": {
         const src = serializeMath(n.content);
@@ -41,7 +41,11 @@ function entry(block, page, pageTitle) {
       case "image": text += n.attrs.alt; break;
     }
   });
-  const { id, task, deadline } = block.attrs;
+  const { id, task, deadline, tags } = block.attrs;
+  for (const p of tags) {
+    links.push(p);
+    text += (text ? " #" : "#") + pageTitle(p);
+  }
   // what filter.js reads
   const item = { text: (text + plain).toLowerCase(), links: links.map(pageTitle), task, deadline, date: isDate(page) ? page : null };
   return { id, text, tex, item };

@@ -139,8 +139,18 @@ export const newTopBlock = (state, dispatch) => {
   return true;
 };
 
-// Backspace at the start of a line: append it to the previous line; its
-// children take its place.
+// #page on the caret's block (the first block the selection starts in), once.
+export function addTags(tr, pos, pages) {
+  const $p = tr.doc.resolve(pos);
+  const d = blockDepth($p);
+  if (d < 0) return tr;
+  const block = $p.node(d), tags = [...block.attrs.tags];
+  for (const p of pages) if (!tags.includes(p)) tags.push(p);
+  return tags.length === block.attrs.tags.length ? tr : tr.setNodeMarkup($p.before(d), null, { ...block.attrs, tags });
+}
+
+// Backspace at the start of a line: append it to the previous line (its
+// tags join that block's); its children take its place.
 export const joinBackward = (state, dispatch) => {
   const sel = state.selection;
   // at the start of a code block: an empty one turns back into a line,
@@ -170,6 +180,7 @@ export const joinBackward = (state, dispatch) => {
     const block = $p.node(d);
     const children = block.content.cut(block.firstChild.nodeSize);
     const tr = state.tr.replaceWith(start, end, children).insert(prev.from, $p.parent.content);
+    addTags(tr, prev.from, block.attrs.tags);
     dispatch(tr.setSelection(TextSelection.create(tr.doc, prev.from)).scrollIntoView());
   }
   return true;
@@ -325,8 +336,7 @@ export const outlineDecorations = new Plugin({
             return el;
           }, { side: 1, key: `dl-${deadline}-${task}`, ignoreSelection: true }));
         }
-        const tags = [];
-        node.firstChild.forEach((n) => { if (n.type === T.link && n.attrs.tag) tags.push(n.attrs.page); });
+        const { tags } = node.attrs;
         if (tags.length) {
           decos.push(Decoration.widget(afterLine, (view, getPos) => tagRow(tags, view, getPos), { side: 0, key: `tags-${tags.join("|")}`, ignoreSelection: true, stopEvent: () => true }));
         }
@@ -378,9 +388,8 @@ function propRow(fields, props, view, getPos) {
 
 // ---------- tags ----------
 
-// A tag link draws itself hidden in the line (style.css); its block's row
-// shows them all here, right-aligned, in order. Each chip opens its page;
-// its × removes that tag from the line.
+// A block's tags, at its row's end, right-aligned, in order. Each chip opens
+// its page; its × removes that tag.
 function tagRow(pages, view, getPos) {
   const row = document.createElement("span");
   row.className = "tag-row";
@@ -397,15 +406,9 @@ function tagRow(pages, view, getPos) {
     remove.textContent = "×";
     remove.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      // the i-th tag in this block's line
       const blockPos = view.state.doc.resolve(getPos()).before();
-      const line = view.state.doc.nodeAt(blockPos).firstChild;
-      let pos = blockPos + 2, seen = 0, at = null;
-      line.forEach((n) => {
-        if (at === null && n.type === T.link && n.attrs.tag && seen++ === i) at = pos;
-        pos += n.nodeSize;
-      });
-      if (at !== null) view.dispatch(view.state.tr.delete(at, at + 1));
+      const node = view.state.doc.nodeAt(blockPos);
+      view.dispatch(view.state.tr.setNodeMarkup(blockPos, null, { ...node.attrs, tags: node.attrs.tags.filter((_, k) => k !== i) }));
     });
     chip.append(name, remove);
     row.append(chip);

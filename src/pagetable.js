@@ -1,5 +1,5 @@
 import { DOMSerializer } from "prosemirror-model";
-import { backlinks, completedAt, isDate, titleOf, getFields, savePageFields, setBlockProp } from "./store.js";
+import { backlinks, linksIn, completedAt, isDate, titleOf, getFields, savePageFields, setBlockProp } from "./store.js";
 import { openFieldEditor, openValueEditor, displayValue } from "./fields.js";
 import { place } from "./popover.js";
 import { schema } from "./schema.js";
@@ -37,11 +37,7 @@ const COLUMNS = [
 function rowsFor(page) {
   return backlinks(page)
     .filter((b) => b.page !== page)
-    .map((b) => {
-      const links = [];
-      b.node.firstChild.forEach((n) => { if (n.type.name === "link") links.push(titleOf(n.attrs.page)); });
-      return { ...b, ...b.node.attrs, date: isDate(b.page) ? b.page : null, completed: completedAt(b.node.attrs), links };
-    });
+    .map((b) => ({ ...b, ...b.node.attrs, date: isDate(b.page) ? b.page : null, completed: completedAt(b.node.attrs), links: linksIn(b.node).map(titleOf) }));
 }
 
 export function renderPageTable(el, page, ctx) {
@@ -112,8 +108,15 @@ export function renderPageTable(el, page, ctx) {
       const content = document.createElement("td");
       content.className = "cell-content";
       content.append(serializer.serializeFragment(r.node.firstChild.content));
-      // every row tags this page; showing that tag again says nothing
-      for (const tag of content.querySelectorAll(`.pm-link[data-page="${page}"]`)) tag.remove();
+      // its other tags after it (every row links or tags this page: showing
+      // that again says nothing)
+      for (const p of r.tags) {
+        if (p === page) continue;
+        const tag = document.createElement("span");
+        tag.className = "pm-link pm-tag";
+        tag.textContent = "#" + titleOf(p);
+        content.append(" ", tag);
+      }
       content.onclick = () => hooks.openBlock(r.id);
       const where = document.createElement("td");
       const chip = document.createElement("a");

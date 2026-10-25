@@ -386,6 +386,30 @@ async function dragCase(x, y, where, gesture, expectShape) {
   console.log("Backspace at a line's start");
 }
 
+// ---- tags are the block's, not the line's: Enter and Backspace leave them be
+
+{
+  // [outline, block, caret offset, key, the outline afterwards, the caret's block]
+  const cases = [
+    ["- AB #T\n- C", "AB", 2, "Enter", "- AB #T\n- \n- C", ""],
+    ["- AB #T", "AB", 0, "Enter", "- \n- AB #T", "AB"],
+    ["- AB #T", "AB", 1, "Enter", "- A #T\n- B", "B"],
+    ["- AB #T\n- C", "AB", 2, "Backspace", "- A #T\n- C", "A"],
+    // a line joining the one above brings its tags along
+    ["- A #S\n- B #T #S", "B", 0, "Backspace", "- AB #S #T", "AB"],
+  ];
+  for (const [text, name, o, key, expect, at] of cases) {
+    await H("load", text);
+    await H("caretAt", name, o);
+    await pg.keyboard.press(key); await pause(30);
+    const got = await pg.evaluate(async () => (await import("/src/outline-io.js")).serializeOutline(window.view.state.doc));
+    const head = await H("head");
+    if (got !== expect) fail(`${key} on a tagged line`, { text, o, expect, got });
+    else if (head.name !== at) fail(`${key} on a tagged line left the caret elsewhere`, { text, o, at, head });
+  }
+  console.log("Enter / Backspace on a tagged line");
+}
+
 console.log(`\n${fails.length} failures`);
 for (const x of fails.slice(0, 20)) console.log("  " + JSON.stringify(x));
 for (const e of new Set(pageErrors)) console.log(`page error: ${e}`);

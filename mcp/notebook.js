@@ -2,7 +2,7 @@ import { Fragment } from "prosemirror-model";
 import { Transform } from "prosemirror-transform";
 import { schema } from "../src/schema.js";
 import { readAll, writePage, setTitle, invalidate } from "../src/loro.js";
-import { parseOutline, serializeInline, blockLine, emptyDoc, newId, resolver } from "../src/outline-io.js";
+import { parseOutline, serializeInline, tagsText, blockLine, emptyDoc, newId, resolver } from "../src/outline-io.js";
 import { t } from "../src/i18n.js";
 
 // The notebook as the MCP tools see it: pages read from and written to the
@@ -105,7 +105,7 @@ function parseBlocks(text, keep = new Set(), first = null) {
     const id = ID.exec(raw);
     const line = id ? raw.slice(0, id.index) : raw;
     ids.push(id?.[1] ?? null);
-    if (/^```\S*( DEADLINE: <[^>]*>)?$/.test(BLOCK_LINE.exec(line)[1])) fence = true;
+    if (/^```\S*(?: #(?:\[\[[^\]]+\]\]|\S+))*( DEADLINE: <[^>]*>)?$/.test(BLOCK_LINE.exec(line)[1])) fence = true;
     return line;
   });
   const blocks = [];
@@ -138,7 +138,7 @@ export function outlineText(doc) {
   return lines.join("\n");
 }
 
-const lineText = (block) => (block.firstChild.type === T.codeblock ? block.firstChild.textContent : serializeInline(block.firstChild.content));
+const lineText = (block) => (block.firstChild.type === T.codeblock ? block.firstChild.textContent : serializeInline(block.firstChild.content)) + tagsText(block);
 
 const idsIn = (node) => {
   const out = [];
@@ -203,6 +203,10 @@ function relink(title, to) {
       if (n.type === T.link && n.attrs.page === from) {
         tr ??= new Transform(doc);
         tr.setNodeMarkup(pos, null, { ...n.attrs, page: to });
+      }
+      if (n.type === T.block && n.attrs.tags.includes(from)) {
+        tr ??= new Transform(doc);
+        tr.setNodeMarkup(pos, null, { ...n.attrs, tags: n.attrs.tags.map((p) => (p === from ? to : p)) });
       }
     });
     if (tr) save(page, doc, tr.doc);

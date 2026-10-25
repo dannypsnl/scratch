@@ -3,10 +3,12 @@ import { parseMath, serializeMath } from "./latex.js";
 
 // Text form of an outline, handed to the publisher:
 //
-//   - TODO read $\frac{a}{b}$ **carefully** DEADLINE: <2026-10-30>
+//   - TODO read $\frac{a}{b}$ **carefully** #reading DEADLINE: <2026-10-30>
 //     difficulty:: medium
 //     - child block
 //
+// A block's tags are written after its line; read, a #tag anywhere in the
+// line is the block's.
 // Property lines (`name:: value`) sit under their block, one level deeper.
 // A code block is a fence whose body is indented one level deeper:
 //
@@ -32,11 +34,12 @@ export const resolver = {
 const TAG_STOP = "\\s#[\\]$*(),.;:!?，。、；：！？「」（）";
 const TAG_RE = new RegExp(`^[^${TAG_STOP}]+$`);
 
-const linkText = (node) => {
-  const title = resolver.title(node.attrs.page);
-  if (!node.attrs.tag) return `[[${title}]]`;
+export const tagText = (page) => {
+  const title = resolver.title(page);
   return TAG_RE.test(title) ? `#${title}` : `#[[${title}]]`;
 };
+// " #a #[[b c]]", or "" for a block without tags
+export const tagsText = (block) => block.attrs.tags.map((p) => " " + tagText(p)).join("");
 
 export function serializeInline(fragment) {
   let s = "";
@@ -53,7 +56,7 @@ export function serializeInline(fragment) {
     } else if (n.type === T.math) {
       s += "$" + serializeMath(n.content) + "$";
     } else if (n.type === T.link) {
-      s += linkText(n);
+      s += `[[${resolver.title(n.attrs.page)}]]`;
     } else if (n.type === T.ref) {
       s += `((${n.attrs.block}))`;
     } else if (n.type === T.image) {
@@ -76,9 +79,10 @@ export function blockLine(block, depth) {
   if (first.type === T.codeblock) {
     // the deadline stays on the fence line, where the parser looks for it
     const [fence, ...body] = fenced(first, depth).split("\n");
-    return [line + fence + (deadline ? ` DEADLINE: <${deadline}>` : ""), ...body].join("\n");
+    return [line + fence + tagsText(block) + (deadline ? ` DEADLINE: <${deadline}>` : ""), ...body].join("\n");
   }
-  line += serializeInline(first.content);
+  const text = serializeInline(first.content);
+  line += text ? text + tagsText(block) : tagsText(block).slice(1);
   if (deadline) line += ` DEADLINE: <${deadline}>`;
   return line;
 }
@@ -104,14 +108,32 @@ export function serializeOutline(doc) {
 
 // `code`, $..$ formulas, **bold**, *italic*, <u>underline</u>, ~~strike~~,
 // ==highlight== (no nesting of marks),
-// [[page]], #page, #[[page with spaces]], ((block-id)), ![alt](images/<file>)
-// (![alt|300](…): drawn 300px wide)
-export function parseInline(text) {
+// [[page]], ((block-id)), ![alt](images/<file>) (![alt|300](…): drawn 300px
+// wide). #page and #[[page with spaces]] go into `tags` (page ids), the
+// spaces around them closing up; without `tags` they stay text.
+export function parseInline(text, tags = null) {
   const out = [];
   const re = new RegExp(String.raw`\x60([^\x60]+)\x60|!\[([^\]]*)\]\(images\/([^)\s]+)\)|\$([^$]*)\$|\*\*([^*]+)\*\*|\*([^*]+)\*|<u>(.+?)<\/u>|~~([^~]+)~~|==([^=]+)==|(#)?\[\[([^\]]+)\]\]|#([^${TAG_STOP}]+)|\(\(([a-z0-9]+)\)\)`, "g");
   let last = 0, m;
   while ((m = re.exec(text))) {
-    if (m.index > last) out.push(schema.text(text.slice(last, m.index)));
+    const tag = m[10] ? m[11] : m[12];
+    if (tag !== undefined && !tags) continue;
+    let before = text.slice(last, m.index);
+    if (tag !== undefined) {
+      tags.push(resolver.pageId(tag));
+      // a space either side (or the line's start before): the ones before go
+      const after = re.lastIndex;
+      if (after >= text.length || /\s/.test(text[after])) {
+        if (/\s$/.test(before) || (!before && !out.length)) {
+          before = before.replace(/\s+$/, "");
+          if (!before && !out.length) re.lastIndex = after + /^\s*/.exec(text.slice(after))[0].length;
+        }
+      }
+      if (before) out.push(schema.text(before));
+      last = re.lastIndex;
+      continue;
+    }
+    if (before) out.push(schema.text(before));
     if (m[1] !== undefined) out.push(schema.text(m[1], [schema.marks.code.create()]));
     else if (m[3] !== undefined) {
       const [, alt, width] = /^(.*?)(?:\|(\d+))?$/.exec(m[2]);
@@ -123,8 +145,7 @@ export function parseInline(text) {
     else if (m[7] !== undefined) out.push(schema.text(m[7], [schema.marks.underline.create()]));
     else if (m[8] !== undefined) out.push(schema.text(m[8], [schema.marks.strike.create()]));
     else if (m[9] !== undefined) out.push(schema.text(m[9], [schema.marks.highlight.create()]));
-    else if (m[11] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[11]), tag: !!m[10] }));
-    else if (m[12] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[12]), tag: true }));
+    else if (m[11] !== undefined) out.push(T.link.create({ page: resolver.pageId(m[11]) }));
     else out.push(T.ref.create({ block: m[13] }));
     last = re.lastIndex;
   }
@@ -154,9 +175,12 @@ export function parseOutline(src) {
     const m = LINE.exec(raw);
     if (!m) continue;
     const depth = m[1].length >> 1;
-    const item = { task: m[2]?.toLowerCase() ?? null, text: m[3], deadline: m[4] ?? null, props: {}, children: [] };
+    const item = { task: m[2]?.toLowerCase() ?? null, deadline: m[4] ?? null, props: {}, tags: [], children: [] };
     last = item;
-    const open = /^```(\S*)$/.exec(item.text);
+    // a fence line keeps its tags after the language
+    const open = /^```(\S*)((?: #(?:\[\[[^\]]+\]\]|\S+))*)$/.exec(m[3]);
+    if (open) parseInline(open[2], item.tags);
+    else item.line = T.line.create(null, parseInline(m[3], item.tags));
     if (open) {
       item.lang = open[1];
       item.code = [];
@@ -168,13 +192,8 @@ export function parseOutline(src) {
   }
   const build = (it) =>
     T.block.create(
-      { id: newId(), task: it.task, deadline: it.deadline, props: it.props },
-      [
-        it.code
-          ? T.codeblock.create({ lang: it.lang }, it.code.length ? schema.text(it.code.join("\n")) : null)
-          : T.line.create(null, parseInline(it.text)),
-        ...it.children.map(build),
-      ],
+      { id: newId(), task: it.task, deadline: it.deadline, props: it.props, tags: it.tags },
+      [it.code ? T.codeblock.create({ lang: it.lang }, it.code.length ? schema.text(it.code.join("\n")) : null) : it.line, ...it.children.map(build)],
     );
   if (root.children.length === 0) return emptyDoc();
   return T.doc.create(null, root.children.map(build));

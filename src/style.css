@@ -713,7 +713,6 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 /* Tags are shown at the right end of their block's row (outline.js draws
    them there, in order); inside the line they take no space. */
 .pm-tag { font-size: .92em; }
-.pm-line .pm-tag { display: none; }
 .pm-body > .tag-row { flex: none; margin-left: auto; padding-left: 12px; display: flex; gap: 6px; align-self: baseline; }
 /* the × floats at the chip's corner on hover, so it never pads the chip */
 .tag-row .chip { font-size: 12px; padding: 0 7px; position: relative; }

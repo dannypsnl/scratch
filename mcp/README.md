@@ -36,7 +36,7 @@ When sync is not set up, the server reads the app's local snapshot (`notebook.lo
 | `set_task` | `todo`, `doing`, `done` or `none`, logged with its time as in the app |
 | `set_deadline` | a date, or null to clear it |
 
-Text is the app's outline form (`src/outline-io.js`): `- ` per block, two spaces per level, `TODO`/`DOING`/`DONE` first, ` DEADLINE: <YYYY-MM-DD>` last, `$LaTeX$`, `[[page]]`, `#tag`, `((block-id))`, `name:: value` property lines. Read text ends each block line with its id, ` ^id`; text written may keep or drop them. `replace_block` keeps the replaced block's id, and the ids of its old children written back.
+Text is the app's outline form (`src/outline-io.js`): `- ` per block, two spaces per level, `TODO`/`DOING`/`DONE` first, ` DEADLINE: <YYYY-MM-DD>` last, `$LaTeX$`, `[[page]]`, `#tag` (the block's tags: read anywhere in its line, written after it), `((block-id))`, `name:: value` property lines. Read text ends each block line with its id, ` ^id`; text written may keep or drop them. `replace_block` keeps the replaced block's id, and the ids of its old children written back.
 
 ## Test
 

@@ -207,15 +207,7 @@ function caretOverlay(view) {
     const show = wantsCaret(view);
     el.hidden = !show;
     if (!show) { last = ""; return; }
-    // hidden tags (drawn at the row's end) have no place in the line: measure
-    // from the visible content before them
-    let at = view.state.selection.head;
-    for (;;) {
-      const n = view.state.doc.resolve(at).nodeBefore;
-      if (!(n && n.type.name === "link" && n.attrs.tag)) break;
-      at -= n.nodeSize;
-    }
-    const $h = view.state.doc.resolve(at);
+    const $h = view.state.selection.$head;
     let c = view.coordsAtPos($h.pos, $h.nodeBefore ? -1 : 1);
     // beside a script, fraction or formula its box sits higher or lower than
     // the caret's own line: x from beside it, height from something on the
@@ -229,7 +221,7 @@ function caretOverlay(view) {
       }
     }
     if (!c.top && !c.bottom) {
-      // only hidden things around (a line that is just tags): its left edge
+      // nothing measurable around: the line's left edge
       const line = view.domAtPos($h.start()).node;
       const r = (line.nodeType === 1 ? line : line.parentElement).getBoundingClientRect();
       c = { left: r.left, top: r.top, bottom: r.top + r.height };

@@ -30,6 +30,7 @@ export const schema = new Schema({
         deadline: { default: null }, // "YYYY-MM-DD"
         folded: { default: false }, // children hidden
         props: { default: {} }, // field id -> value (fields are defined on tag pages)
+        tags: { default: [] }, // page ids, in order: #page, drawn at the row's end
       },
       toDOM: (node) => [
         "div",
@@ -53,17 +54,14 @@ export const schema = new Schema({
       toDOM: (node) => ["pre", { class: "pm-code", "data-lang": node.attrs.lang }, ["code", 0]],
     },
     text: { group: "inline mathinline" },
-    // [[page]] or #page (same thing, different look); page is a page id
+    // [[page]]; page is a page id. (A #tag is not in the line: the block's
+    // `tags`.)
     link: {
       group: "inline",
       inline: true,
       atom: true,
-      attrs: { page: {}, tag: { default: false } },
-      toDOM: (node) => [
-        "span",
-        { class: node.attrs.tag ? "pm-link pm-tag" : "pm-link", "data-page": node.attrs.page, contenteditable: "false" },
-        (node.attrs.tag ? "#" : "") + lookup.title(node.attrs.page),
-      ],
+      attrs: { page: {} },
+      toDOM: (node) => ["span", { class: "pm-link", "data-page": node.attrs.page, contenteditable: "false" }, lookup.title(node.attrs.page)],
     },
     // an image, by content-hash file name ("<sha256>.png"); drawn by a node
     // view in editor.js that loads it from the local store or the server.
