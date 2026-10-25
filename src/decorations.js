@@ -2,7 +2,8 @@ import { Plugin } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import { isMathContainer } from "./schema.js";
 import { inMath, mathDepth } from "./nav.js";
-import { X_ARROWS, ARROW_X, SYMBOLS } from "./specs.js";
+import { X_ARROWS, ARROW_X, SYMBOLS, STRUCTS } from "./specs.js";
+import { MATH_ITALIC } from "./katex-symbols.js";
 import { inCode } from "./code.js";
 
 // Glyph classes for plain characters typed into a formula. + - * are done
@@ -11,27 +12,72 @@ const CHAR_CLASSES = [
   [/[0-9.]+/g, "pm-upright"],
   [/[=<>]/g, "pm-upright pm-rel"],
   [/[()[\]{}|!']/g, "pm-upright"],
-  [/[,;:]/g, "pm-upright pm-punct"], // (: as TeX's \colon, f: A → B: no space before, a little after)
+  [/[,;]/g, "pm-upright pm-punct"],
 ];
 
 // TeX's atoms, for spacing: a binary operator is spaced as one only between
 // two things it can join; at the start, after an opening bracket, a comma, a
 // relation, another operator or a large operator (-x, (-x), x = -y), or before
-// a closing bracket, a comma or a relation, it is an ordinary symbol.
-const CHAR_ATOM = { "+": "bin", "-": "bin", "*": "bin", "=": "rel", "<": "rel", ">": "rel", "(": "open", "[": "open", "{": "open", ")": "close", "]": "close", "}": "close", ",": "punct", ";": "punct", ":": "punct" };
+// a closing bracket, a comma or a relation, it is an ordinary symbol. One
+// with a script on it is used as a large operator (\sqcup_y, a coproduct):
+// spaced as \sum_y is, nothing beside it and a thin space after the script.
+// A bar | closes the bar before it when one is open and it does not come
+// right after an opening bracket (||x||), and opens one otherwise: |-|
+// and |x| are bracketed, as (x) is. Brackets are classed pm-open /
+// pm-close for the spacing beside them (style.css).
+// A colon is a relation, spaced evenly on both sides as = is (TeX's bare :):
+// the typing colon x : A, the bar of a set builder {x : x > 0}; := is one
+// relation (\coloneqq).
+// A math italic letter gets its italic correction after it, as TeX and
+// KaTeX give it (MATH_ITALIC, from KaTeX's font metrics): a ) or a : after
+// a P or an f clears the letter's overhang. Not before a subscript, which
+// sits under the overhang, and not in a structure that sets its text
+// upright (\mathrm, \text, \operatorname, …: UPRIGHT).
+const CHAR_ATOM = { "+": "bin", "-": "bin", "*": "bin", "=": "rel", "<": "rel", ">": "rel", "(": "open", "[": "open", "{": "open", ")": "close", "]": "close", "}": "close", ",": "punct", ";": "punct" };
 const SYM_ATOM = { rel: "rel", bin: "bin", op: "op", opname: "op", punct: "punct" };
-function atomClasses(container, start, decos) {
+const BRACKET = { "(": "open", "[": "open", "{": "open", ")": "close", "]": "close", "}": "close" };
+const UPRIGHT = /^(font-(?!normal$|bsym$)|opname$)/;
+const italicCorrection = (from, to, c) => Decoration.inline(from, to, { style: `margin-right: ${MATH_ITALIC[c]}em` });
+function atomClasses(container, start, decos, upright) {
   const atoms = []; // { kind, from, node }
+  const open = []; // the unclosed brackets so far, as their characters
   let pos = start;
-  container.forEach((n) => {
-    if (n.isText) for (const c of n.text) { atoms.push({ kind: CHAR_ATOM[c] ?? "ord", from: pos, char: c }); pos++; }
+  const bracket = (c) => { if (BRACKET[c] === "open") open.push(c); else if (BRACKET[c] === "close") open.pop(); };
+  container.forEach((n, _, index) => {
+    const nextName = container.maybeChild(index + 1)?.type.name;
+    const beforeSub = nextName === "sub", beforeScript = beforeSub || nextName === "sup";
+    if (n.isText) [...n.text].forEach((c, i, chars) => {
+      const kind = c === ":" ? "rel"
+        : c === "|" ? (open.at(-1) === "|" && atoms.at(-1)?.kind !== "open" ? "close" : "open")
+        : CHAR_ATOM[c] ?? "ord";
+      atoms.push({ kind, from: pos, char: c });
+      if (c === "|") { if (kind === "open") open.push(c); else open.pop(); } else bracket(c);
+      if (!upright && MATH_ITALIC[c] && !(beforeSub && i === chars.length - 1)) decos.push(italicCorrection(pos, pos + 1, c));
+      pos++;
+    });
     else {
       // a script belongs to what it is on
-      if (n.type.name !== "sup" && n.type.name !== "sub") atoms.push({ kind: n.type.name === "sym" ? SYM_ATOM[SYMBOLS[n.attrs.name]?.cls] ?? "ord" : "ord", from: pos, node: n });
+      if (n.type.name !== "sup" && n.type.name !== "sub") {
+        const kind = n.type.name === "sym" ? SYM_ATOM[SYMBOLS[n.attrs.name]?.cls] ?? "ord" : "ord";
+        const asOp = kind === "bin" && beforeScript;
+        atoms.push({ kind: asOp ? "op" : kind, asOp, from: pos, node: n });
+      }
+      if (n.type.name === "sym") {
+        const sym = SYMBOLS[n.attrs.name];
+        bracket(sym?.char); // \{ \}
+        if (sym?.italic && MATH_ITALIC[sym.char] && !beforeSub) decos.push(Decoration.node(pos, pos + n.nodeSize, { style: `margin-right: ${MATH_ITALIC[sym.char]}em` }));
+      }
       pos += n.nodeSize;
     }
   });
   atoms.forEach((a, k) => {
+    if (a.asOp) { decos.push(Decoration.node(a.from, a.from + 1, { class: "pm-unary pm-asop" })); return; }
+    if (a.char && (a.kind === "open" || a.kind === "close")) decos.push(Decoration.inline(a.from, a.from + 1, { class: `pm-${a.kind}` }));
+    if (a.char === ":") {
+      const coloneq = atoms[k + 1]?.char === "=";
+      decos.push(Decoration.inline(a.from, a.from + 1, { class: coloneq ? "pm-upright pm-rel pm-coloneq" : "pm-upright pm-rel" }));
+      return;
+    }
     if (a.kind !== "bin") return;
     const prev = atoms[k - 1]?.kind, next = atoms[k + 1]?.kind;
     const unary = !prev || ["bin", "rel", "open", "punct", "op"].includes(prev) || !next || ["rel", "close", "punct"].includes(next);
@@ -108,7 +154,10 @@ function webLinks(node, pos, decos) {
 
 function staticDecos(doc) {
   const decos = [];
+  const uprightEnds = []; // where the structures setting their text upright end (innermost last)
   doc.descendants((node, pos, parent) => {
+    while (uprightEnds.length && uprightEnds.at(-1) <= pos) uprightEnds.pop();
+    if (node.type.name === "struct" && UPRIGHT.test(STRUCTS[node.attrs.name]?.layout ?? "")) uprightEnds.push(pos + node.nodeSize);
     if (node.type.name === "line") cjkSpacing(node, pos + 1, decos);
     if (node.isText && parent?.type.name === "line") webLinks(node, pos, decos);
     const xarrow = labelledArrow(node);
@@ -116,7 +165,7 @@ function staticDecos(doc) {
     if (isMathContainer(node.type) && node.content.size === 0) {
       decos.push(Decoration.node(pos, pos + node.nodeSize, { class: "pm-empty" }));
     }
-    if (isMathContainer(node.type)) atomClasses(node, pos + 1, decos);
+    if (isMathContainer(node.type)) atomClasses(node, pos + 1, decos, uprightEnds.length > 0);
     if (node.isText && parent && isMathContainer(parent.type)) {
       for (const [re, cls] of CHAR_CLASSES) {
         for (const m of node.text.matchAll(re)) {

@@ -419,9 +419,20 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 /* a limit over or under its operator (stack.js places it) */
 .pm-limit { position: relative; left: var(--lx, 0px); }
 .pm-unknown { color: var(--muted); font-size: .8em; }
-.pm-sym.pm-opname { margin: 0 .17em; }
+/* an operator name (\sin, \operatorname{Ob}) has a thin space beside it,
+   as TeX sets Op by Ord; none next to a bracket or before a comma, sin(x),
+   (sin x), Ob(P), and none beside a relation or an operator, whose own
+   space is all TeX puts there: f : Ob(P), x + sin y */
+.pm-sym.pm-opname, .layout-opname { margin: 0 .17em; }
+:is(.pm-sym.pm-opname, .layout-opname):is(:has(+ :is(.pm-open, .pm-close, .pm-punct, .pm-rel, .pm-bin)), :last-child) { margin-right: 0; }
+:is(.pm-open, .pm-rel, .pm-bin) + :is(.pm-sym.pm-opname, .layout-opname), :is(.pm-sym.pm-opname, .layout-opname):first-child { margin-left: 0; }
 .pm-bin { margin: 0 .22em; }
 .pm-math .pm-sym.pm-bin.pm-unary { margin: 0; } /* -x, (-x): an ordinary symbol (decorations.js) */
+/* a binary operator with a script, used as a large one (\sqcup_y): the
+   operator's thin space comes after its last script (decorations.js) */
+.pm-asop + :is(.pm-sup, .pm-sub) { margin-right: .167em; }
+.pm-asop + :is(.pm-sup, .pm-sub):has(+ :is(.pm-sup, .pm-sub)) { margin-right: 0; }
+.pm-asop + :is(.pm-sup, .pm-sub) + :is(.pm-sup, .pm-sub) { margin-right: .167em; }
 /* a typed - is drawn as the minus KaTeX writes for it (the document and the
    LaTeX keep -): the minus glyph laid over the hyphen, which turns invisible
    and takes the minus's .778em (letter-spacing), so the caret goes on either
@@ -435,6 +446,9 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
   :is(.pm-rel, .pm-bin, .pm-punct) { margin-left: 0; margin-right: 0; }
 .pm-rel { margin: 0 .28em; }
 .pm-punct { margin-right: .17em; }
+/* := is one relation: no space inside it (decorations.js) */
+.pm-rel.pm-coloneq { margin-right: 0; }
+.pm-coloneq + .pm-rel { margin-left: 0; }
 
 .pm-sup, .pm-sub { font-size: .7em; display: inline-block; }
 /* --shift: further out, on a structure taller than a letter (stack.js) */
@@ -573,7 +587,6 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
    high over lowercase (KaTeX fits it to each letter; this does not measure) */
 .layout-accent > .pm-deco { display: block; height: .4em; line-height: .8; margin-bottom: -.31em; }
 .pm-accent-vec > .pm-deco { font-size: .65em; margin-bottom: -.3em; }
-.layout-opname { margin: 0 .17em; }
 
 /* unknown command: label + boxed slots, still fully structural */
 .layout-generic > .pm-deco { font: .65em ui-monospace, Menlo, monospace; color: var(--muted); align-self: center; margin-right: .15em; }
