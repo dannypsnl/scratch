@@ -208,7 +208,9 @@ function caretOverlay(view) {
     el.hidden = !show;
     if (!show) { last = ""; return; }
     const $h = view.state.selection.$head;
-    let c = view.coordsAtPos($h.pos, $h.nodeBefore ? -1 : 1);
+    // (at a line's start in a code block, the \n before it is on the line above)
+    const before = $h.nodeBefore;
+    let c = view.coordsAtPos($h.pos, before && !(before.isText && before.text.endsWith("\n")) ? -1 : 1);
     // beside a script, fraction or formula its box sits higher or lower than
     // the caret's own line: x from beside it, height from something on the
     // caret's level (the neighbour on the other side, else any in the container)
@@ -220,6 +222,16 @@ function caretOverlay(view) {
         if (r.top || r.bottom) c = { left: c.left, top: r.top, bottom: r.bottom };
       }
     }
+    // at an edge of inline code: inside its drawn backtick or outside it
+    const isCode = (n) => n?.marks.some((m) => m.type.name === "code");
+    const end = isCode(before) && !isCode($h.nodeAfter), start = isCode($h.nodeAfter) && !isCode(before);
+    if ((end || start) && !inCode(view.state)) {
+      let box = view.domAtPos($h.pos + (end ? -1 : 1)).node;
+      if (box.nodeType !== 1) box = box.parentElement;
+      const rects = box.closest(".pm-icode")?.getClientRects();
+      const r = rects?.length && rects[end ? rects.length - 1 : 0];
+      if (r) c = { left: end ? r.right : r.left, top: c.top, bottom: c.bottom };
+    } else if (start) c = view.coordsAtPos($h.pos, 1);
     if (!c.top && !c.bottom) {
       // nothing measurable around: the line's left edge
       const line = view.domAtPos($h.start()).node;

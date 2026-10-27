@@ -1021,6 +1021,9 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .ProseMirror u { text-underline-offset: 0.18em; }
 .ProseMirror s { text-decoration-color: var(--muted); }
 .pm-icode { font-family: var(--mono); font-size: 0.88em; background: var(--slot); border-radius: 4px; padding: 1px 4px; }
+/* with the caret at it, it reads as typed: `…`, the backticks drawn (not in the text) */
+.pm-icode:has(> .code-raw) { font: inherit; background: none; padding: 0; }
+.pm-icode:has(> .code-raw)::before, .pm-icode:has(> .code-raw)::after { content: "`"; color: var(--muted); }
 .pm-code { position: relative; margin: 2px 0; padding: 8px 12px; background: var(--slot); border-radius: 6px; font-family: var(--mono); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
 .pm-code code { font: inherit; }
 .pm-code[data-lang]:not([data-lang=""]) { padding-right: 3.5em; }

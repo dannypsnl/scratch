@@ -24,7 +24,7 @@ import { notationHint } from "./notation.js";
 import { formatBar } from "./formatbar.js";
 import { derivations } from "./chain.js";
 import { scriptStacking } from "./stack.js";
-import { inCode, typeInCode, leaveCode, enterInCode, codeStep, exitCodeBlock } from "./code.js";
+import { inCode, typeInCode, closesCode, codeStep, codeDelete, exitCodeBlock, codeRaw } from "./code.js";
 import { t } from "./i18n.js";
 
 const T = schema.nodes;
@@ -63,12 +63,14 @@ const mathKeys = typedKeys({
   Escape: exitMath,
 });
 
-// Code keys next: in and out of inline code, out of a code block (code.js).
+// Code keys next: in and out at the edges of inline code and its backticks
+// deleted, out of a code block (code.js).
 const codeKeys = typedKeys({
   ArrowLeft: codeStep(-1),
   ArrowRight: codeStep(1),
-  Enter: enterInCode,
-  Escape: (state, dispatch) => leaveCode(state, dispatch) || exitCodeBlock(state, dispatch),
+  Backspace: codeDelete(-1),
+  Delete: codeDelete(1),
+  Escape: exitCodeBlock,
 });
 
 const outlineKeys = typedKeys({
@@ -169,7 +171,7 @@ function startLink(view, tag, initial = "") {
 // `rest` is what follows ch in the same input event; menus receive it.
 function typed(view, ch, rest = "") {
   const $head = view.state.selection.$head;
-  // code is plain text (brackets wrap a selection, ` leaves); ` starts it
+  // code is plain text (brackets wrap a selection); ` closes `…` into it
   if (inCode(view.state) || (ch === "`" && !inMath($head))) return typeInCode(view, ch);
   if (ch === "$" && wrapSelection(view)) return true;
   if (!inMath($head)) {
@@ -333,7 +335,7 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   let state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), suggest, mathKeys, codeKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, scriptStacking, outlineDecorations, notationHint, formatBar, derivations],
+    plugins: [compositionCommit, history(), suggest, mathKeys, codeKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, codeRaw, scriptStacking, outlineDecorations, notationHint, formatBar, derivations],
   });
   // notes saved while labelled arrows were x-arrow structures: \overset again
   // (saved with the next edit)
@@ -359,7 +361,7 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
     handleDOMEvents: {
       // An input method that composes the backtick (macOS 注音 takes ` for
       // its symbols) commits it as text, with no key press to be seen:
-      // once it is in, it is taken back and ` is typed as it would have been
+      // once it is in, a ` that closes `…` is taken back and typed again
       compositionend(view, ev) {
         if (ev.data !== "`") return false;
         setTimeout(() => {
@@ -367,8 +369,7 @@ export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
           const before = $head.nodeBefore;
           if (!empty || view.composing || !before?.isText || !before.text.endsWith("`")) return;
           const tr = view.state.tr.delete($head.pos - 1, $head.pos);
-          // (composed into code just started, with nothing else in it: still in it, so `` is a backtick)
-          if (before.text === "`" && before.marks.some((m) => m.type === schema.marks.code)) tr.setStoredMarks([schema.marks.code.create()]);
+          if (!closesCode(tr.doc.resolve($head.pos - 1).nodeBefore)) return;
           view.dispatch(tr);
           typed(view, "`");
         }, 80);

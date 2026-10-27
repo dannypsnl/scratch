@@ -53,9 +53,11 @@ const COMPOSITIONS = [
   [["ㄓ", "ㄓㄨ", "ㄓ", "ㄓㄨ", "ㄓㄨˇ"], "主"],
 ];
 const RUNS = CASES.flatMap(([line, where, expect]) => COMPOSITIONS.map(([steps, word]) => ({ line, where, steps, word, expect: expect.replace("主", word) })));
-// a backtick composed and committed (macOS 注音 takes ` for its symbols) is
-// the ` that starts inline code, not a character in the line (code.js)
-RUNS.push({ line: "隨筆", where: "line end", steps: ["`"], word: "`", expect: "隨筆" });
+// a backtick composed and committed (macOS 注音 takes ` for its symbols)
+// closes `…` into inline code as a typed one does (code.js), and is a
+// backtick otherwise
+RUNS.push({ line: "隨筆", where: "line end", steps: ["`"], word: "`", expect: "隨筆`" });
+RUNS.push({ line: "隨筆`e", where: "line end", steps: ["`"], word: "`", expect: "隨筆e" });
 
 const server = await createServer({ logLevel: "error", server: { port: 5198, hmr: false, watch: null } });
 await server.listen();
