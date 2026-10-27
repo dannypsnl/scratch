@@ -132,12 +132,13 @@ body {
    window's) decides extra columns, so collapsing the sidebar can make room. */
 main { margin: 0; padding: 16px 40px 80px 56px; box-sizing: border-box; width: 100%; container-type: inline-size; }
 main > :not(.journal-grid) { max-width: 860px; }
-.journal-grid { display: grid; grid-template-columns: minmax(0, 860px); column-gap: 40px; align-items: start; }
+/* the journal fills the main column: its text takes what the calendar (on
+   the right edge) leaves */
+.journal-grid { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 40px; align-items: start; }
 .journal-side { display: none; }
-/* 1000px: a full-screen 1440px window with the sidebar open qualifies; the
-   text column gives up some width for the calendar */
+/* 1000px: a full-screen 1440px window with the sidebar open qualifies */
 @container (min-width: 1000px) {
-  .journal-grid { grid-template-columns: minmax(0, 860px) 232px; }
+  .journal-grid { grid-template-columns: minmax(0, 1fr) 232px; }
   .journal-side { display: block; position: sticky; top: 16px; font: 13px system-ui, sans-serif; padding-top: 4px; }
   .journal-side .cal-grid { grid-template-columns: repeat(7, 1fr); }
   .journal-grid .today-group .cal-btn { display: none; }
