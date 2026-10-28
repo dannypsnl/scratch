@@ -249,6 +249,8 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .pm-body > .pm-block { flex: 0 0 100%; }
 .pm-body > .task-icon, .pm-body > .deadline { flex: none; }
 .pm-body > .task-icon { position: relative; top: .14em; }
+/* a long line wraps beside its task icon, not onto a row of its own */
+.pm-body > .task-icon + .pm-line { max-width: calc(100% - 1.35em); }
 /* deadline: a metadata line under the text, aligned with it (past the
    task icon), not a pill beside it */
 .pm-body > .deadline {
