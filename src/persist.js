@@ -1,8 +1,14 @@
 import * as Neutralino from "@neutralinojs/lib";
+import { logFrame, readLog } from "./updatelog.js";
 
-// Local persistence: the Loro snapshot, a small JSON meta record (sync
-// settings and progress), and image files. Inside Neutralino these are files
-// in the app's data directory; in a plain browser, IndexedDB.
+// Local persistence: the Loro snapshot and the log of updates made since it
+// (store.js), a small JSON meta record (sync settings and progress), and
+// image files. Inside Neutralino these are files in the app's data
+// directory; in a plain browser, IndexedDB.
+//
+//   load()               -> { snapshot, updates: [bytes], meta }
+//   appendUpdate(bytes)  adds to the log
+//   saveSnapshot(bytes)  replaces the snapshot and empties the log
 
 export const inNeutralino = typeof window !== "undefined" && !!window.NL_PORT;
 
@@ -10,6 +16,9 @@ function idb() {
   const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   let db;
   const kv = (mode, store = "kv") => db.transaction(store, mode).objectStore(store);
+  // log entries are keys "u:000000000001"… in the kv store, in order
+  const LOG = () => IDBKeyRange.bound("u:", "u:\uffff");
+  let next = 0;
   return {
     async open() {
       const open = indexedDB.open("scratch", 1);
@@ -26,9 +35,20 @@ function idb() {
     async load() {
       const snapshot = await req(kv("readonly").get("snapshot"));
       const meta = await req(kv("readonly").get("meta"));
-      return { snapshot: snapshot ? new Uint8Array(snapshot) : null, meta: meta ?? {} };
+      const keys = await req(kv("readonly").getAllKeys(LOG()));
+      const updates = await req(kv("readonly").getAll(LOG()));
+      next = keys.length ? Number(keys[keys.length - 1].slice(2)) + 1 : 0;
+      return { snapshot: snapshot ? new Uint8Array(snapshot) : null, updates: updates.map((u) => new Uint8Array(u)), meta: meta ?? {} };
     },
-    saveSnapshot: (bytes) => kv("readwrite").put(bytes, "snapshot"),
+    appendUpdate: (bytes) => req(kv("readwrite").put(bytes, "u:" + String(next++).padStart(12, "0"))),
+    // in one transaction: never a new snapshot with the old log, or the reverse
+    saveSnapshot(bytes) {
+      const tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").put(bytes, "snapshot");
+      tx.objectStore("kv").delete(LOG());
+      next = 0;
+      return new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+    },
     saveMeta: (meta) => kv("readwrite").put(meta, "meta"),
   };
 }
@@ -53,15 +73,22 @@ function files() {
       const snapshot = (await exists(dir + "/notebook.loro"))
         ? new Uint8Array(await Neutralino.filesystem.readBinaryFile(dir + "/notebook.loro"))
         : null;
+      const updates = (await exists(dir + "/notebook.log"))
+        ? readLog(await Neutralino.filesystem.readBinaryFile(dir + "/notebook.log"))
+        : [];
       const meta = (await exists(dir + "/meta.json"))
         ? JSON.parse(await Neutralino.filesystem.readFile(dir + "/meta.json"))
         : {};
-      return { snapshot, meta };
+      return { snapshot, updates, meta };
     },
-    // write to a temp file and rename, so a crash never leaves half a snapshot
+    appendUpdate: (bytes) => Neutralino.filesystem.appendBinaryFile(dir + "/notebook.log", logFrame(bytes).buffer),
+    // write to a temp file and rename, so a crash never leaves half a
+    // snapshot; then the log goes (a crash before that leaves updates the
+    // snapshot already holds, which import again as nothing)
     async saveSnapshot(bytes) {
       await Neutralino.filesystem.writeBinaryFile(dir + "/notebook.loro.tmp", bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
       await Neutralino.filesystem.move(dir + "/notebook.loro.tmp", dir + "/notebook.loro");
+      if (await exists(dir + "/notebook.log")) await Neutralino.filesystem.remove(dir + "/notebook.log");
     },
     saveMeta: (meta) => Neutralino.filesystem.writeFile(dir + "/meta.json", JSON.stringify(meta)),
     dir: () => dir,

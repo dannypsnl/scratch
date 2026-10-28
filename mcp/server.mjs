@@ -8,7 +8,8 @@
 //   the app's own sync settings, in <data dir>/scratch/meta.json
 //     (SCRATCH_DATA_DIR overrides the directory)
 // With no sync configured it reads <data dir>/scratch/notebook.loro, the
-// app's local snapshot, and refuses to write: the running app would never
+// app's local snapshot, and notebook.log, the updates saved since it
+// (src/updatelog.js), and refuses to write: the running app would never
 // see the change and would overwrite it.
 //
 //   npm run mcp
@@ -19,6 +20,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { doc, invalidate } from "../src/loro.js";
+import { readLog } from "../src/updatelog.js";
 import { syncClient } from "./sync.js";
 import * as nb from "./notebook.js";
 
@@ -59,6 +61,8 @@ async function before(write) {
   if (write) throw new Error("read-only: the notebook is not synced. Set up sync in the app (or SCRATCH_SYNC_URL) so edits reach it");
   if (!fs.existsSync(snapshot)) throw new Error(`no notebook at ${snapshot}`);
   doc.import(new Uint8Array(fs.readFileSync(snapshot)));
+  const updates = path.join(dataDir(), "notebook.log");
+  if (fs.existsSync(updates)) for (const u of readLog(fs.readFileSync(updates))) { try { doc.import(u); } catch {} }
   invalidate();
 }
 

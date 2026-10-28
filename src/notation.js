@@ -245,13 +245,18 @@ export function applyEquals(view, action) {
 // every editor update and every focus change draws it again from scratch, so
 // an editor that lost focus, or was taken out of the page without being
 // destroyed, leaves nothing behind.
-const editors = new Set();
+// editor DOM -> its view, to find the focused one without asking each
+const editors = new Map();
+const focused = () => {
+  const v = editors.get(document.activeElement?.closest?.(".ProseMirror"));
+  return v && v.dom.isConnected && v.hasFocus() ? v : null;
+};
 let box = null;
 
 function drawHint() {
   box ??= Object.assign(document.createElement("div"), { className: "notation-hint", hidden: true });
   if (!box.isConnected) document.body.append(box);
-  const view = [...editors].find((v) => v.dom.isConnected && v.hasFocus());
+  const view = focused();
   const actions = view ? selectionActions(view.state) : [];
   const equals = view && !actions.length ? equalsActions(view.state) : [];
   box.hidden = !actions.length && !equals.length;
@@ -288,8 +293,8 @@ export const notationHint = new Plugin({
       document.addEventListener("focusin", () => queueMicrotask(drawHint));
       document.addEventListener("focusout", () => queueMicrotask(drawHint));
     }
-    editors.add(view);
+    editors.set(view.dom, view);
     drawHint();
-    return { update: drawHint, destroy: () => { editors.delete(view); drawHint(); } };
+    return { update: drawHint, destroy: () => { editors.delete(view.dom); drawHint(); } };
   },
 });

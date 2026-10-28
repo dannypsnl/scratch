@@ -152,14 +152,50 @@ function webLinks(node, pos, decos) {
   }
 }
 
+// Every decoration here lies within one line and depends on that line alone:
+// a change draws again only the lines it touched (updateStaticDecos).
 function staticDecos(doc) {
   const decos = [];
+  doc.descendants((node, pos) => {
+    if (node.type.name !== "line") return true;
+    lineDecos(node, pos + 1, decos);
+    return false;
+  });
+  return DecorationSet.create(doc, decos);
+}
+
+function updateStaticDecos(set, tr) {
+  const doc = tr.doc;
+  set = set.map(tr.mapping, doc);
+  const lines = new Map(); // position -> line, for every line a step touched
+  tr.mapping.maps.forEach((map, i) => {
+    const after = tr.mapping.slice(i + 1);
+    map.forEach((_from, _to, from, to) => {
+      const a = Math.max(0, after.map(from, -1) - 1), b = Math.min(doc.content.size, after.map(to, 1) + 1);
+      doc.nodesBetween(a, b, (node, pos) => {
+        if (node.type.name !== "line") return true;
+        lines.set(pos, node);
+        return false;
+      });
+    });
+  });
+  for (const [pos, line] of lines) {
+    const decos = [];
+    lineDecos(line, pos + 1, decos);
+    set = set.remove(set.find(pos + 1, pos + line.nodeSize - 1)).add(doc, decos);
+  }
+  return set;
+}
+
+// The decorations of the line whose content starts at `start`.
+function lineDecos(line, start, decos) {
+  cjkSpacing(line, start, decos);
   const uprightEnds = []; // where the structures setting their text upright end (innermost last)
-  doc.descendants((node, pos, parent) => {
+  line.descendants((node, offset, parent) => {
+    const pos = start + offset;
     while (uprightEnds.length && uprightEnds.at(-1) <= pos) uprightEnds.pop();
     if (node.type.name === "struct" && UPRIGHT.test(STRUCTS[node.attrs.name]?.layout ?? "")) uprightEnds.push(pos + node.nodeSize);
-    if (node.type.name === "line") cjkSpacing(node, pos + 1, decos);
-    if (node.isText && parent?.type.name === "line") webLinks(node, pos, decos);
+    if (node.isText && parent === line) webLinks(node, pos, decos);
     const xarrow = labelledArrow(node);
     if (xarrow) decos.push(Decoration.node(pos, pos + node.nodeSize, { class: xarrow }));
     if (isMathContainer(node.type) && node.content.size === 0) {
@@ -174,7 +210,6 @@ function staticDecos(doc) {
       }
     }
   });
-  return DecorationSet.create(doc, decos);
 }
 
 // The native caret is unreliable around formulas (nested inline spans, and
@@ -196,17 +231,22 @@ function fontSizeAt(view, pos) {
 // (a large operator is drawn larger and lower: not on the caret's level)
 const onLevel = (n) => n && !["math", "struct", "sup", "sub"].includes(n.type.name) && !(n.type.name === "sym" && SYMBOLS[n.attrs.name]?.cls === "op");
 
+// One caret for the whole app, drawn by the editor that wants it (the
+// focused one); an editor that does not want it hides it only if it was its.
+let caretEl = null, caretOwner = null, last = "";
 function caretOverlay(view) {
-  const el = document.createElement("div");
-  el.className = "pm-caret";
-  el.hidden = true;
-  document.body.append(el);
-  let last = "";
   const place = () => {
     if (view.isDestroyed) return;
+    if (!caretEl) caretEl = Object.assign(document.createElement("div"), { className: "pm-caret", hidden: true });
+    if (!caretEl.isConnected) document.body.append(caretEl);
+    const el = caretEl;
     const show = wantsCaret(view);
-    el.hidden = !show;
-    if (!show) { last = ""; return; }
+    if (!show) {
+      if (caretOwner === view) { el.hidden = true; caretOwner = null; last = ""; }
+      return;
+    }
+    caretOwner = view;
+    el.hidden = false;
     const $h = view.state.selection.$head;
     // (at a line's start in a code block, the \n before it is on the line above)
     const before = $h.nodeBefore;
@@ -258,22 +298,34 @@ function caretOverlay(view) {
     el.style.height = `${h}px`;
     el.classList.toggle("in-math", inMath($h)); // formula mode at a glance
     el.classList.toggle("in-code", inCode(view.state));
-    if (key !== last) { el.classList.remove("blink"); void el.offsetWidth; el.classList.add("blink"); }
+    // a caret that moved starts its blink over (without a forced layout)
+    if (key !== last) {
+      el.classList.add("blink");
+      for (const a of el.getAnimations?.() ?? []) a.currentTime = 0;
+    }
     last = key;
   };
-  // layout settles a frame later (script stacking), so place again then
-  const update = () => { place(); requestAnimationFrame(place); };
+  // layout settles a frame later (script stacking), so place again then,
+  // once a frame however many updates came
+  let frame = 0;
+  const update = () => {
+    place();
+    if (!frame) frame = requestAnimationFrame(() => { frame = 0; place(); });
+  };
   for (const ev of ["focus", "blur", "compositionstart", "compositionend"]) view.dom.addEventListener(ev, update);
-  window.addEventListener("resize", update);
+  caretUpdates.set(view, update);
   update();
   return {
     update,
     destroy() {
-      el.remove();
-      window.removeEventListener("resize", update);
+      cancelAnimationFrame(frame);
+      if (caretOwner === view) { caretEl.hidden = true; caretOwner = null; last = ""; }
     },
   };
 }
+// on resize only the caret's own editor has anything to place
+const caretUpdates = new WeakMap();
+if (typeof window !== "undefined") window.addEventListener("resize", () => { if (caretOwner) caretUpdates.get(caretOwner)?.(); });
 
 // The place just outside a formula and the formula's own edge are one place
 // to the DOM, and an input method composes at whichever the browser picks
@@ -338,7 +390,7 @@ export const mathDecorations = new Plugin({
       // commit land inside
       const composing = tr.getMeta(mathDecorations) === "composed" ? false : old.composing || !!tr.getMeta("composition");
       return {
-        set: tr.docChanged ? staticDecos(tr.doc) : old.set,
+        set: tr.docChanged ? updateStaticDecos(old.set, tr) : old.set,
         shut: composing ? old.shut.map(tr.mapping, tr.doc) : DecorationSet.create(state.doc, shutDecos(state)),
         composing,
       };

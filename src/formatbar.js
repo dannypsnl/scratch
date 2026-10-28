@@ -37,13 +37,18 @@ function applies(state) {
   return toggleMark(M.strong)(state);
 }
 
-const editors = new Set();
+// editor DOM -> its view, to find the focused one without asking each
+const editors = new Map();
+const focused = () => {
+  const v = editors.get(document.activeElement?.closest?.(".ProseMirror"));
+  return v && v.dom.isConnected && v.hasFocus() ? v : null;
+};
 let box = null;
 
 function draw() {
   box ??= Object.assign(document.createElement("div"), { className: "format-bar", hidden: true });
   if (!box.isConnected) document.body.append(box);
-  const view = [...editors].find((v) => v.dom.isConnected && v.hasFocus());
+  const view = focused();
   box.hidden = !view || !applies(view.state);
   if (box.hidden) return;
   box.replaceChildren(...BUTTONS.map(({ mark, key, keys, glyph }) => {
@@ -72,8 +77,8 @@ export const formatBar = new Plugin({
       document.addEventListener("focusin", () => queueMicrotask(draw));
       document.addEventListener("focusout", () => queueMicrotask(draw));
     }
-    editors.add(view);
+    editors.set(view.dom, view);
     draw();
-    return { update: draw, destroy: () => { editors.delete(view); draw(); } };
+    return { update: draw, destroy: () => { editors.delete(view.dom); draw(); } };
   },
 });

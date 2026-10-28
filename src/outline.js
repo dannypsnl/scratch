@@ -7,7 +7,7 @@ import { newId } from "./outline-io.js";
 import { blockAfterCode } from "./code.js";
 import { openDeadlinePicker } from "./deadline.js";
 import { today, md } from "./dates.js";
-import { fieldsForBlock } from "./store.js";
+import { fieldsForBlock, fieldsVersion } from "./store.js";
 import { openValueEditor, displayValue } from "./fields.js";
 import { t } from "./i18n.js";
 
@@ -299,60 +299,76 @@ export const taskIconHTML = (task) => `<span class="task-icon task-${task}"><svg
 // Task icon before the line, deadline badge after it. Both sit between the
 // block's nodes, outside the line: a non-editable element inside the line
 // leaves WebKit no place for the caret next to it (typing just beeps).
+// Made again only when the document changed, or the fields pages define
+// (store.js fieldsVersion): moving the caret keeps the set.
 export const outlineDecorations = new Plugin({
+  state: {
+    init: (_, state) => ({ set: outlineDecos(state.doc), fields: fieldsVersion() }),
+    apply(tr, old) {
+      const fields = fieldsVersion();
+      if (!tr.docChanged && fields === old.fields) return old;
+      return { set: outlineDecos(tr.doc), fields };
+    },
+  },
   props: {
     decorations(state) {
-      const decos = [];
-      state.doc.descendants((node, pos) => {
-        if (node.type !== T.block) return false;
-        const { task, deadline } = node.attrs;
-        const beforeLine = pos + 1, afterLine = pos + 1 + node.firstChild.nodeSize;
-        const blockAt = (view, getPos) => view.state.doc.resolve(getPos()).before();
-        if (task) {
-          decos.push(Decoration.widget(beforeLine, (view, getPos) => {
-            const el = document.createElement("span");
-            el.className = `task-icon task-${task}`;
-            el.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${ICON[task]}</svg>`;
-            el.title = t("task.toggle", LABEL[task]);
-            el.addEventListener("mousedown", (e) => {
-              e.preventDefault();
-              const p = blockAt(view, getPos);
-              const n = view.state.doc.nodeAt(p);
-              setTask(view.state, view.dispatch, [[p, n]], nextState(n.attrs.task));
-            });
-            return el;
-          }, { side: -1, key: `task-${task}`, ignoreSelection: true }));
-        }
-        if (deadline) {
-          decos.push(Decoration.widget(afterLine, (view, getPos) => {
-            const el = document.createElement("span");
-            const overdue = deadline < today() && task !== "done";
-            el.className = "deadline" + (overdue ? " overdue" : "");
-            el.textContent = t("deadline.badge", md(deadline));
-            el.addEventListener("mousedown", (e) => {
-              e.preventDefault();
-              openDeadlinePicker(view, [blockAt(view, getPos)]);
-            });
-            return el;
-          }, { side: 1, key: `dl-${deadline}-${task}`, ignoreSelection: true }));
-        }
-        const { tags } = node.attrs;
-        if (tags.length) {
-          decos.push(Decoration.widget(afterLine, (view, getPos) => tagRow(tags, view, getPos), { side: 0, key: `tags-${tags.join("|")}`, ignoreSelection: true, stopEvent: () => true }));
-        }
-        const fields = fieldsForBlock(node);
-        if (fields.length) {
-          const key = `props-${fields.map((f) => f.id + f.name + f.type).join("|")}-${JSON.stringify(node.attrs.props)}`;
-          decos.push(Decoration.widget(afterLine, (view, getPos) => propRow(fields, node.attrs.props, view, getPos), { side: 1.5, key, ignoreSelection: true, stopEvent: () => true }));
-        }
-        const video = youtubeId(node.firstChild.textContent);
-        if (video) decos.push(Decoration.widget(afterLine, () => youtubePreview(video), { side: 2, key: `yt-${video}`, ignoreSelection: true, stopEvent: () => true }));
-        return true;
-      });
-      return DecorationSet.create(state.doc, decos);
+      const { set, fields } = this.getState(state);
+      // (fields changed on another page with no transaction here since)
+      return fields === fieldsVersion() ? set : outlineDecos(state.doc);
     },
   },
 });
+
+function outlineDecos(doc) {
+  const decos = [];
+  doc.descendants((node, pos) => {
+    if (node.type !== T.block) return false;
+    const { task, deadline } = node.attrs;
+    const beforeLine = pos + 1, afterLine = pos + 1 + node.firstChild.nodeSize;
+    const blockAt = (view, getPos) => view.state.doc.resolve(getPos()).before();
+    if (task) {
+      decos.push(Decoration.widget(beforeLine, (view, getPos) => {
+        const el = document.createElement("span");
+        el.className = `task-icon task-${task}`;
+        el.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${ICON[task]}</svg>`;
+        el.title = t("task.toggle", LABEL[task]);
+        el.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          const p = blockAt(view, getPos);
+          const n = view.state.doc.nodeAt(p);
+          setTask(view.state, view.dispatch, [[p, n]], nextState(n.attrs.task));
+        });
+        return el;
+      }, { side: -1, key: `task-${task}`, ignoreSelection: true }));
+    }
+    if (deadline) {
+      decos.push(Decoration.widget(afterLine, (view, getPos) => {
+        const el = document.createElement("span");
+        const overdue = deadline < today() && task !== "done";
+        el.className = "deadline" + (overdue ? " overdue" : "");
+        el.textContent = t("deadline.badge", md(deadline));
+        el.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          openDeadlinePicker(view, [blockAt(view, getPos)]);
+        });
+        return el;
+      }, { side: 1, key: `dl-${deadline}-${task}`, ignoreSelection: true }));
+    }
+    const { tags } = node.attrs;
+    if (tags.length) {
+      decos.push(Decoration.widget(afterLine, (view, getPos) => tagRow(tags, view, getPos), { side: 0, key: `tags-${tags.join("|")}`, ignoreSelection: true, stopEvent: () => true }));
+    }
+    const fields = fieldsForBlock(node);
+    if (fields.length) {
+      const key = `props-${fields.map((f) => f.id + f.name + f.type).join("|")}-${JSON.stringify(node.attrs.props)}`;
+      decos.push(Decoration.widget(afterLine, (view, getPos) => propRow(fields, node.attrs.props, view, getPos), { side: 1.5, key, ignoreSelection: true, stopEvent: () => true }));
+    }
+    const video = youtubeId(node.firstChild.textContent);
+    if (video) decos.push(Decoration.widget(afterLine, () => youtubePreview(video), { side: 2, key: `yt-${video}`, ignoreSelection: true, stopEvent: () => true }));
+    return true;
+  });
+  return DecorationSet.create(doc, decos);
+}
 
 // ---------- fields ----------
 

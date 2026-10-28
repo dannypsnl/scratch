@@ -81,13 +81,16 @@ export const suggest = new Plugin({
     },
   },
   view(view) {
-    const box = Object.assign(document.createElement("div"), { className: "palette suggest", hidden: true });
-    document.body.append(box);
-    let shown = null;
     const draw = () => {
       const s = key.getState(view.state);
-      box.hidden = !s || !view.hasFocus();
-      if (box.hidden) { shown = null; return; }
+      if (!s || !view.hasFocus()) {
+        if (owner === view) { box.hidden = true; owner = shown = null; }
+        return;
+      }
+      box ??= Object.assign(document.createElement("div"), { className: "palette suggest", hidden: true });
+      if (!box.isConnected) document.body.append(box);
+      if (owner !== view) { owner = view; shown = null; }
+      box.hidden = false;
       const list = document.createElement("ul");
       list.append(...s.items.map((it, k) => {
         const li = document.createElement("li");
@@ -103,9 +106,12 @@ export const suggest = new Plugin({
       if (shown !== s.from) { shown = s.from; place(box, view.coordsAtPos(s.from)); }
     };
     draw();
-    return { update: draw, destroy: () => box.remove() };
+    return { update: draw, destroy: () => { if (owner === view) { box.hidden = true; owner = shown = null; } } };
   },
 });
+
+// One box for the whole app, drawn by the editor whose suggestions it shows.
+let box = null, owner = null, shown = null;
 
 // the word goes, and what was picked takes its place
 function take(view, s, item) {

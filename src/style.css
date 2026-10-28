@@ -301,6 +301,10 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
   column-gap: 4px;
   padding: 6px 8px;
   border-radius: 8px;
+  /* a list can hold thousands: those off screen are not laid out or drawn
+     (the size they last had stands in for them) */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
 }
 .task-item:hover { background: var(--panel); }
 .task-item .task-meta { font: 12px system-ui, sans-serif; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

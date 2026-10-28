@@ -20,7 +20,7 @@ claude mcp add --scope user scratch -e SCRATCH_SYNC_URL=ws://localhost:8787/sync
 
 Use `node` directly, not `npm run mcp`: npm prints a banner on stdout, which is the MCP channel.
 
-When sync is not set up, the server reads the app's local snapshot (`notebook.loro`) and refuses to write: the running app never reads that file back, and would overwrite it.
+When sync is not set up, the server reads the app's local snapshot (`notebook.loro`, with the updates saved since in `notebook.log`) and refuses to write: the running app never reads that file back, and would overwrite it.
 
 ## Tools
 

@@ -77,27 +77,81 @@ function readBlock(node) {
   );
 }
 
-// { pageId: { title, doc } } for every page in the notebook
-export function readAll() {
+function readPage(roots) {
+  const blocks = roots.flatMap((r) => (r.children() ?? []).map(readBlock));
+  const title = roots.map((r) => r.data.get("title")).find(Boolean) ?? null;
+  const fields = JSON.parse(roots.map((r) => r.data.get("fields")).find(Boolean) ?? "[]");
+  return { title, fields, doc: blocks.length ? T.doc.create(null, blocks) : null };
+}
+
+// { pageId: { title, doc } } for every page in the notebook, or only for
+// `pages` (those of them that still exist)
+export function readAll(pages = null) {
   const out = new Map();
-  for (const [page, roots] of rootsByPage()) {
-    const blocks = roots.flatMap((r) => (r.children() ?? []).map(readBlock));
-    const title = roots.map((r) => r.data.get("title")).find(Boolean) ?? null;
-    const fields = JSON.parse(roots.map((r) => r.data.get("fields")).find(Boolean) ?? "[]");
-    out.set(page, { title, fields, doc: blocks.length ? T.doc.create(null, blocks) : null });
-  }
+  for (const [page, roots] of rootsByPage()) if (!pages || pages.has(page)) out.set(page, readPage(roots));
   return out;
 }
 
+// ---------- what imports changed ----------
+
+// The pages that imported changes touched since the last takeTouched(), so
+// that only those are read again; null when that cannot be told (a page
+// root came, went or moved, or a node is gone), and everything is.
+let touched = new Set();
+export function takeTouched() {
+  const t = touched;
+  touched = new Set();
+  return t;
+}
+
+function pageOf(id) {
+  let n = tree.getNodeByID(id);
+  if (!n || n.isDeleted()) return null;
+  for (let p = n.parent(); p; p = n.parent()) n = p;
+  return n.data.get("page") ?? null;
+}
+
+doc.subscribe((batch) => {
+  if (batch.by !== "import") return;
+  const ids = new Set();
+  for (const ev of batch.events) {
+    if (ev.diff.type === "tree") {
+      for (const d of ev.diff.diff) {
+        // a page root: its own page key arrives with it, or it took its blocks along
+        if ((d.action !== "delete" && !d.parent) || (d.action !== "create" && !d.oldParent)) touched = null;
+        if (d.parent) ids.add(d.parent);
+        if (d.oldParent) ids.add(d.oldParent);
+      }
+    } else if (ev.path[0] === "blocks" && ev.path.length >= 2) {
+      ids.add(ev.path[1]);
+      // a block made elsewhere: findable by its id from now on
+      const bid = ev.diff.type === "map" ? ev.diff.updated.bid : undefined;
+      if (bid && index) index.set(bid, tree.getNodeByID(ev.path[1]));
+    }
+  }
+  if (!touched) return;
+  for (const id of ids) {
+    const page = pageOf(id);
+    if (!page) { touched = null; return; }
+    touched.add(page);
+  }
+});
+
 // ---------- writing ----------
 
-let index = null; // bid -> tree node
+// bid -> tree node. Built once, then kept: blocks written here are added as
+// they are made, blocks imported by the subscriber above. Looking up a node
+// deleted since (here or elsewhere) builds it again, in case another node
+// carries that id.
+let index = null;
 function nodeOf(bid) {
   if (!index) {
     index = new Map();
     for (const n of tree.nodes()) if (!n.isDeleted() && n.data.get("bid")) index.set(n.data.get("bid"), n);
   }
-  return index.get(bid);
+  const n = index.get(bid);
+  if (n?.isDeleted()) { index = null; return nodeOf(bid); }
+  return n;
 }
 export const invalidate = () => { index = null; };
 

@@ -1,6 +1,6 @@
 import { TextSelection, Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
-import { getPage, savePage, titleOf, renamePage, namedPages, backlinks, findPage, createPage, deletePage, isDate, onRemote } from "./store.js";
+import { getPage, savePage, titleOf, renamePage, namedPages, backlinks, backlinkCounts, getFields, findPage, createPage, deletePage, isDate, onRemote } from "./store.js";
 import { createEditor } from "./editor.js";
 import { emptyDoc } from "./outline-io.js";
 import { renderBacklinks, renderOutgoing } from "./backlinks.js";
@@ -68,7 +68,23 @@ export function deleteButton(onDelete) {
 // options.table: linked blocks as a table (named pages) instead of the
 // grouped list (journal days); options.focus: put the caret in the editor.
 export function mountOutline(root, page, ctx, { table = false, focus = true } = {}) {
-  const renderLinked = table ? renderPageTable : renderBacklinks;
+  // The linked blocks are drawn again when another device changed one of
+  // them (a block kept as it was keeps its node), a page title or this
+  // page's fields; their editors with them.
+  let linkedViews = [], linkedNodes = null, linkedKey = null;
+  const linkedCtx = { ...ctx, track: (v) => linkedViews.push(v) };
+  const renderLinked = () => {
+    const nodes = backlinks(page).filter((b) => b.page !== page).map((b) => b.node);
+    const key = namedPages().map((p) => p.id + "\t" + p.title).join("\n") + JSON.stringify(getFields(page));
+    const same = linkedNodes && key === linkedKey && nodes.length === linkedNodes.length && nodes.every((n, i) => n === linkedNodes[i]);
+    if (same) return;
+    linkedNodes = nodes;
+    linkedKey = key;
+    for (const v of linkedViews) v.destroy();
+    linkedViews = [];
+    (table ? renderPageTable : renderBacklinks)(backlinksEl, page, linkedCtx);
+  };
+  ctx.track({ destroy: () => { for (const v of linkedViews) v.destroy(); linkedViews = []; } });
   const view = createEditor(root.querySelector(".editor"), getPage(page) ?? emptyDoc(), {
     plugins: [flash],
     onUpdate(v, _prev, tr) {
@@ -81,13 +97,13 @@ export function mountOutline(root, page, ctx, { table = false, focus = true } = 
   const outgoingEl = document.createElement("div");
   backlinksEl.after(outgoingEl);
   renderOutgoing(outgoingEl, page, view.state.doc);
-  renderLinked(backlinksEl, page, ctx);
+  renderLinked();
 
   // another device changed this page: swap the content in, keep the caret
   // on the same block; backlinks may have changed from any page
   const off = onRemote((changed) => {
     if (changed.has(page)) replaceDoc(view, getPage(page) ?? emptyDoc());
-    if (!backlinksEl.contains(document.activeElement)) renderLinked(backlinksEl, page, ctx);
+    if (!backlinksEl.contains(document.activeElement)) renderLinked();
   });
   ctx.track({ destroy: off });
 
@@ -151,8 +167,9 @@ export function renderPage(root, ctx) {
 }
 
 export function renderPages(root, ctx) {
+  const counts = backlinkCounts();
   const pages = namedPages()
-    .map((p) => ({ ...p, refs: backlinks(p.id).filter((b) => b.page !== p.id).length }))
+    .map((p) => ({ ...p, refs: counts.get(p.id) ?? 0 }))
     .sort((a, b) => a.title.localeCompare(b.title));
   root.innerHTML = `
     <div class="pages">

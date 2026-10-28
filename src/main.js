@@ -1,7 +1,7 @@
 import "katex/dist/katex.min.css";
 import "./style.css";
 import "./katex-stretchy.css";
-import { load, getPage, titleOf, findPage, createPage, getBlock, pageOfBlock, isDate, onRemote, fieldById, fieldByName } from "./store.js";
+import { load, getPage, titleOf, findPage, createPage, getBlock, pageOfBlock, isDate, onRemote, fieldById, fieldByName, namedPages, allTasks, backlinkCounts } from "./store.js";
 import { connect, config, configure, onStatus } from "./sync.js";
 import { resolver } from "./outline-io.js";
 import { lookup } from "./schema.js";
@@ -61,6 +61,7 @@ function render() {
   document.querySelectorAll(".tabs [data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   RENDER[state.tab](app, ctx);
   renderSidebar(ctx);
+  shownList = ["agenda", "tasks", "pages"].includes(state.tab) ? listed() : null;
 }
 
 // ---------- sidebar: ☰ or ⌘\ collapses it; narrow windows start collapsed ----------
@@ -194,10 +195,19 @@ document.addEventListener("mousedown", (e) => {
 });
 
 // Remote changes: journal and page views patch their own editor (page.js);
-// list views re-render unless one of their editors is in use.
+// list views re-render when what they list changed (a task's block, a page
+// title, a link count: a block kept as it was keeps its node), unless one
+// of their editors is in use.
+const listed = () => {
+  if (state.tab === "pages") return [JSON.stringify([namedPages(), [...backlinkCounts()]])];
+  return [JSON.stringify(namedPages()), ...allTasks().map((t) => t.node)];
+};
+let shownList = null;
 onRemote(() => {
   if (!["agenda", "tasks", "pages"].includes(state.tab)) return;
   if (document.activeElement?.closest(".task-item")) return;
+  const now = listed();
+  if (shownList && now.length === shownList.length && now.every((x, i) => x === shownList[i])) return;
   render();
 });
 

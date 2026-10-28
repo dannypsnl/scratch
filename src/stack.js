@@ -175,17 +175,26 @@ export const scriptStacking = new Plugin({
   key,
   state: {
     init: () => ({ set: DecorationSet.empty, sig: "" }),
-    apply: (tr, old) => tr.getMeta(key) ?? { set: old.set.map(tr.mapping, tr.doc), sig: tr.docChanged ? "stale" : old.sig },
+    apply: (tr, old) => tr.getMeta(key) ?? (tr.docChanged ? { set: old.set.map(tr.mapping, tr.doc), sig: "stale" } : old),
   },
   props: { decorations: (state) => key.getState(state).set },
+  // Measured again when the document changed, or after its own decorations
+  // went in (the pass that converges); a selection moving changes no width.
+  // Once a frame at most.
   view(view) {
+    let frame = 0;
     const sync = () => {
+      frame = 0;
       if (view.isDestroyed) return; // a re-render destroyed it before this frame
       const next = measure(view);
       if (next.sig !== key.getState(view.state).sig) view.dispatch(view.state.tr.setMeta(key, next));
     };
-    requestAnimationFrame(sync);
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(sync); };
+    schedule();
     document.fonts?.ready.then(sync);
-    return { update: () => requestAnimationFrame(sync) };
+    return {
+      update: (v, prev) => { if (v.state.doc !== prev.doc || key.getState(v.state) !== key.getState(prev)) schedule(); },
+      destroy: () => cancelAnimationFrame(frame),
+    };
   },
 });
