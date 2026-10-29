@@ -775,7 +775,7 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 }
 
 .pages { max-width: 640px; }
-.new-page {
+.page-search {
   width: 100%;
   box-sizing: border-box;
   font: 15px system-ui, sans-serif;

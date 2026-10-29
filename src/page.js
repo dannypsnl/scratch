@@ -1,6 +1,6 @@
 import { TextSelection, Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
-import { getPage, savePage, titleOf, renamePage, namedPages, backlinks, backlinkCounts, getFields, findPage, createPage, deletePage, isDate, onRemote } from "./store.js";
+import { getPage, savePage, titleOf, renamePage, namedPages, backlinks, backlinkCounts, getFields, findPage, deletePage, onRemote } from "./store.js";
 import { createEditor } from "./editor.js";
 import { emptyDoc } from "./outline-io.js";
 import { renderBacklinks, renderOutgoing } from "./backlinks.js";
@@ -166,6 +166,10 @@ export function renderPage(root, ctx) {
   mountOutline(root, page, ctx, { table: true, focus: hasNotes });
 }
 
+// The Pages tab: every named page with how often it is linked. The box at
+// the top filters the list; ↵ opens the first page left. Pages are created
+// by linking them ([[ or # in any line), not here.
+let pagesFilter = "";
 export function renderPages(root, ctx) {
   const counts = backlinkCounts();
   const pages = namedPages()
@@ -173,29 +177,39 @@ export function renderPages(root, ctx) {
     .sort((a, b) => a.title.localeCompare(b.title));
   root.innerHTML = `
     <div class="pages">
-      <input class="new-page" placeholder="${t("pages.new")}">
+      <input class="page-search" type="search" placeholder="${t("pages.search")}">
       <ul class="page-list"></ul>
     </div>`;
-  const input = root.querySelector(".new-page");
-  input.onkeydown = (e) => {
-    if (e.key !== "Enter" || !input.value.trim()) return;
-    const t = input.value.trim();
-    ctx.openPage(findPage(t) ?? (isDate(t) ? t : createPage(t)));
-  };
+  const input = root.querySelector(".page-search");
   const list = root.querySelector(".page-list");
-  for (const p of pages) {
-    const li = document.createElement("li");
-    const a = document.createElement("a");
-    a.href = "#";
-    a.textContent = p.title;
-    a.onclick = (e) => { e.preventDefault(); ctx.openPage(p.id); };
-    const n = document.createElement("span");
-    n.className = "count";
-    n.textContent = p.refs;
-    n.title = t("pages.refCount");
-    li.append(a, deleteButton(() => { deletePage(p.id); ctx.render(); }), n);
-    list.append(li);
-  }
-  if (!pages.length) list.innerHTML = `<li class="empty">${t("pages.empty")}</li>`;
+  input.value = pagesFilter;
+  const draw = () => {
+    const q = input.value.trim().toLowerCase();
+    const shown = q ? pages.filter((p) => p.title.toLowerCase().includes(q)) : pages;
+    list.replaceChildren();
+    for (const p of shown) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = "#";
+      a.textContent = p.title;
+      a.onclick = (e) => { e.preventDefault(); ctx.openPage(p.id); };
+      const n = document.createElement("span");
+      n.className = "count";
+      n.textContent = p.refs;
+      n.title = t("pages.refCount");
+      li.append(a, deleteButton(() => { deletePage(p.id); ctx.render(); }), n);
+      list.append(li);
+    }
+    if (!shown.length) list.innerHTML = `<li class="empty">${t(pages.length ? "pages.noMatch" : "pages.empty")}</li>`;
+    return shown;
+  };
+  input.oninput = () => { pagesFilter = input.value; draw(); };
+  input.onkeydown = (e) => {
+    if (e.key === "Escape" && input.value) { e.preventDefault(); input.value = pagesFilter = ""; draw(); return; }
+    if (e.key !== "Enter") return;
+    const [first] = draw();
+    if (first) { e.preventDefault(); ctx.openPage(first.id); }
+  };
+  draw();
   input.focus();
 }
