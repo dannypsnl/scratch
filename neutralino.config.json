@@ -12,6 +12,7 @@
   "nativeAllowList": [
     "app.*",
     "os.getPath",
+    "os.getEnv",
     "filesystem.*",
     "window.*",
     "debug.log",

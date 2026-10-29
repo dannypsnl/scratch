@@ -145,6 +145,12 @@ function save() {
   return queue(() => persistence.appendUpdate(bytes));
 }
 
+// local edits included; resolves once they are on disk
+export function saveNow() {
+  flush();
+  return save();
+}
+
 export const getMeta = () => meta;
 export function saveMeta(patch) {
   meta = { ...meta, ...patch };

@@ -59,7 +59,8 @@ function files() {
   return {
     async open() {
       Neutralino.init();
-      dir = (await Neutralino.os.getPath("data")) + "/scratch";
+      // SCRATCH_DATA_DIR, as for the MCP server: another notebook, for tests
+      dir = (await Neutralino.os.getEnv("SCRATCH_DATA_DIR")) || (await Neutralino.os.getPath("data")) + "/scratch";
       if (!(await exists(dir))) await Neutralino.filesystem.createDirectory(dir);
       if (!(await exists(dir + "/images"))) await Neutralino.filesystem.createDirectory(dir + "/images");
     },

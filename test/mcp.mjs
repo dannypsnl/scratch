@@ -14,6 +14,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { doc, readAll, writePage, setTitle, invalidate } from "../src/loro.js";
 import { parseOutline, serializeOutline, resolver } from "../src/outline-io.js";
 import { Transform } from "prosemirror-transform";
+import { LoroDoc } from "loro-crdt";
 import { schema } from "../src/schema.js";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -111,7 +112,8 @@ async function mcp(env) {
   const client = new Client({ name: "test", version: "1" });
   await client.connect(new StdioClientTransport({
     command: process.execPath,
-    args: [path.join(root, "mcp/server.mjs")],
+    // MCP_SERVER=dist/mcp/scratch-mcp.mjs tests the bundled one
+    args: [path.resolve(root, process.env.MCP_SERVER ?? "mcp/server.mjs")],
     env: { PATH: process.env.PATH, HOME: process.env.HOME, SCRATCH_DATA_DIR: path.join(tmp, "nodata"), ...env },
     stderr: "pipe",
   }));
@@ -261,16 +263,45 @@ check(await until(async () => strip(body(await call("read_page", { page: "Topolo
   same(appText("Old tags"), "- heff", "a tag taken off an older line stays off");
 }
 
-// ---------- without sync: read the app's local snapshot, refuse to write ----------
+// ---------- without sync: read the app's files, write to its inbox ----------
 
-const local = path.join(tmp, "local");
+const local = path.join(tmp, "local"), inbox = path.join(local, "inbox");
 fs.mkdirSync(local);
 fs.writeFileSync(path.join(local, "notebook.loro"), doc.export({ mode: "snapshot" }));
-const ro = await mcp({ SCRATCH_DATA_DIR: local });
-check(strip(body(await ro.call("read_page", { page: "Topology" }))).includes("(edited in the app)"), "no sync: reads the app's snapshot");
-const refused = await ro.call("append_blocks", { page: "today", text: "- x" });
-check(refused.error && refused.text.includes("read-only"), "no sync: writes are refused");
-await ro.client.close();
+const inboxFiles = () => (fs.existsSync(inbox) ? fs.readdirSync(inbox).sort() : []);
+const off = await mcp({ SCRATCH_DATA_DIR: local });
+check(strip(body(await off.call("read_page", { page: "Topology" }))).includes("(edited in the app)"), "no sync: reads the app's snapshot");
+const wrote = await off.call("append_blocks", { page: "today", text: "- offline one" });
+check(!wrote.error, "no sync: a write is accepted", wrote.text);
+await off.call("append_blocks", { page: "today", text: "- offline two" });
+check(inboxFiles().length === 2 && inboxFiles().every((n) => n.endsWith(".loro")), "no sync: each write is one file in the inbox", inboxFiles().join("\n"));
+await off.client.close();
+
+// what the app does with them (src/inbox.js): merge, save, remove
+const merged = new LoroDoc();
+merged.import(new Uint8Array(fs.readFileSync(path.join(local, "notebook.loro"))));
+for (const n of inboxFiles()) check(!merged.import(new Uint8Array(fs.readFileSync(path.join(inbox, n)))).pending, "no sync: an inbox file applies on the app's snapshot");
+const mergedText = JSON.stringify(merged.toJSON());
+check(mergedText.includes("offline one") && mergedText.includes("offline two"), "no sync: the inbox holds both writes");
+
+const again = await mcp({ SCRATCH_DATA_DIR: local });
+const pending = strip(body(await again.call("read_page", { page: "today" })));
+check(pending.includes("offline one") && pending.includes("offline two"), "no sync: a new server reads what still waits in the inbox", pending);
+await again.client.close();
+
+fs.writeFileSync(path.join(local, "notebook.loro"), merged.export({ mode: "snapshot" }));
+for (const n of inboxFiles()) fs.rmSync(path.join(inbox, n));
+const after = await mcp({ SCRATCH_DATA_DIR: local });
+const taken = strip(body(await after.call("read_page", { page: "today" })));
+check(taken.split("offline one").length === 2 && taken.split("offline two").length === 2, "no sync: once the app took them, each is there once", taken);
+await after.client.close();
+
+const fresh = path.join(tmp, "fresh");
+const empty = await mcp({ SCRATCH_DATA_DIR: fresh });
+check((await empty.call("read_page", { page: "today" })).error, "no sync: no notebook yet, reading is an error");
+const first = await empty.call("create_page", { title: "First", content: "- hello" });
+check(!first.error && fs.readdirSync(path.join(fresh, "inbox")).length === 1, "no sync: no notebook yet, a write starts the inbox", first.text);
+await empty.client.close();
 
 fs.writeFileSync(path.join(local, "meta.json"), JSON.stringify({ sync: { url: SYNC_URL, token: "wrong", notebook: "main" } }));
 const bad = await mcp({ SCRATCH_DATA_DIR: local });

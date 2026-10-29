@@ -6,21 +6,31 @@ It joins the sync relay (`sync/`, self-hosted or the Cloudflare Worker) as one m
 
 ## Add it to Claude Code
 
-From the repository root (Node 24 or later, after `npm install`):
+It needs Node 24 or later. The installed app carries it as one file, `scratch-mcp.mjs`: inside `scratch.app/Contents/Resources/` on macOS, and beside the binary in the Linux and Windows downloads.
+
+```bash
+claude mcp add --scope user scratch -- node /Applications/scratch.app/Contents/Resources/scratch-mcp.mjs
+```
+
+From a checkout of this repository instead (after `npm install`):
 
 ```bash
 claude mcp add --scope user scratch -- node "$PWD/mcp/server.mjs"
 ```
 
+`node scripts/bundle-mcp.mjs` builds `dist/mcp/scratch-mcp.mjs` (`npm run dist` does too).
+
+With a Node version manager such as fnm or nvm, give the full path of a `node` that stays put (fnm: `~/.local/share/fnm/aliases/default/bin/node`): the `node` on a shell's PATH can be one that goes away with that shell.
+
 With no options it uses the app's own sync settings (server, token, notebook), read from the app's data directory (`~/Library/Application Support/scratch/meta.json` on macOS). To point it elsewhere:
 
 ```bash
-claude mcp add --scope user scratch -e SCRATCH_SYNC_URL=ws://localhost:8787/sync -e SCRATCH_SYNC_TOKEN=dev-token -e SCRATCH_NOTEBOOK=main -- node "$PWD/mcp/server.mjs"
+claude mcp add --scope user scratch -e SCRATCH_SYNC_URL=ws://localhost:8787/sync -e SCRATCH_SYNC_TOKEN=dev-token -e SCRATCH_NOTEBOOK=main -- node /Applications/scratch.app/Contents/Resources/scratch-mcp.mjs
 ```
 
 Use `node` directly, not `npm run mcp`: npm prints a banner on stdout, which is the MCP channel.
 
-When sync is not set up, the server reads the app's local snapshot (`notebook.loro`, with the updates saved since in `notebook.log`) and refuses to write: the running app never reads that file back, and would overwrite it.
+When sync is not set up, the server works on the app's own files: it reads the snapshot (`notebook.loro`, with the updates saved since in `notebook.log`), and writes each change as a Loro update file in `inbox/`. The app merges the inbox and empties it, at once while it is running (it watches the directory) or the next time it starts; until then the server reads the inbox too, so its own writes show. `SCRATCH_DATA_DIR` points both the server and the app at another data directory.
 
 ## Tools
 
@@ -40,7 +50,7 @@ Text is the app's outline form (`src/outline-io.js`): `- ` per block, two spaces
 
 ## Test
 
-`node test/mcp.mjs` (part of `npm test`) starts `sync/server.mjs` (run `npm install` in `sync/` once), drives every tool through an MCP client, and checks each edit in a second Loro document read with the app's own `src/loro.js`, including an edit the app makes offline at the same time.
+`node test/mcp.mjs` (part of `npm test`) starts `sync/server.mjs` (run `npm install` in `sync/` once), drives every tool through an MCP client, and checks each edit in a second Loro document read with the app's own `src/loro.js`, including an edit the app makes offline at the same time; then the inbox without sync. `MCP_SERVER=dist/mcp/scratch-mcp.mjs node test/mcp.mjs` runs it against the bundled file.
 
 ## Not done yet
 

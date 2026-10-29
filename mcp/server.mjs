@@ -8,9 +8,10 @@
 //   the app's own sync settings, in <data dir>/scratch/meta.json
 //     (SCRATCH_DATA_DIR overrides the directory)
 // With no sync configured it reads <data dir>/scratch/notebook.loro, the
-// app's local snapshot, and notebook.log, the updates saved since it
-// (src/updatelog.js), and refuses to write: the running app would never
-// see the change and would overwrite it.
+// app's local snapshot, notebook.log, the updates saved since it
+// (src/updatelog.js), and inbox/, and writes each change as a file in
+// inbox/, which the app merges and removes (src/inbox.js): at once when it
+// is running, or the next time it starts.
 //
 //   npm run mcp
 import fs from "node:fs";
@@ -50,20 +51,40 @@ function syncConfig() {
 const cfg = syncConfig();
 const sync = cfg && syncClient(doc, { ...cfg, log });
 const snapshot = path.join(dataDir(), "notebook.loro");
+const inbox = path.join(dataDir(), "inbox");
 if (sync) log(`scratch mcp: syncing notebook "${cfg.notebook}" with ${cfg.url}`);
-else log(`scratch mcp: no sync configured, reading ${snapshot} (read-only)`);
+else log(`scratch mcp: no sync configured, reading and writing the app's files in ${dataDir()}`);
+
+// what the app has saved, and what is waiting in the inbox for it (a file
+// can go between listing and reading it: the app took it, and it is in the
+// snapshot or the log read next time)
+function readLocal() {
+  const read = (f) => { try { return fs.readFileSync(f); } catch { return null; } };
+  const snap = read(snapshot);
+  if (snap) doc.import(new Uint8Array(snap));
+  const updates = read(path.join(dataDir(), "notebook.log"));
+  if (updates) for (const u of readLog(updates)) { try { doc.import(u); } catch {} }
+  const names = fs.existsSync(inbox) ? fs.readdirSync(inbox).filter((n) => n.endsWith(".loro")).sort() : [];
+  for (const n of names) { const u = read(path.join(inbox, n)); if (u) try { doc.import(new Uint8Array(u)); } catch {} }
+  invalidate();
+  return !!snap || !!updates || names.length > 0;
+}
+
+// written whole under another name first, so the app never reads half of one
+function toInbox(update) {
+  fs.mkdirSync(inbox, { recursive: true });
+  const name = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.loro`;
+  fs.writeFileSync(path.join(inbox, name + ".tmp"), update);
+  fs.renameSync(path.join(inbox, name + ".tmp"), path.join(inbox, name));
+}
 
 async function before(write) {
   if (sync) {
     if (await sync.ready()) return;
     throw new Error(sync.state === "unauthorized" ? "the sync server rejected the token" : `cannot reach the sync server (${cfg.url})`);
   }
-  if (write) throw new Error("read-only: the notebook is not synced. Set up sync in the app (or SCRATCH_SYNC_URL) so edits reach it");
-  if (!fs.existsSync(snapshot)) throw new Error(`no notebook at ${snapshot}`);
-  doc.import(new Uint8Array(fs.readFileSync(snapshot)));
-  const updates = path.join(dataDir(), "notebook.log");
-  if (fs.existsSync(updates)) for (const u of readLog(fs.readFileSync(updates))) { try { doc.import(u); } catch {} }
-  invalidate();
+  // a new notebook can start from an empty one; reading one needs it there
+  if (!readLocal() && !write) throw new Error(`no notebook at ${snapshot}`);
 }
 
 const text = (s) => ({ content: [{ type: "text", text: s }] });
@@ -73,8 +94,13 @@ function tool(name, description, inputSchema, run, { write = false } = {}) {
   server.registerTool(name, { description, inputSchema, annotations: { readOnlyHint: !write } }, async (args) => {
     try {
       await before(write);
+      const from = doc.oplogVersion();
       const out = run(args);
       if (!write) return text(out);
+      if (!sync) {
+        if (doc.oplogVersion().compare(from) !== 0) toInbox(doc.export({ mode: "update", from }));
+        return text(JSON.stringify(out));
+      }
       const sent = await sync.flushed();
       return text(JSON.stringify(out) + (sent ? "" : "\n(not yet acknowledged by the sync server; it is sent when the connection is back, if this server keeps running)"));
     } catch (e) {

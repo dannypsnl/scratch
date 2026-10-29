@@ -44,9 +44,9 @@ jobs:
             ditto -c -k --keepParent "dist/mac_$arch/scratch.app" "out/scratch-mac_$arch.zip"
           done
           for arch in x64 arm64 armhf; do
-            tar -czf "out/scratch-linux_$arch.tar.gz" -C dist/scratch "scratch-linux_$arch"
+            tar -czf "out/scratch-linux_$arch.tar.gz" -C dist/scratch "scratch-linux_$arch" -C ../mcp scratch-mcp.mjs
           done
-          (cd dist/scratch && zip -q ../../out/scratch-win_x64.zip scratch-win_x64.exe)
+          (cd dist/scratch && zip -q -j ../../out/scratch-win_x64.zip scratch-win_x64.exe ../mcp/scratch-mcp.mjs)
           ls -l out
 
       - name: Publish

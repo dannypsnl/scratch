@@ -22,6 +22,8 @@ The latest commit on `main` is built and published on the [releases page](https:
 | `scratch-linux_x64.tar.gz`, `_arm64`, `_armhf` | a single binary |
 | `scratch-win_x64.zip` | a single `.exe` |
 
+Each comes with the MCP server, `scratch-mcp.mjs` (in `scratch.app/Contents/Resources/` on macOS), see [`mcp/`](mcp/README.md).
+
 The mac app is signed ad hoc, not notarized: the first time, right-click it and choose Open, or run `xattr -dr com.apple.quarantine scratch.app`.
 
 ## Develop

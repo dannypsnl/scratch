@@ -17,6 +17,7 @@ import { renderSidebar } from "./sidebar.js";
 import { openSearch } from "./searchbox.js";
 import * as Neutralino from "@neutralinojs/lib";
 import { inNeutralino } from "./persist.js";
+import { watchInbox } from "./inbox.js";
 import { t } from "./i18n.js";
 
 const app = document.querySelector("#app");
@@ -257,4 +258,5 @@ applySettings(() => {
 render();
 nativeMenu();
 connect();
+watchInbox();
 window.getPage = getPage;
