@@ -17,7 +17,8 @@ import { addImage, imageURL, isImageFile } from "./images.js";
 import { newId } from "./outline-io.js";
 import * as Neutralino from "@neutralinojs/lib";
 import { inNeutralino } from "./persist.js";
-import { findPage, createPage, namedPages, pageDates, titleOf, isDate } from "./store.js";
+import { findPage, createPage, namedPages, pageDates, titleOf } from "./store.js";
+import { parseDates, weekday } from "./dates.js";
 import { openDeadlinePicker } from "./deadline.js";
 import { mathDecorations } from "./decorations.js";
 import { notationHint } from "./notation.js";
@@ -152,10 +153,15 @@ function startLink(view, tag, initial = "") {
         .sort((a, b) => a.r - b.r || a.p.label.localeCompare(b.p.label))
         .slice(0, 8)
         .map((x) => x.p);
+      // a date, however written, is a journal day whether or not it has
+      // notes yet: every reading of it comes first (10/11 is Oct 11 and
+      // Nov 10), and a date is never a page to create
       const title = q.trim();
-      if (title && !findPage(title)) hits.push({ value: null, label: t("picker.create", title), sub: t("picker.newPage") });
-      if (title && isDate(title) && !hits.some((h) => h.value === title)) hits.unshift({ value: title, label: titleOf(title), sub: t("picker.kindJournal") });
-      return hits;
+      const dates = parseDates(title);
+      const rest = hits.filter((h) => !dates.includes(h.value));
+      const days = dates.map((d) => ({ value: d, label: titleOf(d), sub: `${t("picker.kindJournal")} · ${weekday(d)}` }));
+      if (title && !dates.length && !findPage(title)) rest.push({ value: null, label: t("picker.create", title), sub: t("picker.newPage") });
+      return [...days, ...rest];
     },
     onPick(item, q) {
       const page = item.value ?? createPage(q);
