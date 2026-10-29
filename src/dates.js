@@ -36,9 +36,10 @@ export function md(date) {
 // letters (oct, sept); a missing year is this year. Two numbers or three
 // without a 4-digit year are read both month-first and day-first (10/11 is
 // Oct 11 and Nov 10), so whichever habit wrote it, the day meant is there.
-//   2026-10-29  2026/10/29  2026.10.29  20261029  2026年10月29日  115/10/29
+//   2026-10-29  2026/10/29  2026.10.29  2026年10月29日  115/10/29
 //   10/29/2026  29/10/2026  10-29-26  29.10.26  10/29  29/10  10月29日
-//   oct 29  oct 29, 2026  october 29th 2026  29 oct  29 october 2026
+//   20261029  10292026  261029  1029  129  (digits alone, cut every way)
+//   oct 29  oct29  oct 29, 2026  october 29th 2026  29 oct  29oct  29 october 2026
 //   today  tomorrow  yesterday  今天  明天  昨天  後天  前天
 const RELATIVE = { today: 0, tomorrow: 1, yesterday: -1, 今天: 0, 今日: 0, 明天: 1, 明日: 1, 昨天: -1, 昨日: -1, 後天: 2, 前天: -2 };
 const MONTH_NAMES = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
@@ -49,8 +50,8 @@ const NUM3 = new RegExp(`^(\\d{1,4})${SEP}(\\d{1,2})${SEP}(\\d{1,4})$`);
 const NUM2 = new RegExp(`^(\\d{1,2})(?:${SEP}|月\\s*)(\\d{1,2})\\s*[日號]?$`);
 const YMD_CJK = /^(\d{2,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日號]?$/;
 const ORD = "(?:st|nd|rd|th)?";
-const MDY_EN = new RegExp(`^([a-z]{3,9}\\.?)\\s+(\\d{1,2})${ORD}(?:,?\\s+(\\d{2}|\\d{4}))?$`);
-const DMY_EN = new RegExp(`^(\\d{1,2})${ORD}\\s+(?:of\\s+)?([a-z]{3,9}\\.?)(?:,?\\s+(\\d{2}|\\d{4}))?$`);
+const MDY_EN = new RegExp(`^([a-z]{3,9}\\.?)\\s*(\\d{1,2})${ORD}(?:,?\\s+(\\d{2}|\\d{4}))?$`);
+const DMY_EN = new RegExp(`^(\\d{1,2})${ORD}\\s*(?:of\\s+)?([a-z]{3,9}\\.?)(?:,?\\s+(\\d{2}|\\d{4}))?$`);
 
 export function parseDates(text, base = today()) {
   const s = text.trim().toLowerCase().replace(/\s+/g, " ");
@@ -66,7 +67,17 @@ export function parseDates(text, base = today()) {
     out.push(iso);
   };
   let m;
-  if ((m = /^(\d{4})(\d\d)(\d\d)$/.exec(s)) || (m = YMD_CJK.exec(s))) add(fullYear(m[1]), m[2], m[3]);
+  if (/^\d+$/.test(s)) {
+    // digits alone, cut every way that makes a date: 1204 is Dec 4 (and
+    // Apr 12), 124 is Jan 24, Dec 4 and Apr 12; 261204 and 20261204 too
+    const cut = (...widths) => { const parts = []; let k = 0; for (const w of widths) { parts.push(s.slice(k, k + w)); k += w; } return parts; };
+    const n = s.length;
+    if (n === 8) { const [y, mo, d] = cut(4, 2, 2); add(y, mo, d); const [a, b, yy] = cut(2, 2, 4); add(yy, a, b); add(yy, b, a); }
+    else if (n === 6) { const [a, b, c] = cut(2, 2, 2); add(fullYear(a), b, c); add(fullYear(c), a, b); add(fullYear(c), b, a); } // yymmdd first, then mmddyy, ddmmyy
+    else if (n === 4) { const [a, b] = cut(2, 2); add(thisYear, a, b); add(thisYear, b, a); }
+    else if (n === 3) { const cuts = [cut(1, 2), cut(2, 1)]; for (const [a, b] of cuts) add(thisYear, a, b); for (const [a, b] of cuts) add(thisYear, b, a); }
+  }
+  else if ((m = YMD_CJK.exec(s))) add(fullYear(m[1]), m[2], m[3]);
   else if ((m = NUM3.exec(s))) {
     const [, a, b, c] = m;
     if (a.length >= 3) add(fullYear(a), b, c); // year first: 2026-10-29, 115/10/29
