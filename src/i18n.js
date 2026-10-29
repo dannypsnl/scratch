@@ -54,6 +54,8 @@ const zh = {
   "picker.create": (t) => `建立「${t}」`,
   "picker.newPage": "新頁面",
   "picker.emptyBlock": "（空白）",
+  "picker.partialYear": (y) => `${y} 年：接著輸入月和日`,
+  "picker.partialMonth": (y, m) => `${y} 年 ${m} 月：接著輸入日`,
 
   "notation.slash": "a/b",
   "notation.frac": "分數",
@@ -253,6 +255,8 @@ const en = {
   "picker.create": (t) => `Create "${t}"`,
   "picker.newPage": "new page",
   "picker.emptyBlock": "(empty)",
+  "picker.partialYear": (y) => `${y}: type the month and day`,
+  "picker.partialMonth": (y, m) => `${y}-${String(m).padStart(2, "0")}: type the day`,
 
   "notation.slash": "a/b",
   "notation.frac": "fraction",

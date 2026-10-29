@@ -18,7 +18,7 @@ import { newId } from "./outline-io.js";
 import * as Neutralino from "@neutralinojs/lib";
 import { inNeutralino } from "./persist.js";
 import { findPage, createPage, namedPages, pageDates, titleOf } from "./store.js";
-import { parseDates, weekday } from "./dates.js";
+import { parseDates, partialDate, weekday } from "./dates.js";
 import { openDeadlinePicker } from "./deadline.js";
 import { mathDecorations } from "./decorations.js";
 import { notationHint } from "./notation.js";
@@ -160,8 +160,13 @@ function startLink(view, tag, initial = "") {
       const dates = parseDates(title);
       const rest = hits.filter((h) => !dates.includes(h.value));
       const days = dates.map((d) => ({ value: d, label: titleOf(d), sub: `${t("picker.kindJournal")} · ${weekday(d)}` }));
-      if (title && !dates.length && !findPage(title)) rest.push({ value: null, label: t("picker.create", title), sub: t("picker.newPage") });
+      // (a year, or a year and month, is a date still being typed: no page either)
+      if (title && !dates.length && !partialDate(title) && !findPage(title)) rest.push({ value: null, label: t("picker.create", title), sub: t("picker.newPage") });
       return [...days, ...rest];
+    },
+    hint(q) {
+      const part = partialDate(q);
+      return part ? (part.month ? t("picker.partialMonth", part.year, part.month) : t("picker.partialYear", part.year)) : null;
     },
     onPick(item, q) {
       const page = item.value ?? createPage(q);

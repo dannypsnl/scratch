@@ -653,6 +653,7 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 .palette .note { color: var(--muted); text-align: right; font-size: 11px; }
 .palette li.active { background: var(--slot); }
 .palette .ask { padding: 8px; }
+.palette .hint { padding: 4px 8px 6px; color: var(--muted); font-size: 12px; }
 
 /* what the selection in a formula can be rewritten as (notation.js) */
 .notation-hint {

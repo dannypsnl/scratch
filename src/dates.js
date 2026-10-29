@@ -87,3 +87,16 @@ export function parseDates(text, base = today()) {
   else if ((m = DMY_EN.exec(s)) && monthNamed(m[2])) add(m[3] ? fullYear(m[3]) : thisYear, monthNamed(m[2]), m[1]);
   return out;
 }
+
+// A date typed only so far: a year (2027, 2027-, 2027年), or a year and
+// month (2027-01, 2027/1/, 2027年1月). { year, month? } for the picker to
+// say what is still to come; null for anything else.
+export function partialDate(text) {
+  const s = text.trim();
+  let m;
+  if ((m = /^(\d{4})(?:\s*[-/.年]\s*(?:(\d{1,2})\s*[-/.月]?\s*)?)?$/.exec(s)) && m[1] >= 1900 && m[1] <= 2200) {
+    if (m[2] === undefined) return { year: Number(m[1]) };
+    if (m[2] >= 1 && m[2] <= 12) return { year: Number(m[1]), month: Number(m[2]) };
+  }
+  return null;
+}

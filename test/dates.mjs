@@ -1,7 +1,7 @@
 // A typed date in any habit (dates.js parseDates): year first, month
 // first, day first, Chinese, English month names, relative words; every
 // real reading of an ambiguous one, none twice, and nothing for a non-date.
-import { parseDates } from "../src/dates.js";
+import { parseDates, partialDate } from "../src/dates.js";
 
 const BASE = "2026-10-29";
 const fails = [];
@@ -59,6 +59,22 @@ check("Health", []);
 check("ma 5", []); // too short to name a month
 check("1.5", ["2026-01-05", "2026-05-01"]);
 check("", []);
+
+// a date typed only so far
+const part = (text, want) => {
+  const got = JSON.stringify(partialDate(text));
+  if (got !== JSON.stringify(want)) fails.push(`partial ${JSON.stringify(text)} → ${got}, wanted ${JSON.stringify(want)}`);
+};
+part("2027", { year: 2027 });
+part("2027-", { year: 2027 });
+part("2027年", { year: 2027 });
+part("2027-01", { year: 2027, month: 1 });
+part("2027/1/", { year: 2027, month: 1 });
+part("2027年1月", { year: 2027, month: 1 });
+part("2027-13", null);
+part("1204", null); // a day, not a year
+part("202", null);
+part("Health", null);
 
 console.log(`dates: ${fails.length} problems`);
 for (const f of fails) console.log("  " + f);
