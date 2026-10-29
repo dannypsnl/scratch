@@ -13,7 +13,6 @@ import { renderTasks } from "./views.js";
 import { today } from "./dates.js";
 import { place } from "./popover.js";
 import { applySettings, toggleSettings } from "./settings.js";
-import { renderSidebar } from "./sidebar.js";
 import { openSearch } from "./searchbox.js";
 import * as Neutralino from "@neutralinojs/lib";
 import { inNeutralino } from "./persist.js";
@@ -61,7 +60,6 @@ function render() {
   const tab = state.tab === "page" ? "pages" : state.tab;
   document.querySelectorAll(".tabs [data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   RENDER[state.tab](app, ctx);
-  renderSidebar(ctx);
   shownList = ["agenda", "tasks", "pages"].includes(state.tab) ? listed() : null;
 }
 

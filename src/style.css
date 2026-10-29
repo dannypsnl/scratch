@@ -119,11 +119,6 @@ body {
 }
 .tabs button:hover { background: var(--slot); color: var(--fg); }
 .tabs button.active { background: var(--slot); color: var(--fg); font-weight: 600; }
-.side-pages { display: flex; flex-direction: column; gap: 1px; min-height: 0; }
-.side-pages h3 { font: 600 11px system-ui, sans-serif; letter-spacing: .04em; color: var(--muted); margin: 0 10px 4px; }
-.side-pages a { color: var(--fg); text-decoration: none; padding: 4px 10px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.side-pages a:hover { background: var(--slot); }
-.side-pages a.active { background: var(--slot); font-weight: 600; }
 .side-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; }
 .side-foot button { background: none; border: 0; cursor: pointer; color: var(--muted); font: 12px system-ui, sans-serif; padding: 4px 8px; border-radius: 6px; }
 .side-foot button:hover { background: var(--slot); }
