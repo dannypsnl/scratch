@@ -89,6 +89,9 @@ const tagged = [
   ["- #t b DEADLINE: <2026-10-30>", "- b #t DEADLINE: <2026-10-30>"],
   ["- #a #[[b c]]", "- #a #[[b c]]"],
   ["- ```js #t\n  x\n  ```", "- ```js #t\n  x\n  ```"],
+  // a # inside a web address is part of it
+  ["- see https://example.com/a#part #t", "- see https://example.com/a#part #t"],
+  ["- https://example.com/#/x*y*", "- https://example.com/#/x*y*"],
 ];
 for (const [src, want] of tagged) {
   const got = serializeOutline(parseOutline(src));

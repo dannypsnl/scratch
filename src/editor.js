@@ -6,7 +6,7 @@ import { baseKeymap, toggleMark } from "prosemirror-commands";
 import { history, undo, redo } from "prosemirror-history";
 import { schema } from "./schema.js";
 import { parseMath, serializeMath } from "./latex.js";
-import { parseInline, parseOutline, serializeInline, serializeOutline } from "./outline-io.js";
+import { parseInline, parseOutline, serializeInline, serializeOutline, endsInURL } from "./outline-io.js";
 import { horizontal, vertical, term, selectTerm, selectStep, selectEdge, formula, selectionShape, xArrowsToOverset, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
 import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, newTopBlock, blockIds, outlineDecorations, addTags } from "./outline.js";
 import { blockDrag } from "./drag.js";
@@ -193,7 +193,8 @@ function typed(view, ch, rest = "") {
       startLink(view, false, rest);
       return true;
     }
-    if (ch === "#") { startLink(view, true, rest); return true; }
+    // (right after a web address, # is part of it)
+    if (ch === "#" && !endsInURL($head.parent.textBetween(0, $head.parentOffset, null, "\ufffc"))) { startLink(view, true, rest); return true; }
     // right beside a formula or an atom (tag, link, image) the DOM caret may
     // sit inside it (see navGuard), so the browser must not do the inserting
     if (besideSpecial($head)) {

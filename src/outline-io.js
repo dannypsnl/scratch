@@ -34,6 +34,12 @@ export const resolver = {
 const TAG_STOP = "\\s#[\\]$*(),.;:!?，。、；：！？「」（）";
 const TAG_RE = new RegExp(`^[^${TAG_STOP}]+$`);
 
+// a web address is plain text: a # in it (https://…/page#part) is no tag
+const URL_SRC = String.raw`https?:\/\/[^\s<>"'）」，。]+`;
+const URL_TAIL = new RegExp(`${URL_SRC}$`);
+// text ending in a web address: a # typed now continues it
+export const endsInURL = (text) => URL_TAIL.test(text);
+
 export const tagText = (page) => {
   const title = resolver.title(page);
   return TAG_RE.test(title) ? `#${title}` : `#[[${title}]]`;
@@ -113,9 +119,11 @@ export function serializeOutline(doc) {
 // spaces around them closing up; without `tags` they stay text.
 export function parseInline(text, tags = null) {
   const out = [];
-  const re = new RegExp(String.raw`\x60([^\x60]+)\x60|!\[([^\]]*)\]\(images\/([^)\s]+)\)|\$([^$]*)\$|\*\*([^*]+)\*\*|\*([^*]+)\*|<u>(.+?)<\/u>|~~([^~]+)~~|==([^=]+)==|(#)?\[\[([^\]]+)\]\]|#([^${TAG_STOP}]+)|\(\(([a-z0-9]+)\)\)`, "g");
+  const re = new RegExp(String.raw`\x60([^\x60]+)\x60|!\[([^\]]*)\]\(images\/([^)\s]+)\)|\$([^$]*)\$|\*\*([^*]+)\*\*|\*([^*]+)\*|<u>(.+?)<\/u>|~~([^~]+)~~|==([^=]+)==|(#)?\[\[([^\]]+)\]\]|#([^${TAG_STOP}]+)|\(\(([a-z0-9]+)\)\)|${URL_SRC}`, "g");
   let last = 0, m;
   while ((m = re.exec(text))) {
+    // a web address stays in the text around it, unread
+    if (/^https?:/.test(m[0])) continue;
     const tag = m[10] ? m[11] : m[12];
     if (tag !== undefined && !tags) continue;
     let before = text.slice(last, m.index);
