@@ -204,6 +204,39 @@ function slotStart(struct, structPos, idx) {
   return pos + 1;
 }
 
+// The start of a line in a code block, measured from the text itself. The
+// character after it, when it has a box with a width (WKWebView also gives
+// it an empty one at the end of the line above); on an empty line, one line
+// below the \n before it, at the block's left edge.
+export function codeLineStart(view, pos) {
+  const { node, offset } = view.domAtPos(pos);
+  if (node.nodeType !== 3) return null;
+  const rects = (from, to) => {
+    const range = document.createRange();
+    range.setStart(node, from);
+    range.setEnd(node, to);
+    return [...range.getClientRects()];
+  };
+  if (offset < node.length && node.data[offset] !== "\n") {
+    const r = rects(offset, offset + 1).find((r) => r.width > 0);
+    if (r) return { left: r.left, top: r.top, bottom: r.bottom };
+  }
+  const nl = offset > 0 && rects(offset - 1, offset).pop();
+  const pre = node.parentElement.closest("pre");
+  if (!nl || !pre) return null;
+  const st = getComputedStyle(pre), box = pre.getBoundingClientRect();
+  const lh = parseFloat(st.lineHeight) || nl.bottom - nl.top;
+  return { left: box.left + parseFloat(st.borderLeftWidth) + parseFloat(st.paddingLeft), top: nl.top + lh, bottom: nl.bottom + lh };
+}
+
+// Where the caret at pos is, as Up / Down see it: at a line's start in a
+// code block, on that line (coordsAtPos gives the end of the line above)
+function caretAt(view, pos) {
+  const before = view.state.doc.resolve(pos).nodeBefore;
+  const c = view.coordsAtPos(pos);
+  return before?.isText && before.text.endsWith("\n") ? codeLineStart(view, pos) ?? c : c;
+}
+
 // Up / Down from plain text. WebKit counts \overset's label as a line of its
 // own, so on a line holding one it moves the caret into the label instead of
 // to the next line. Here the next line is found by probing further and further
@@ -214,7 +247,7 @@ let goal = null;
 function intoLine(view, dir, scrolled = false) {
   const { state } = view;
   const head = state.selection.head;
-  const c = view.coordsAtPos(head);
+  const c = caretAt(view, head);
   const x = goal?.pos === head ? goal.x : c.left;
   const h = c.bottom - c.top;
   for (let k = 1; k <= 6; k++) {
@@ -235,7 +268,7 @@ function intoLine(view, dir, scrolled = false) {
     }
     const d = mathDepth($hit);
     const pos = d > 0 ? nearestX(view, $hit.node(d), $hit.start(d), x) : $hit.pos;
-    if (Math.abs(view.coordsAtPos(pos).bottom - c.bottom) < h / 2) continue; // still this line
+    if (Math.abs(caretAt(view, pos).bottom - c.bottom) < h / 2) continue; // still this line
     caret(state, view.dispatch, pos);
     goal = { pos: view.state.selection.head, x };
     return true;

@@ -13,7 +13,8 @@ import WebKit
 let url = URL(string: CommandLine.arguments[1])!
 // keys: arrow names, "click" (the mouse at the right of the line, past its
 // end), "type:<text>" (each character a key event), or "wait:<ms>"
-// at: "start" or "end" of the line, or inside its first formula, "math-start" or "math-end"
+// at: "start" or "end" of the line, inside its first formula, "math-start" or
+// "math-end", or "code-last" (the start of its code block's last line)
 // source: an input source for the page's text input (as "com.apple.inputmethod.TCIM.Zhuyin"),
 // for this window alone
 struct Case: Decodable { let text: String; let line: Int; let at: String?; let source: String?; let keys: [String] }
@@ -72,6 +73,13 @@ let KEYS: [String: (UInt16, String)] = [
 let WHERE = """
   const s = window.view.state.selection, b = s.$from.nodeBefore, a = s.$from.nodeAfter;
   const name = (n) => !n ? "" : n.isText ? n.text : n.type.name;
+  // in a code block: the caret's offset in it, and the line it is drawn on
+  const pre = document.querySelector(".ProseMirror pre");
+  if (pre && s.$from.parent.type.spec.code) {
+    const c = document.querySelector(".pm-caret").getBoundingClientRect(), p = pre.getBoundingClientRect(), st = getComputedStyle(pre);
+    const row = Math.round((c.top - p.top - parseFloat(st.paddingTop)) / parseFloat(st.lineHeight));
+    return `${s.$from.parent.type.name} ${s.$from.parentOffset} @row${row}`;
+  }
   // and the caret as drawn: left of it, the formula's left edge, or its right edge
   const c = document.querySelector(".pm-caret"), m = document.querySelector(".ProseMirror .pm-math");
   const x = c ? c.getBoundingClientRect().left : null, ml = m.getBoundingClientRect().left, mr = m.getBoundingClientRect().right;
@@ -94,11 +102,12 @@ Task { @MainActor in
     _ = await js("""
       const v = window.view, IO = await import("/src/outline-io.js");
       const tr = v.state.tr.replaceWith(0, v.state.doc.content.size, IO.parseOutline(text).content);
-      const ends = [], starts = [], mathEnds = [], mathStarts = [];
+      const ends = [], starts = [], mathEnds = [], mathStarts = []; let codeLast = null;
       tr.doc.descendants((n, p) => {
+        if (n.type.spec.code) codeLast = p + 1 + n.textContent.lastIndexOf("\\n") + 1;
         if (n.type.name === "line") { ends.push(p + n.nodeSize - 1); starts.push(p + 1); const m = n.firstChild; mathEnds.push(m?.type.name === "math" ? p + 1 + m.nodeSize - 1 : null); mathStarts.push(m?.type.name === "math" ? p + 2 : null); }
       });
-      v.focus(); v.dispatch(tr.setSelection(v.state.selection.constructor.create(tr.doc, at === "math-end" ? mathEnds[line] : at === "math-start" ? mathStarts[line] : at === "start" ? starts[line] : ends[line])));
+      v.focus(); v.dispatch(tr.setSelection(v.state.selection.constructor.create(tr.doc, at === "code-last" ? codeLast : at === "math-end" ? mathEnds[line] : at === "math-start" ? mathStarts[line] : at === "start" ? starts[line] : ends[line])));
       """, ["text": c.text, "line": c.line, "at": c.at ?? "end"])
     await sleep(300)
     if let source = c.source {

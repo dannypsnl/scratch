@@ -21,6 +21,8 @@ const CASES = [
     ["math |struct @math-left", "slot |b @-85"]],
   ["→ from the formula's start goes into the fraction", `- ${W}`, 0, "math-start", ["right", "right"],
     ["slot |b @-85", "slot b|sup @-77"]],
+  ["↑ ↓ through an empty line of a code block, from a line's start", "- ```\n  {\n  \n  }\n  ```", 0, "code-last", ["up", "up", "down", "down"],
+    ["codeblock 2 @row1", "codeblock 0 @row0", "codeblock 2 @row1", "codeblock 3 @row2"]],
 ];
 
 if (process.platform !== "darwin") {

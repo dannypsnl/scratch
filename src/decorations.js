@@ -1,7 +1,7 @@
 import { Plugin } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import { isMathContainer } from "./schema.js";
-import { inMath, mathDepth } from "./nav.js";
+import { inMath, mathDepth, codeLineStart } from "./nav.js";
 import { X_ARROWS, ARROW_X, SYMBOLS, STRUCTS } from "./specs.js";
 import { MATH_ITALIC } from "./katex-symbols.js";
 import { inCode } from "./code.js";
@@ -230,31 +230,6 @@ function fontSizeAt(view, pos) {
 // sits on the line it is in, not raised or lowered like scripts and fractions
 // (a large operator is drawn larger and lower: not on the caret's level)
 const onLevel = (n) => n && !["math", "struct", "sup", "sub"].includes(n.type.name) && !(n.type.name === "sym" && SYMBOLS[n.attrs.name]?.cls === "op");
-
-// The start of a line in a code block, measured from the text itself. The
-// character after it, when it has a box with a width (WKWebView also gives
-// it an empty one at the end of the line above); on an empty line, one line
-// below the \n before it, at the block's left edge.
-function codeLineStart(view, pos) {
-  const { node, offset } = view.domAtPos(pos);
-  if (node.nodeType !== 3) return null;
-  const rects = (from, to) => {
-    const range = document.createRange();
-    range.setStart(node, from);
-    range.setEnd(node, to);
-    return [...range.getClientRects()];
-  };
-  if (offset < node.length && node.data[offset] !== "\n") {
-    const r = rects(offset, offset + 1).find((r) => r.width > 0);
-    if (r) return { left: r.left, top: r.top, bottom: r.bottom };
-  }
-  const nl = offset > 0 && rects(offset - 1, offset).pop();
-  const pre = node.parentElement.closest("pre");
-  if (!nl || !pre) return null;
-  const st = getComputedStyle(pre), box = pre.getBoundingClientRect();
-  const lh = parseFloat(st.lineHeight) || nl.bottom - nl.top;
-  return { left: box.left + parseFloat(st.borderLeftWidth) + parseFloat(st.paddingLeft), top: nl.top + lh, bottom: nl.bottom + lh };
-}
 
 // One caret for the whole app, drawn by the editor that wants it (the
 // focused one); an editor that does not want it hides it only if it was its.
