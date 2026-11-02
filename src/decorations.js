@@ -231,6 +231,31 @@ function fontSizeAt(view, pos) {
 // (a large operator is drawn larger and lower: not on the caret's level)
 const onLevel = (n) => n && !["math", "struct", "sup", "sub"].includes(n.type.name) && !(n.type.name === "sym" && SYMBOLS[n.attrs.name]?.cls === "op");
 
+// The start of a line in a code block, measured from the text itself. The
+// character after it, when it has a box with a width (WKWebView also gives
+// it an empty one at the end of the line above); on an empty line, one line
+// below the \n before it, at the block's left edge.
+function codeLineStart(view, pos) {
+  const { node, offset } = view.domAtPos(pos);
+  if (node.nodeType !== 3) return null;
+  const rects = (from, to) => {
+    const range = document.createRange();
+    range.setStart(node, from);
+    range.setEnd(node, to);
+    return [...range.getClientRects()];
+  };
+  if (offset < node.length && node.data[offset] !== "\n") {
+    const r = rects(offset, offset + 1).find((r) => r.width > 0);
+    if (r) return { left: r.left, top: r.top, bottom: r.bottom };
+  }
+  const nl = offset > 0 && rects(offset - 1, offset).pop();
+  const pre = node.parentElement.closest("pre");
+  if (!nl || !pre) return null;
+  const st = getComputedStyle(pre), box = pre.getBoundingClientRect();
+  const lh = parseFloat(st.lineHeight) || nl.bottom - nl.top;
+  return { left: box.left + parseFloat(st.borderLeftWidth) + parseFloat(st.paddingLeft), top: nl.top + lh, bottom: nl.bottom + lh };
+}
+
 // One caret for the whole app, drawn by the editor that wants it (the
 // focused one); an editor that does not want it hides it only if it was its.
 let caretEl = null, caretOwner = null, last = "";
@@ -250,7 +275,11 @@ function caretOverlay(view) {
     const $h = view.state.selection.$head;
     // (at a line's start in a code block, the \n before it is on the line above)
     const before = $h.nodeBefore;
-    let c = view.coordsAtPos($h.pos, before && !(before.isText && before.text.endsWith("\n")) ? -1 : 1);
+    const atLineStart = before?.isText && before.text.endsWith("\n");
+    let c = view.coordsAtPos($h.pos, before && !atLineStart ? -1 : 1);
+    // (and WKWebView measures that \n even asked for the side after it: the
+    // caret drawn past the end of the line above)
+    if (atLineStart) c = codeLineStart(view, $h.pos) ?? c;
     // beside a script, fraction or formula its box sits higher or lower than
     // the caret's own line: x from beside it, height from something on the
     // caret's level (the neighbour on the other side, else any in the container)
