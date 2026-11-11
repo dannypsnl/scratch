@@ -1,7 +1,9 @@
-// Image sizes in WebKit: a selected image shows a handle at its lower right;
-// dragged, it sets the width the image is drawn at (kept in the outline text
-// as ![alt|width](…), and read back from it), within the column; a double
-// click on it goes back to the image's own size. Starts its own Vite server.
+// Image sizes in WebKit: a hovered or selected image shows a handle on each
+// side; dragged, it sets the width the image is drawn at, its shape kept
+// (the width kept in the outline text as ![alt|width](…), and read back from
+// it), within the column; a double click on it goes back to the image's own
+// size. A selected image, or a selection of text over one, is not tinted by
+// the browser. Starts its own Vite server.
 //
 //   npm run test:ui
 import { createServer } from "vite";
@@ -36,11 +38,18 @@ await load(`- before\n- ![a cat](images/${name})\n- after`);
 await pg.waitForFunction(() => document.querySelector(".pm-image img")?.complete && document.querySelector(".pm-image img").naturalWidth > 0);
 let img = await box(".pm-image img");
 check(Math.round(img.w) === 600, `an image is drawn at its own size (${img?.w})`);
-check(!(await box(".pm-image-handle")), "no handle while it is not selected");
+check(!(await box(".pm-image-handle")), "no handle while it is neither hovered nor selected");
+await pg.mouse.move(img.x + img.w / 2, img.y + img.h / 2);
+check(!!(await box(".pm-image-handle.left")) && !!(await box(".pm-image-handle.right")), "hovered, it shows a handle on each side");
 
 await pg.mouse.click(img.x + img.w / 2, img.y + img.h / 2);
-let h = await box(".pm-image-handle");
-check(!!h, "selected, it shows the handle");
+let h = await box(".pm-image-handle.right");
+check(!!h, "selected, it shows the handles");
+check(Math.abs(h.y + h.h / 2 - (img.y + img.h / 2)) <= 1 && h.x > img.x + img.w / 2, "the right handle halfway down its right side");
+// the browser's selection tint is not drawn over a selected image
+const tint = () => pg.evaluate(() => getComputedStyle(document.querySelector(".pm-image img"), "::selection").backgroundColor);
+check(await pg.evaluate(() => window.view.dom.classList.contains("ProseMirror-hideselection")), "a selected image: the browser's selection hidden");
+check(/rgba\(0, 0, 0, 0\)|transparent/.test(await tint()), `no selection tint on the image (${await tint()})`);
 
 // drag the handle 300px to the left
 await pg.mouse.move(h.x + h.w / 2, h.y + h.h / 2);
@@ -50,13 +59,25 @@ await pg.mouse.move(h.x + h.w / 2 - 300, h.y + h.h / 2, { steps: 5 });
 await pg.mouse.up();
 img = await box(".pm-image img");
 check(Math.abs(img.w - 300) <= 1 && Math.abs(img.h - 150) <= 1, `dragged 300px in: drawn 300 × 150, its shape kept (${img.w} × ${img.h})`);
-check(!!(await box(".pm-image-handle")), "resized, it stays selected, the handle there to go on");
+check(!!(await box(".pm-image-handle.right")), "resized, it stays selected, the handle there to go on");
 check((await outline()).includes(`![a cat|300](images/${name})`), `the width is in the outline text (${(await outline()).split("\n")[1]})`);
 await pg.keyboard.press("ControlOrMeta+z");
 await pg.waitForTimeout(50);
 check(!(await outline()).includes("|300"), "undo takes the width back");
 await pg.keyboard.press("ControlOrMeta+Shift+z");
 await pg.waitForTimeout(50);
+
+// the left handle: the image grows as it is dragged left, its shape kept
+await pg.mouse.move(5, 5);
+img = await box(".pm-image img");
+await pg.mouse.click(img.x + img.w / 2, img.y + img.h / 2);
+h = await box(".pm-image-handle.left");
+await pg.mouse.move(h.x + h.w / 2, h.y + h.h / 2);
+await pg.mouse.down();
+await pg.mouse.move(h.x + h.w / 2 - 100, h.y + h.h / 2, { steps: 5 });
+await pg.mouse.up();
+const grown = await box(".pm-image img");
+check(Math.abs(grown.w - img.w - 100) <= 1 && Math.abs(grown.h / grown.w - 0.5) < 0.01, `left handle 100px out: 100px wider, its shape kept (${img.w} → ${grown.w} × ${grown.h})`);
 
 // read back from the text
 await load(`- ![a cat|200](images/${name})`);
@@ -66,7 +87,7 @@ check(Math.abs(img.w - 200) <= 1, `![a cat|200](…) is drawn 200px wide (${img.
 
 // wider than the column: no wider than the line
 await pg.mouse.click(img.x + img.w / 2, img.y + img.h / 2);
-h = await box(".pm-image-handle");
+h = await box(".pm-image-handle.right");
 await pg.mouse.move(h.x + h.w / 2, h.y + h.h / 2);
 await pg.mouse.down();
 await pg.mouse.move(h.x + 3000, h.y + h.h / 2, { steps: 5 });
@@ -76,7 +97,7 @@ img = await box(".pm-image img");
 check(img.w > 600 && img.x + img.w <= editor.x + editor.w + 1, `dragged far out: larger, up to the editor's right edge (${img.x + img.w} ≤ ${editor.x + editor.w})`);
 
 // a double click on the handle: its own size again
-h = await box(".pm-image-handle");
+h = await box(".pm-image-handle.right");
 await pg.mouse.dblclick(h.x + h.w / 2, h.y + h.h / 2);
 img = await box(".pm-image img");
 check(Math.round(img.w) === 600 && !(await outline()).includes("|"), `double click: back to its own size, no width in the text (${img.w})`);

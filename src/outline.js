@@ -10,6 +10,7 @@ import { today, md } from "./dates.js";
 import { fieldsForBlock, fieldsVersion } from "./store.js";
 import { openValueEditor, displayValue } from "./fields.js";
 import { t } from "./i18n.js";
+import { BlockSelection } from "./blockselect.js";
 
 // Outline editing: Enter / Tab / Shift-Tab / Backspace between blocks,
 // task state cycling, and the per-block id every block carries.
@@ -98,12 +99,14 @@ export const singleRoot = new Plugin({
   filterTransaction: (tr) => !tr.docChanged || tr.doc.childCount === 1,
 });
 
-// Tab: become the last child of the previous sibling.
+// Tab: become the last child of the previous sibling. A first child has none
+// (what comes before it in its parent is the parent's own line): it stays.
 export const indent = (state, dispatch) => {
   const { $from, from } = state.selection;
   const d = blockDepth($from);
   if (d < 0) return false;
-  if ($from.index(d - 1) === 0) return true;
+  const i = $from.index(d - 1);
+  if (i === 0 || $from.node(d - 1).child(i - 1).type !== T.block) return true;
   if (dispatch) {
     const start = $from.before(d), end = $from.after(d);
     const tr = state.tr.delete(start, end).insert(start - 1, $from.node(d));
@@ -227,8 +230,10 @@ export const selectAll = (state, dispatch) => {
   return true;
 };
 
-// Blocks whose line overlaps the selection, as [pos, node].
+// Blocks whose line overlaps the selection (the selected blocks, when blocks
+// are selected), as [pos, node].
 export function selectedBlocks(state) {
+  if (state.selection instanceof BlockSelection) return state.selection.rows.map((p) => [p, state.doc.nodeAt(p)]);
   const { from, to } = state.selection;
   const out = [];
   state.doc.nodesBetween(from, to, (node, pos) => {

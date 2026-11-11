@@ -10,6 +10,7 @@ import { parseInline, parseOutline, serializeInline, serializeOutline, endsInURL
 import { horizontal, vertical, term, selectTerm, selectStep, selectEdge, formula, selectionShape, xArrowsToOverset, backspace, deleteForward, exitMath, inMath, typeInMath, insertMath, navGuard, besideSpecial } from "./nav.js";
 import { splitBlock, indent, outdent, joinBackward, cycleTask, selectAll, setFold, newTopBlock, blockIds, outlineDecorations, addTags } from "./outline.js";
 import { blockDrag } from "./drag.js";
+import { blockSelection, selectBlock } from "./blockselect.js";
 import { openPalette } from "./palette.js";
 import { suggest } from "./suggest.js";
 import { openPicker } from "./picker.js";
@@ -81,6 +82,7 @@ const outlineKeys = typedKeys({
   "Mod-Shift-Enter": newTopBlock,
   Backspace: joinBackward,
   "Mod-Enter": cycleTask,
+  Escape: selectBlock,
   "Mod-a": selectAll,
   "Mod-ArrowUp": setFold(true),
   "Mod-ArrowDown": setFold(false),
@@ -268,9 +270,10 @@ async function insertImages(view, files) {
   pasteBlocks(view, T.doc.create(null, blocks));
 }
 
-// Images load asynchronously (local store, else the server). Selected, an
-// image has a handle at its lower right: dragged, it sets the width the
-// image is drawn at; a double click goes back to the image's own size.
+// Images load asynchronously (local store, else the server). Hovered or
+// selected, an image has a handle on each side (as in Logseq): dragged, it
+// sets the width the image is drawn at, its height following; a double
+// click goes back to the image's own size.
 const MIN_WIDTH = 40;
 function imageView(node, view, getPos) {
   const dom = document.createElement("span");
@@ -282,8 +285,8 @@ function imageView(node, view, getPos) {
     if (url) img.src = url;
     else dom.classList.add("missing");
   });
-  const handle = Object.assign(document.createElement("span"), { className: "pm-image-handle", title: t("image.resize") });
-  dom.append(img, handle);
+  const handles = ["left", "right"].map((side) => Object.assign(document.createElement("span"), { className: `pm-image-handle ${side}`, title: t("image.resize") }));
+  dom.append(img, ...handles);
   const draw = (width) => { img.style.width = width ? `${width}px` : ""; dom.classList.toggle("sized", !!width); };
   draw(node.attrs.width);
   const setWidth = (width) => {
@@ -294,23 +297,29 @@ function imageView(node, view, getPos) {
     const tr = view.state.tr.setNodeMarkup(pos, null, { ...n.attrs, width });
     view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, pos)));
   };
-  handle.addEventListener("mousedown", (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    const x0 = ev.clientX, w0 = img.getBoundingClientRect().width;
-    // up to the editor's right edge (the line itself is only as wide as what is in it)
-    const most = view.dom.getBoundingClientRect().right - img.getBoundingClientRect().left;
-    let width = w0;
-    const move = (e) => { width = Math.round(Math.max(MIN_WIDTH, Math.min(most, w0 + e.clientX - x0))); draw(width); };
-    const up = () => {
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", up);
-      if (Math.abs(width - w0) >= 1) setWidth(width);
-    };
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-  });
-  handle.addEventListener("dblclick", (ev) => { ev.preventDefault(); ev.stopPropagation(); setWidth(null); });
+  for (const handle of handles) {
+    // the left handle grows the image as it goes left (its left edge stays)
+    const sign = handle.classList.contains("left") ? -1 : 1;
+    handle.addEventListener("mousedown", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const x0 = ev.clientX, w0 = img.getBoundingClientRect().width;
+      // up to the editor's right edge (the line itself is only as wide as what is in it)
+      const most = view.dom.getBoundingClientRect().right - img.getBoundingClientRect().left;
+      let width = w0;
+      dom.classList.add("resizing");
+      const move = (e) => { width = Math.round(Math.max(MIN_WIDTH, Math.min(most, w0 + sign * (e.clientX - x0)))); draw(width); };
+      const up = () => {
+        window.removeEventListener("mousemove", move);
+        window.removeEventListener("mouseup", up);
+        dom.classList.remove("resizing");
+        if (Math.abs(width - w0) >= 1) setWidth(width);
+      };
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", up);
+    });
+    handle.addEventListener("dblclick", (ev) => { ev.preventDefault(); ev.stopPropagation(); setWidth(null); });
+  }
   return {
     dom,
     update(next) {
@@ -320,7 +329,7 @@ function imageView(node, view, getPos) {
       return true;
     },
     ignoreMutation: () => true,
-    stopEvent: (ev) => ev.target === handle,
+    stopEvent: (ev) => handles.includes(ev.target),
   };
 }
 
@@ -347,7 +356,7 @@ function pasteBlocks(view, doc) {
 export function createEditor(mount, doc, { onUpdate, plugins = [] } = {}) {
   let state = EditorState.create({
     doc,
-    plugins: [compositionCommit, history(), suggest, mathKeys, codeKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, codeRaw, scriptStacking, outlineDecorations, notationHint, formatBar, derivations],
+    plugins: [blockSelection, compositionCommit, history(), suggest, mathKeys, codeKeys, ...plugins, outlineKeys, typedKeys(baseKeymap), blockIds, blockDrag, navGuard, selectionShape, mathDecorations, codeRaw, scriptStacking, outlineDecorations, notationHint, formatBar, derivations],
   });
   // notes saved while labelled arrows were x-arrow structures: \overset again
   // (saved with the next edit)

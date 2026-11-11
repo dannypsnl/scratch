@@ -1,5 +1,6 @@
 // The outline UI in WebKit (the engine the app runs in): a block dragged by
-// its bullet to every place in a small outline, and every piece of a line cut
+// its bullet to every slot in a small outline, blocks selected (with the
+// mouse, with keys) and what is done to them, and every piece of a line cut
 // and pasted into another, and the key for a new top-level block, each
 // checked against what should happen. Starts its own Vite server; needs
 // the WebKit build: npx playwright-core install webkit
@@ -60,6 +61,12 @@ await pg.evaluate(async () => {
     })),
     drop: () => { const d = document.querySelector(".block-drop"); if (!d) return null; const r = d.getBoundingClientRect(); return { left: r.left, top: r.top }; },
     dragged: () => document.querySelectorAll(".pm-dragged").length,
+    rings: () => [...document.querySelectorAll(".block-slot")].map((r) => { const b = r.getBoundingClientRect(); return { depth: +r.dataset.depth, picked: r.classList.contains("picked"), x: b.left + b.width / 2, y: b.top + b.height / 2 }; }),
+    card: () => !!document.querySelector(".block-card"),
+    // the selected blocks' names, in order ([] when no blocks are selected)
+    selected: () => v.state.selection.rows?.map((p) => v.state.doc.nodeAt(p).firstChild.textContent) ?? [],
+    // where each line's text is
+    lines: () => Object.fromEntries([...v.dom.querySelectorAll(".pm-line")].map((l) => { const r = l.getBoundingClientRect(); return [l.textContent, { left: r.left, mid: r.top + r.height / 2 }]; })),
     // positions directly in the i-th block's line, and that line as text
     linePositions: (i) => { const [p, b] = nth(i); return Array.from({ length: b.firstChild.content.size + 1 }, (_, k) => p + 2 + k).filter((x) => v.state.doc.resolve(x).parent === b.firstChild); },
     line: (i) => IO.serializeInline(nth(i)[1].firstChild.content),
@@ -109,98 +116,120 @@ const shape = (t) => t.map((n) => n.name + (n.children.length ? `(${shape(n.chil
 const ids = (t) => { const m = []; const walk = (t) => t.forEach((n) => { m.push(n.name + "=" + n.id); walk(n.children); }); walk(t); return m.sort().join(" "); };
 const find = (t, name) => { for (const n of t) { if (n.name === name) return n; const c = find(n.children, name); if (c) return c; } return null; };
 
-// The model: `x` moved before / after / as the first child of `y`. Into its
-// own subtree nothing moves.
-function move(t, x, y, where) {
-  t = structuredClone(t);
-  if (find([find(t, x)], y)) return t;
-  let moved;
-  const take = (list) => { const i = list.findIndex((n) => n.name === x); if (i >= 0) [moved] = list.splice(i, 1); else list.forEach((n) => take(n.children)); };
-  take(t);
-  const put = (list) => {
-    const i = list.findIndex((n) => n.name === y);
-    if (i < 0) return list.some((n) => put(n.children));
-    if (where === "child") list[i].children.unshift(moved);
-    else list.splice(where === "before" ? i : i + 1, 0, moved);
-    return true;
-  };
-  put(t);
-  return t;
+// ---- dragging a bullet
+//
+// The model (drag.js): with x's subtree lifted out, every gap between the
+// rows left is a place to drop it, at each depth from the next row's to one
+// deeper than the row above's. Dropped, the rows are the rows left with x's
+// put in at the gap, x at that depth and its children under it.
+
+// visible rows in order: { name, depth }
+const flat = (t, d = 0, out = []) => { for (const n of t) { out.push({ name: n.name, depth: d }); if (!n.folded) flat(n.children, d + 1, out); } return out; };
+// rows (each depth at most one more than the row before) back into a shape
+function unflat(rows) {
+  const root = { children: [] }, stack = [root];
+  for (const r of rows) { const n = { name: r.name, children: [] }; stack.length = r.depth + 1; stack[r.depth].children.push(n); stack.push(n); }
+  return shape(root.children);
+}
+// x held: its rows, the rows left, and the gaps among them
+function slotsOf(tree, x) {
+  const all = flat(tree), i = all.findIndex((r) => r.name === x);
+  let j = i + 1;
+  while (j < all.length && all[j].depth > all[i].depth) j++;
+  const held = all.slice(i, j), rest = [...all.slice(0, i), ...all.slice(j)];
+  const gaps = [];
+  for (let g = 0; g <= rest.length; g++) {
+    const above = rest[g - 1] ?? null, below = rest[g] ?? null;
+    gaps.push({ g, above, below, lo: below ? below.depth : 0, hi: above ? above.depth + 1 : 0 });
+  }
+  const result = (g, d) => unflat([...rest.slice(0, g), ...held.map((r) => ({ name: r.name, depth: r.depth - held[0].depth + d })), ...rest.slice(g)]);
+  return { all, held, rest, gaps, result };
+}
+// where on screen the held bullet goes to pick gap g at depth d: the gap's
+// line (the top of what follows the row above), the bullet at that depth
+function aim(R, all, { above, below }, d) {
+  const k = above ? all.findIndex((r) => r.name === above.name) + 1 : 0;
+  const y = k < all.length ? R[all[k].name].top : Math.max(...Object.values(R).map((r) => r.bottom));
+  const base = above ?? below, b = R[base.name];
+  return [b.left + (d - base.depth) * b.indent + b.indent / 2, y + 2];
 }
 
-// Press on x's bullet, move to (tx, ty), and see what the drop line shows
-// before letting go (or pressing Escape instead).
+// Press on x's bullet, move to (tx, ty), and see what is drawn before
+// letting go (or pressing Escape instead).
 async function drag(x, tx, ty, { escape = false } = {}) {
   const r = (await H("rows"))[x];
   await pg.mouse.move(r.cx, r.cy);
   await pg.mouse.down();
-  // by way of the gutter beside the target and the middle of its line
-  await pg.mouse.move(tx - 30, ty, { steps: 3 });
-  await pg.mouse.move(tx + 60, ty, { steps: 2 });
-  await pg.mouse.move(tx, ty, { steps: 2 });
+  await pg.mouse.move(r.cx + 6, r.cy + 6, { steps: 2 });
+  await pg.mouse.move(tx, ty, { steps: 4 });
   await pause(30);
-  const seen = { drop: await H("drop"), dragged: await H("dragged") };
+  const seen = { drop: await H("drop"), dragged: await H("dragged"), rings: await H("rings"), card: await H("card") };
   if (escape) await pg.keyboard.press("Escape");
   await pg.mouse.up();
   await pause(40);
   return seen;
 }
 
-// Drop x where `where` of y, by a gesture at y's row, and check the outline
-// against the model: ids kept, one undo step, the drop line where it lands.
-async function dragCase(x, y, where, gesture, expectShape) {
+// Drop x into gap g at depth d, and check the outline against the model:
+// ids kept, one undo step, the rings that were drawn.
+async function dragCase(x, g, d) {
   await H("load", OUTLINE);
   const before = await H("tree"), json = await H("json");
-  const expect = expectShape ?? shape(move(before, x, y, where));
+  const S = slotsOf(before, x), gap = S.gaps[g];
+  const expect = S.result(g, d);
   const moves = expect !== shape(before);
-  const seen = await drag(x, ...gesture(await H("rows")));
+  const seen = await drag(x, ...aim(await H("rows"), S.all, gap, d));
   const after = await H("tree");
-  const label = { x, y, where };
+  const label = { x, gap: `${gap.above?.name ?? "^"}|${gap.below?.name ?? "$"}`, d };
   if (shape(after) !== expect) fail("drop went somewhere else", { ...label, expect, got: shape(after) });
   if (ids(after) !== ids(before)) fail("a moved block lost its id", label);
   const ok = await H("check");
   if (ok !== true) fail("invalid document after a drop", { ...label, ok });
   if (!seen.dragged) fail("the dragged block is not drawn as held", label);
-  if (await H("drop")) fail("drop line left on screen", label);
+  if (!seen.card) fail("no card follows the pointer", label);
+  const depths = seen.rings.map((r) => r.depth).join(), want = Array.from({ length: gap.hi - gap.lo + 1 }, (_, k) => gap.lo + k).join();
+  if (depths !== want) fail("the rings are not the gap's depths", { ...label, want, got: depths });
+  if (seen.rings.filter((r) => r.picked).map((r) => r.depth).join() !== String(d)) fail("the larger ring is not the depth it lands at", { ...label, rings: seen.rings });
+  if ((await H("drop")) || (await H("rings")).length || (await H("card"))) fail("rings, line or card left on screen", label);
   if (await H("dragged")) fail("block still drawn as held after the drop", label);
-  if (find([find(before, x)], y) && seen.drop) fail("a drop line over the dragged block itself", label);
-  if (!find([find(before, x)], y) && !seen.drop) fail("no drop line", label);
-  if (!moves) return;
-  // the line is drawn at the indent the block lands at
-  const landed = (await H("rows"))[x];
-  if (seen.drop && Math.abs(seen.drop.left - landed.left) > 2) fail("drop line at another indent than the block lands", { ...label, line: seen.drop.left, block: landed.left });
+  if (!moves) { if ((await H("json")) !== json) fail("a drop where it was changed something", label); return; }
+  // the picked ring is where the block's bullet lands
+  const landed = (await H("rows"))[x], ring = seen.rings.find((r) => r.picked);
+  if (Math.abs(ring.x - landed.cx) > 2) fail("the picked ring at another indent than the block lands", { ...label, ring: ring.x, block: landed.cx });
   await pg.keyboard.press("ControlOrMeta+z"); await pause(40);
   if ((await H("json")) !== json) fail("one undo does not put the block back", { ...label, got: shape(await H("tree")) });
   await pg.keyboard.press("ControlOrMeta+Shift+z"); await pause(40);
   if (shape(await H("tree")) !== expect) fail("redo does not move it again", label);
 }
 
-// ---- dragging a bullet
-
 {
   await H("load", OUTLINE);
-  const names = Object.keys(await H("rows"));
-  const shown = await H("rows");
-  let n = 0;
-  for (const x of names) for (const y of names) for (const where of ["before", "after", "child"]) {
-    // below a block whose children are shown is their top: "child"
-    if (where === "after" && shown[y].children) continue;
-    await dragCase(x, y, where, (R) => {
-      const r = R[y];
-      return where === "before" ? [r.left + r.indent / 2, r.top + 3]
-        : where === "after" ? [r.left + 2, r.rowBottom - 3]
-        : [r.bodyLeft + r.indent + 6, r.rowBottom - 3];
-    });
-    n++;
+  const tree = await H("tree");
+  let n = 0, places = 0;
+  for (const { name: x } of flat(tree)) {
+    const S = slotsOf(tree, x);
+    for (const gap of S.gaps) for (let d = gap.lo; d <= gap.hi; d++) { await dragCase(x, gap.g, d); n++; }
+    places += new Set(S.gaps.flatMap((gap) => Array.from({ length: gap.hi - gap.lo + 1 }, (_, k) => S.result(gap.g, gap.lo + k)))).size;
   }
-  console.log(`drag: ${n} drops`);
+  console.log(`drag: ${n} slots (${places} outlines)`);
 
-  // after the last child, further left: after the block it ends (at each level)
-  await dragCase("D", "B1a", "after", (R) => [R.B.left + 2, R.B1a.rowBottom - 3], "A(A1,A2),B(B1(B1a)),D,C");
-  await dragCase("D", "B1a", "after", (R) => [R.B1.left + 2, R.B1a.rowBottom - 3], "A(A1,A2),B(B1(B1a),D),C");
-  // the dragged block itself being the last one does not count
-  await dragCase("A2", "A1", "after", (R) => [R.A.left + 2, R.A1.rowBottom - 3], "A(A1),A2,B(B1(B1a)),C,D");
-  console.log("drag: out of a subtree");
+  // sideways where it is: indented under the block above, or outdented
+  await H("load", OUTLINE);
+  {
+    const R = await H("rows"), b = R.B;
+    await pg.mouse.move(b.cx, b.cy); await pg.mouse.down();
+    await pg.mouse.move(b.cx + 5, b.cy, { steps: 2 });
+    await pg.mouse.move(b.cx + b.indent, b.cy, { steps: 3 });
+    await pg.mouse.up(); await pause(40);
+    if (shape(await H("tree")) !== "A(A1,A2,B(B1(B1a))),C,D") fail("held and moved right, a block is indented where it is", { got: shape(await H("tree")) });
+    const r = (await H("rows")).B1;
+    await pg.mouse.move(r.cx, r.cy); await pg.mouse.down();
+    await pg.mouse.move(r.cx - 5, r.cy, { steps: 2 });
+    await pg.mouse.move(r.cx - 2 * r.indent, r.cy, { steps: 3 });
+    await pg.mouse.up(); await pause(40);
+    if (shape(await H("tree")) !== "A(A1,A2,B),B1(B1a),C,D") fail("held and moved left, a block is outdented where it is", { got: shape(await H("tree")) });
+  }
+  console.log("drag: sideways in place");
 
   // a click without dragging folds; a leaf's bullet does nothing
   await H("load", OUTLINE);
@@ -216,28 +245,28 @@ async function dragCase(x, y, where, gesture, expectShape) {
   // into a folded block: it unfolds to show where the block went
   await H("load", OUTLINE);
   await click("A");
-  const a = (await H("rows")).A;
-  await drag("D", a.bodyLeft + a.indent + 6, a.rowBottom - 3);
-  if (shape(await H("tree")) !== "A(D,A1,A2),B(B1(B1a)),C" || find(await H("tree"), "A").folded) fail("drop into a folded block", { got: shape(await H("tree")) });
+  {
+    const R = await H("rows"), b = R.B;
+    await drag("D", R.A.left + 1.5 * R.A.indent, b.top + 2);
+    if (shape(await H("tree")) !== "A(D,A1,A2),B(B1(B1a)),C" || find(await H("tree"), "A").folded) fail("drop into a folded block", { got: shape(await H("tree")) });
+  }
 
-  // one long drag over every row, the drop line following, let go at the top
+  // one long drag over every row, the rings following, let go at the top
   await H("load", OUTLINE);
   {
     const R = await H("rows"), d = R.D;
     await pg.mouse.move(d.cx, d.cy);
     await pg.mouse.down();
     for (const name of Object.keys(R).reverse()) {
+      if (name === "D") continue;
       const r = R[name];
-      for (const [x, y, at] of [[r.bodyLeft + r.indent + 6, r.rowBottom - 3, r.rowBottom], [r.cx, r.top + 3, r.top]]) {
-        await pg.mouse.move(x, y, { steps: 3 });
-        const drop = await H("drop");
-        if (name !== "D" && (!drop || Math.abs(drop.top + 1 - at) > 2)) fail("the drop line does not follow the pointer", { name, at, drop });
-      }
+      await pg.mouse.move(r.cx, r.top + 2, { steps: 3 });
+      const rings = await H("rings");
+      if (!rings.length || rings.some((g) => Math.abs(g.y - r.top) > 2)) fail("the rings do not follow the pointer", { name, at: r.top, rings });
     }
     await pg.mouse.up(); await pause(40);
     if (shape(await H("tree")) !== "D,A(A1,A2),B(B1(B1a)),C") fail("a long drag", { got: shape(await H("tree")) });
   }
-
   // the outline changes while a block is held (sync): the same block moves
   await H("load", OUTLINE);
   {
@@ -254,11 +283,97 @@ async function dragCase(x, y, where, gesture, expectShape) {
 
   // Escape lets go without moving anything
   await H("load", OUTLINE);
-  const before = await H("json"), c = (await H("rows")).A;
-  const seen = await drag("C", c.cx, c.top + 3, { escape: true });
-  if (!seen.drop) fail("no drop line before Escape", {});
-  if ((await H("json")) !== before || (await H("drop")) || (await H("dragged"))) fail("Escape does not cancel a drag", {});
-  console.log("drag: click, folded target, a long drag, a change meanwhile, Escape");
+  {
+    const before = await H("json"), a = (await H("rows")).A;
+    const seen = await drag("C", a.cx, a.top + 3, { escape: true });
+    if (!seen.rings.length) fail("no rings before Escape", {});
+    if ((await H("json")) !== before || (await H("drop")) || (await H("rings")).length || (await H("card")) || (await H("dragged"))) fail("Escape does not cancel a drag", {});
+  }
+
+  // selected blocks are dragged together, by any of their bullets, and stay selected
+  await H("load", OUTLINE);
+  {
+    await H("caretAt", "A1", 1);
+    await pg.keyboard.press("Escape");
+    await pg.keyboard.press("Shift+ArrowDown");
+    await pg.keyboard.press("Shift+ArrowDown");
+    const R = await H("rows"), json = await H("json");
+    const seen = await drag("A2", R.D.cx, R.D.bottom + 2);
+    if (seen.dragged !== 3) fail("selected blocks are not all held", { dragged: seen.dragged });
+    if (shape(await H("tree")) !== "A,C,D,A1,A2,B(B1(B1a))") fail("selected blocks dragged together", { got: shape(await H("tree")) });
+    const sel = await H("selected");
+    if (sel.join() !== "A1,A2,B") fail("dropped, the blocks are still selected", { sel });
+    await pg.keyboard.press("ControlOrMeta+z"); await pause(40);
+    if ((await H("json")) !== json) fail("one undo puts the selected blocks back", { got: shape(await H("tree")) });
+  }
+  console.log("drag: click, folded target, a long drag, a change meanwhile, Escape, selected blocks");
+}
+
+// ---- selecting blocks (as Logseq: no selection of text across blocks)
+
+{
+  const selected = () => H("selected");
+  const bar = () => pg.evaluate(() => !!document.querySelector(".format-bar:not([hidden])"));
+  // with the mouse, from text in A1 to text in B: A1, A2 and B, whole
+  await H("load", OUTLINE);
+  {
+    const L = await H("lines");
+    await pg.mouse.move(L.A1.left + 4, L.A1.mid); await pg.mouse.down();
+    await pg.mouse.move(L.A2.left + 4, L.A2.mid, { steps: 4 });
+    await pg.mouse.move(L.B.left + 4, L.B.mid, { steps: 4 });
+    await pg.mouse.up(); await pause(40);
+    if ((await selected()).join() !== "A1,A2,B") fail("a mouse selection across blocks takes them whole", { got: await selected() });
+    if ((await pg.evaluate(() => document.querySelectorAll(".pm-block-selected").length)) !== 3) fail("selected blocks are not drawn tinted", {});
+    if (!(await pg.evaluate(() => window.view.dom.classList.contains("ProseMirror-hideselection")))) fail("text is drawn selected over selected blocks", {});
+    if (await bar()) fail("the format bar shows over selected blocks", {});
+    // Backspace takes them away, children and all; one undo brings them back
+    const json = await H("json");
+    await pg.keyboard.press("Backspace"); await pause(30);
+    if (shape(await H("tree")) !== "A,C,D") fail("Backspace on selected blocks", { got: shape(await H("tree")) });
+    await pg.keyboard.press("ControlOrMeta+z"); await pause(30);
+    if ((await H("json")) !== json) fail("undo after taking selected blocks away", { got: shape(await H("tree")) });
+  }
+  // Escape on a line selects its block; Shift-↑↓ grows and shrinks, ↑↓ moves,
+  // typing does nothing, Enter edits again
+  await H("load", OUTLINE);
+  {
+    await H("caretAt", "B1", 1);
+    await pg.keyboard.press("Escape");
+    if ((await selected()).join() !== "B1") fail("Escape selects the line's block", { got: await selected() });
+    await pg.keyboard.press("Shift+ArrowUp");
+    if ((await selected()).join() !== "B,B1") fail("Shift-Up grows the selection", { got: await selected() });
+    await pg.keyboard.press("Shift+ArrowDown"); await pg.keyboard.press("Shift+ArrowDown");
+    if ((await selected()).join() !== "B1,B1a") fail("Shift-Down past the anchor", { got: await selected() });
+    await pg.keyboard.press("ArrowDown");
+    if ((await selected()).join() !== "C") fail("Down moves to the block below", { got: await selected() });
+    const json = await H("json");
+    await pg.keyboard.type("xy"); await pause(30);
+    if ((await H("json")) !== json) fail("typing over selected blocks changed something", {});
+    await pg.keyboard.press("Enter"); await pause(30);
+    const head = await H("head");
+    if ((await selected()).length || head.name !== "C") fail("Enter edits the selected block again", { head });
+  }
+  // ⌘A twice: every block; ⌘⏎ marks each a task; Backspace leaves one empty block
+  await H("load", OUTLINE);
+  {
+    await H("caretAt", "B", 0);
+    await pg.keyboard.press("ControlOrMeta+a"); await pg.keyboard.press("ControlOrMeta+a");
+    if ((await selected()).join() !== "A,A1,A2,B,B1,B1a,C,D") fail("⌘A twice selects every block", { got: await selected() });
+    await pg.keyboard.press("ControlOrMeta+Enter"); await pause(30);
+    const tasks = await pg.evaluate(async () => (await import("/src/outline-io.js")).serializeOutline(window.view.state.doc));
+    if ((tasks.match(/TODO/g) ?? []).length !== 8) fail("⌘⏎ on every selected block", { tasks });
+    await pg.keyboard.press("Backspace"); await pause(30);
+    if (shape(await H("tree")) !== "" || (await H("check")) !== true) fail("all blocks taken away: one empty block", { got: shape(await H("tree")) });
+  }
+  // ⌘C: the blocks as outline text
+  await H("load", OUTLINE);
+  {
+    await H("caretAt", "B", 0);
+    await pg.keyboard.press("Escape");
+    const text = await pg.evaluate(() => { let got = null; document.addEventListener("copy", (e) => { got = e.clipboardData.getData("text/plain"); }, { once: true }); document.execCommand("copy"); return got; });
+    if (text !== "- B\n  - B1\n    - B1a") fail("⌘C on a selected block copies it as an outline", { text });
+  }
+  console.log("selecting blocks: mouse, keys, ⌘A, Backspace, ⌘C");
 }
 
 // ---- cut, copy and paste
@@ -311,7 +426,7 @@ async function dragCase(x, y, where, gesture, expectShape) {
   await pg.keyboard.press("ControlOrMeta+v"); await pause(30);
   if (JSON.stringify(await lines()) !== JSON.stringify(["twoalpha on", "betae two"])) fail("copy a double-clicked word, paste it in a line", { got: await lines() });
 
-  // across blocks it is still blocks: pasted after the caret's block
+  // across blocks it is the blocks, whole: pasted after the caret's block
   await H("load", LINES);
   {
     const [a] = await H("linePositions", 0), t = await H("linePositions", 1);
@@ -320,7 +435,7 @@ async function dragCase(x, y, where, gesture, expectShape) {
     await H("caretIn", 3, 1);
     await pg.keyboard.press("ControlOrMeta+v"); await pause(30);
     const got = await lines();
-    if (JSON.stringify(got) !== JSON.stringify([...originalLines, "cd x2 e - f", "target"])) fail("a copy across blocks pastes as those blocks", { got });
+    if (JSON.stringify(got) !== JSON.stringify([...originalLines, "ab cd x2 e - f", "target line", " child"])) fail("a copy across blocks pastes as those blocks", { got });
     // a block with its child
     await H("load", LINES);
     const c = await H("linePositions", 2);
@@ -384,6 +499,34 @@ async function dragCase(x, y, where, gesture, expectShape) {
     else if (head.name !== at) fail("Backspace left the caret elsewhere", { text, at, head });
   }
   console.log("Backspace at a line's start");
+}
+
+// ---- Tab / Shift-Tab
+
+{
+  // [outline, block, caret offset, key, the outline afterwards]: the caret
+  // stays where it was in its line
+  const cases = [
+    // a first child has no sibling before it to go under: nothing happens
+    ["- testse\n  - ", "", 0, "Tab", "- testse\n  - "],
+    ["- A\n  - a1\n  - a2", "a1", 1, "Tab", "- A\n  - a1\n  - a2"],
+    ["- A\n- B", "A", 1, "Tab", "- A\n- B"],
+    // under the sibling before, as its last child
+    ["- A\n  - a1\n  - a2", "a2", 1, "Tab", "- A\n  - a1\n    - a2"],
+    ["- A\n  - a1\n- B\n  - b1", "B", 1, "Tab", "- A\n  - a1\n  - B\n    - b1"],
+    // out: after its parent
+    ["- A\n  - a1\n  - a2", "a1", 1, "Shift+Tab", "- A\n  - a2\n- a1"],
+  ];
+  for (const [text, name, o, key, expect] of cases) {
+    await H("load", text);
+    await H("caretAt", name, o);
+    await pg.keyboard.press(key); await pause(30);
+    const got = await pg.evaluate(async () => (await import("/src/outline-io.js")).serializeOutline(window.view.state.doc));
+    const at = await pg.evaluate(() => { const $h = window.view.state.selection.$head; return { parent: $h.parent.type.name, offset: $h.parentOffset, line: $h.parent.textContent }; });
+    if (got !== expect) fail(`${key}`, { text, name, expect, got });
+    else if (at.parent !== "line" || at.line !== name || at.offset !== o) fail(`${key} moved the caret`, { text, name, at });
+  }
+  console.log("Tab / Shift-Tab");
 }
 
 // ---- tags are the block's, not the line's: Enter and Backspace leave them be

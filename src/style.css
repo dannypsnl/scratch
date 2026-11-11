@@ -223,12 +223,29 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   background: var(--line);
   box-shadow: 0 0 0 .12em var(--line);
 }
-/* dragging a bullet moves its block: the block fades, a line shows where it goes */
+/* dragging a bullet moves its block (drag.js): the block fades and follows
+   the pointer as a card; the depths it can land at in the gap it is over are
+   rings at their bullets' places, the one it will land at larger, a line
+   from it */
 .pm-bullet { cursor: grab; }
 body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
+body.block-dragging { user-select: none; -webkit-user-select: none; }
 .pm-block.pm-dragged { opacity: .35; }
-.block-drop { position: fixed; z-index: 50; height: 2px; background: var(--accent); border-radius: 1px; pointer-events: none; }
-.block-drop::before { content: ""; position: absolute; left: -3px; top: -3px; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--accent); background: var(--bg); }
+.block-slots { position: fixed; inset: 0; z-index: 52; pointer-events: none; }
+.block-drop { position: fixed; z-index: 50; pointer-events: none; height: 2px; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 1px; }
+.block-slot { position: fixed; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent); background: var(--bg); transition: width .08s, height .08s, margin .08s; }
+.block-slot.picked { width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; border-width: 2.5px; border-color: var(--accent); }
+.block-card {
+  position: fixed; z-index: 51; pointer-events: none;
+  padding: 4px 10px 4px 0; max-height: 45vh; overflow: hidden;
+  background: var(--bg); border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .14), 0 1px 3px rgba(0, 0, 0, .08);
+  opacity: 1;
+}
+.block-card > .pm-block > .pm-bullet { color: var(--accent); }
+/* selected blocks (blockselect.js): tinted, each with its children */
+.pm-block.pm-block-selected { background: color-mix(in srgb, var(--accent) 13%, transparent); border-radius: 4px; }
+.pm-block-selected .pm-block-selected { background: none; }
 .pm-body > .pm-block { position: relative; }
 .pm-body > .pm-block::before {
   content: "";
@@ -622,6 +639,11 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 @keyframes blink { 50% { border-color: transparent; } }
 
 .ProseMirror-selectednode { outline: 1.5px solid var(--accent); border-radius: 2px; }
+/* a selection that is not text (an image, selected blocks) is drawn by its
+   own marks, never by the browser's tint (ProseMirror's own stylesheet,
+   which is not loaded, has this) */
+.ProseMirror-hideselection *::selection { background: transparent; }
+.ProseMirror-hideselection { caret-color: transparent; }
 
 /* ---------- palette ---------- */
 
@@ -946,10 +968,19 @@ body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
 /* a width chosen by hand: drawn at it, however tall */
 .pm-image.sized img { max-height: none; height: auto; }
 .pm-image.missing { width: 12em; height: 6em; background: var(--panel); border: 1px dashed var(--line); border-radius: 6px; }
+/* an image is not text: a selection of text over it leaves it untinted */
+.pm-image, .pm-image img { -webkit-user-select: none; user-select: none; }
+.pm-image img::selection, .pm-image::selection { background: transparent; }
+.ProseMirror-selectednode.pm-image { outline: none; }
 .ProseMirror-selectednode.pm-image img { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* the handle that resizes a selected image */
-.pm-image-handle { display: none; position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 3px; background: var(--accent); border: 2px solid var(--bg); cursor: nwse-resize; }
-.ProseMirror-selectednode.pm-image .pm-image-handle { display: block; }
+/* the handles on its sides that set its width (its height follows), shown
+   while it is hovered or selected */
+.pm-image-handle { display: none; position: absolute; top: 50%; width: 6px; height: min(48px, 40%); min-height: 16px; transform: translateY(-50%); border-radius: 3px; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); cursor: ew-resize; opacity: .85; }
+.pm-image-handle.left { left: 6px; }
+.pm-image-handle.right { right: 6px; }
+.pm-image-handle:hover, .pm-image.resizing .pm-image-handle { opacity: 1; }
+.pm-image:hover .pm-image-handle, .ProseMirror-selectednode.pm-image .pm-image-handle, .pm-image.resizing .pm-image-handle { display: block; }
+.block-card .pm-image-handle, .pm-image.missing .pm-image-handle { display: none !important; }
 
 /* delete: quiet until hovered, red once armed (second click deletes) */
 .page-del { background: none; border: 0; cursor: pointer; font: 12px system-ui, sans-serif; color: var(--muted); padding: 3px 8px; border-radius: 5px; white-space: nowrap; }
