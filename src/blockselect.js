@@ -212,10 +212,21 @@ export const blockSelection = new Plugin({
     return state.tr.setSelection(new BlockSelection(sel.$anchor, sel.$head));
   },
   props: {
+    // The selected blocks are tinted as one piece: one under the other, only
+    // the corners on its outside are rounded (a block indented further than
+    // the one beside it has its left corner on that side out too).
     decorations(state) {
       const sel = state.selection;
       if (!(sel instanceof BlockSelection)) return null;
-      return DecorationSet.create(state.doc, sel.roots.map((p) => Decoration.node(p, p + state.doc.nodeAt(p).nodeSize, { class: "pm-block-selected" })));
+      const { doc } = state, roots = sel.roots;
+      const depth = (i) => (i < 0 || i >= roots.length ? Infinity : doc.resolve(roots[i]).depth);
+      const R = "var(--sel-radius)";
+      return DecorationSet.create(doc, roots.map((p, i) => {
+        const first = i === 0, last = i === roots.length - 1, d = depth(i);
+        // tl tr br bl; a left corner is out where the block beside it starts further right
+        const corners = [first || depth(i - 1) > d, first, last, last || depth(i + 1) > d];
+        return Decoration.node(p, p + doc.nodeAt(p).nodeSize, { class: "pm-block-selected", style: `border-radius: ${corners.map((c) => (c ? R : "0")).join(" ")}` });
+      }));
     },
     handleKeyDown(view, ev) {
       if (!isBlocks(view.state) || ev.isComposing) return false;

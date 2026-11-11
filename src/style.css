@@ -208,6 +208,11 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 
 /* ---------- outline ---------- */
 
+/* one colour for what is selected, text or whole blocks (blockselect.js);
+   a formula's own (.pm-math, further down) is red, as its caret is */
+.ProseMirror { --select: color-mix(in srgb, var(--accent) 16%, transparent); }
+.ProseMirror ::selection, .ProseMirror::selection { background: var(--select); }
+
 /* bullet and first line share a baseline, however tall the line (fractions) */
 .pm-block { display: grid; grid-template-columns: 1.2em minmax(0, 1fr); align-items: baseline; }
 .pm-bullet { color: var(--muted); text-align: center; user-select: none; }
@@ -244,7 +249,7 @@ body.block-dragging { user-select: none; -webkit-user-select: none; }
 }
 .block-card > .pm-block > .pm-bullet { color: var(--accent); }
 /* selected blocks (blockselect.js): tinted, each with its children */
-.pm-block.pm-block-selected { background: color-mix(in srgb, var(--accent) 13%, transparent); border-radius: 4px; }
+.pm-block.pm-block-selected { --sel-radius: 5px; background: var(--select); }
 .pm-block-selected .pm-block-selected { background: none; }
 .pm-body > .pm-block { position: relative; }
 .pm-body > .pm-block::before {
@@ -774,8 +779,10 @@ body.block-dragging { user-select: none; -webkit-user-select: none; }
   border: 1px solid var(--line);
   border-radius: 10px;
   white-space: nowrap;
+  /* its own ground: still a chip over a tinted (selected) block */
+  background: var(--bg);
 }
-.chip:hover { background: var(--slot); }
+.chip:hover { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
 .empty { font: 13px system-ui, sans-serif; color: var(--muted); }
 
 .outgoing { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 20px; }
