@@ -257,13 +257,29 @@ function caretOverlay(view) {
     if (atLineStart) c = codeLineStart(view, $h.pos) ?? c;
     // beside a script, fraction or formula its box sits higher or lower than
     // the caret's own line: x from beside it, height from something on the
-    // caret's level (the neighbour on the other side, else any in the container)
+    // caret's level and on its row: the neighbour after it, else the nearest
+    // before (measured at its end), else the nearest after. On a line that
+    // wraps, text on the caret's level may sit on another row (its start,
+    // for a caret after a formula ending the second row), and is no use.
     if (!onLevel($h.nodeBefore) && $h.parent.inlineContent) {
-      let ref = onLevel($h.nodeAfter) ? $h.pos : null;
-      if (ref == null) $h.parent.forEach((n, off) => { if (ref == null && onLevel(n)) ref = $h.start() + off; });
-      if (ref != null) {
-        const r = view.coordsAtPos(ref, 1);
-        if (r.top || r.bottom) c = { left: c.left, top: r.top, bottom: r.bottom };
+      const refs = []; // [pos, side]
+      const parent = $h.parent, start = $h.start(), index = $h.index();
+      if (onLevel($h.nodeAfter)) refs.push([$h.pos, 1]);
+      for (let i = index - 1, off = $h.parentOffset; i >= 0; i--) {
+        const n = parent.child(i);
+        if (onLevel(n)) { refs.push([start + off, -1]); break; }
+        off -= n.nodeSize;
+      }
+      for (let i = index + 1, off = $h.parentOffset + ($h.nodeAfter?.nodeSize ?? 0); i < parent.childCount; i++) {
+        const n = parent.child(i);
+        if (onLevel(n)) { refs.push([start + off, 1]); break; }
+        off += n.nodeSize;
+      }
+      const mid = (r) => (r.top + r.bottom) / 2;
+      const onRow = (r) => (r.top || r.bottom) && (!(c.top || c.bottom) || Math.abs(mid(r) - mid(c)) < r.bottom - r.top);
+      for (const [pos, side] of refs) {
+        const r = view.coordsAtPos(pos, side);
+        if (onRow(r)) { c = { left: c.left, top: r.top, bottom: r.bottom }; break; }
       }
     }
     // at an edge of inline code: inside its drawn backtick or outside it

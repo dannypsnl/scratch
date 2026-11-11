@@ -82,8 +82,10 @@ let WHERE = """
   }
   // and the caret as drawn: left of it, the formula's left edge, or its right edge
   const c = document.querySelector(".pm-caret"), m = document.querySelector(".ProseMirror .pm-math");
-  const x = c ? c.getBoundingClientRect().left : null, ml = m.getBoundingClientRect().left, mr = m.getBoundingClientRect().right;
-  const drawn = x === null ? "none" : Math.abs(x - ml) < 4 ? "@math-left" : Math.abs(x - mr) < 6 ? "@math-right" : `@${Math.round(x - mr)}`;
+  const cr = c?.getBoundingClientRect(), mb = m.getBoundingClientRect(), x = c ? cr.left : null, ml = mb.left, mr = mb.right;
+  // (on a line that wraps: a caret drawn on another row than the formula's)
+  const offRow = c && Math.abs((cr.top + cr.bottom) / 2 - (mb.top + mb.bottom) / 2) > mb.height;
+  const drawn = x === null ? "none" : offRow ? "@other-row" : Math.abs(x - ml) < 4 ? "@math-left" : Math.abs(x - mr) < 6 ? "@math-right" : `@${Math.round(x - mr)}`;
   return `${s.$from.parent.type.name} ${name(b)}|${name(a)} ${drawn}`;
   """
 
@@ -105,7 +107,12 @@ Task { @MainActor in
       const ends = [], starts = [], mathEnds = [], mathStarts = []; let codeLast = null;
       tr.doc.descendants((n, p) => {
         if (n.type.spec.code) codeLast = p + 1 + n.textContent.lastIndexOf("\\n") + 1;
-        if (n.type.name === "line") { ends.push(p + n.nodeSize - 1); starts.push(p + 1); const m = n.firstChild; mathEnds.push(m?.type.name === "math" ? p + 1 + m.nodeSize - 1 : null); mathStarts.push(m?.type.name === "math" ? p + 2 : null); }
+        if (n.type.name === "line") {
+          ends.push(p + n.nodeSize - 1); starts.push(p + 1);
+          // (the line's first formula, wherever it is in the line)
+          let m = null; n.forEach((c, off) => { if (!m && c.type.name === "math") m = [c, p + 1 + off]; });
+          mathEnds.push(m ? m[1] + m[0].nodeSize - 1 : null); mathStarts.push(m ? m[1] + 1 : null);
+        }
       });
       v.focus(); v.dispatch(tr.setSelection(v.state.selection.constructor.create(tr.doc, at === "code-last" ? codeLast : at === "math-end" ? mathEnds[line] : at === "math-start" ? mathStarts[line] : at === "start" ? starts[line] : ends[line])));
       """, ["text": c.text, "line": c.line, "at": c.at ?? "end"])

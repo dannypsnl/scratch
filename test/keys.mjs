@@ -11,8 +11,12 @@ import { existsSync, mkdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const W = "$\\frac{b^2-a^2}{b-a} =$";
+// (long enough to wrap in the test window, 900px)
+const LONG = "簡單來說就是一個在拓樸空間上的層把每個開集送到一個集合並且限制映射互相相容的那種東西而且還要滿足黏合公理的空間";
 // [what, outline, line, at, keys, where the caret is after each key]
 const CASES = [
+  ["→ out of a formula that ends a wrapped line: the caret stays on that row", `- ${LONG} $E$`, 0, "math-end", ["right"],
+    ["line math| @math-right"]],
   ["→ out of a formula, ← back in after the =", `- ${W}\n- $=$`, 0, "math-end", ["right", "wait:800", "left", "left"],
     ["line math| @math-right", "math =| @-7", "math struct|= @-30"]],
   ["← from a space after a formula: its edge, then in after the =", `- ${W} `, 0, "end", ["left", "left"],
