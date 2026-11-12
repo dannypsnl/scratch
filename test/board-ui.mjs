@@ -131,6 +131,26 @@ async function drag(text, x, y, { escape = false } = {}) {
   check(await H("status", "busy") === "doing" && !(await H("card")), "a click on the handle changes nothing");
 }
 
+// a long DONE column, where the card would sort to the very bottom: pointed
+// at the top of the column it still goes to DONE (the column is the target,
+// not the spot the card would land at)
+{
+  await pg.evaluate(async ({ day }) => {
+    const store = await import("/src/store.js");
+    const IO = await import("/src/outline-io.js");
+    store.savePage(day, IO.parseOutline(Array.from({ length: 30 }, (_, i) => `- DONE old ${i} DEADLINE: <2024-01-${String(i + 1).padStart(2, "0")}>`).join("\n")));
+    store.flush();
+  }, { day: "2025-04-01" });
+  await pg.click('.tabs [data-tab="journal"]');
+  await pg.click('.tabs [data-tab="tasks"]');
+  await pg.waitForSelector(".board .task-item");
+  const W = await H("where"), col = W.cols.done;
+  const seen = await drag("late", col.left + 40, col.top + 30);
+  const at = seen.board.done.cards.findIndex((c) => c.text === "late");
+  check(at === 30 && seen.board.done.cards[at].held, "held at the top of a long DONE column, the card is shown at its place far down (after every old task)", seen.board);
+  check(await H("status", "late") === "done", "…and let go there, the task is DONE");
+}
+
 console.log(`\n${fails.length} failures`);
 for (const x of fails.slice(0, 20)) console.log("  " + JSON.stringify(x));
 for (const e of new Set(pageErrors)) console.log(`page error: ${e}`);
