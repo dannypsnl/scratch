@@ -1,10 +1,10 @@
 // The agenda in WebKit (the engine the app runs in): a task dragged by its
 // handle to another day moves its block, children and all, to that day's
-// journal page (dragspec.js). While it is held, the week shows the task
-// under the day it would land on, faded; let go, the block is there; Escape,
-// or a drop back where it was, moves nothing. A task from a named page is
-// listed on its deadline and can be dragged to a day too. Starts its own
-// Vite server; needs the WebKit build: npx playwright-core install webkit
+// journal page (dragspec.js). While it is held, the day it would go to is
+// lit, the card faded where it is; let go, the block is there; Escape, or a
+// drop back where it was, moves nothing. A task from a named page is listed
+// on its deadline and can be dragged to a day too. Starts its own Vite
+// server; needs the WebKit build: npx playwright-core install webkit
 //
 //   npm run test:ui
 import { createServer } from "vite";
@@ -43,6 +43,7 @@ const W = await pg.evaluate(async () => {
       cards: Object.fromEntries([...document.querySelectorAll(".agenda .task-item")].reverse().map((c) => { const h = c.querySelector(".drag").getBoundingClientRect(); return [c.querySelector(".pm-line").textContent.trim(), { hx: h.left + h.width / 2, hy: h.top + h.height / 2 }]; })),
     }),
     card: () => !!document.querySelector(".drag-card"),
+    lit: () => document.querySelector(".agenda .day.drop")?.dataset.day ?? null,
     page: (text) => byText(text)?.page ?? null,
     children: (text) => byText(text).node.childCount - 1, // blocks under it
     exists: (page) => !!store.getPage(page),
@@ -71,7 +72,7 @@ async function drag(text, day, { escape = false, dx = 0, dy = 0 } = {}) {
   if (day) await pg.mouse.move(d.left + 40, d.top + 30, { steps: 5 });
   else await pg.mouse.move(c.hx + dx, c.hy + dy, { steps: 5 });
   await pause(30);
-  const seen = { week: await H("week"), card: await H("card") };
+  const seen = { week: await H("week"), card: await H("card"), lit: await H("lit") };
   if (escape) await pg.keyboard.press("Escape");
   await pg.mouse.up();
   await pause(80);
@@ -86,11 +87,11 @@ async function drag(text, day, { escape = false, dx = 0, dy = 0 } = {}) {
 // alpha to Wednesday
 {
   const seen = await drag("alpha", W.WED);
-  check(on(seen.week, W.WED).includes("alpha") && !on(seen.week, W.MON).includes("alpha"), "held over Wednesday, alpha is shown there, not on Monday", seen.week);
-  check(seen.week[W.WED].find((c) => c.text === "alpha")?.held && seen.card, "…faded, with a copy under the pointer", seen);
+  check(seen.lit === W.WED && on(seen.week, W.MON) === "alpha,beta", "held over Wednesday, that day is lit, the week as it was", seen);
+  check(seen.week[W.MON].find((c) => c.text === "alpha")?.held && seen.card, "…alpha faded where it is, with a copy under the pointer", seen);
   check(await H("page", "alpha") === W.WED, "let go, alpha's block is on Wednesday's page");
   const w = await H("week");
-  check(on(w, W.WED).includes("alpha") && on(w, W.MON) === "beta" && !Object.values(w).flat().some((c) => c.held) && !(await H("card")), "the week is redrawn, nothing faded or left over", w);
+  check(on(w, W.WED).includes("alpha") && on(w, W.MON) === "beta" && !Object.values(w).flat().some((c) => c.held) && !(await H("card")) && !(await H("lit")), "the week is redrawn, nothing faded, lit or left over", w);
 }
 
 // beta, with its child, to Tuesday: Monday is then empty and gone
@@ -104,8 +105,8 @@ async function drag(text, day, { escape = false, dx = 0, dy = 0 } = {}) {
 // Escape: nothing moves
 {
   const seen = await drag("alpha", W.MON, { escape: true });
-  check(on(seen.week, W.MON) === "alpha", "held over Monday, shown there", seen.week);
-  check(await H("page", "alpha") === W.WED && on(await H("week"), W.WED).includes("alpha"), "Escape: alpha stays on Wednesday");
+  check(seen.lit === W.MON, "held over Monday, it is lit", seen);
+  check(await H("page", "alpha") === W.WED && on(await H("week"), W.WED).includes("alpha") && !(await H("lit")), "Escape: alpha stays on Wednesday, nothing lit");
 }
 
 // a short drag that ends where it began
@@ -117,10 +118,10 @@ async function drag(text, day, { escape = false, dx = 0, dy = 0 } = {}) {
 // gamma, from a named page, listed on its deadline: a short drag keeps it
 // there; dragged to Monday it moves, and is still listed as due on Wednesday
 {
-  await drag("gamma", null, { dx: 8, dy: 10 });
-  check(await H("page", "gamma") === W.notes, "a short drag of a task from a named page leaves it on that page");
+  const short = await drag("gamma", null, { dx: 8, dy: 10 });
+  check(!short.lit && await H("page", "gamma") === W.notes, "a short drag of a task from a named page lights nothing and leaves it on that page", short);
   const seen = await drag("gamma", W.MON);
-  check(on(seen.week, W.MON) === "gamma" && on(seen.week, W.WED).includes("gamma"), "held over Monday, gamma is shown there and still on its deadline", seen.week);
+  check(seen.lit === W.MON, "held over Monday, it is lit", seen);
   check(await H("page", "gamma") === W.MON, "let go, gamma's block is on Monday's page");
   const w = await H("week");
   check(on(w, W.MON) === "gamma" && on(w, W.WED).includes("gamma"), "…listed on Monday and, as due, on Wednesday", w);

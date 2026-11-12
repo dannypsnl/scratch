@@ -6,7 +6,7 @@ import { md, weekday, today } from "./dates.js";
 import { pageLabel } from "./taskitem.js";
 import { place } from "./popover.js";
 import { t as tr } from "./i18n.js";
-import { drag, standin, boxAt, gapAt } from "./dragspec.js";
+import { drag, within } from "./dragspec.js";
 
 // Saved views over all tasks, after GitHub Projects: each view is a filter,
 // a grouping and a layout (list or board).
@@ -184,38 +184,55 @@ export function renderTasks(root, ctx) {
   }));
 
   // A card dragged by its handle goes anywhere on the board (dragspec.js):
-  // the states are the places it can be put, a gap in a column (status,
-  // index); each is the board drawn with the card there, out of stand-ins
-  // for the cards as they are now. The pointer picks the column it is over
-  // and the gap it is level with, among the cards on screen; let go, the
-  // card has that status and the column that order.
+  // the places are the gaps of every column (status, index), worked out
+  // once when the drag starts, from the cards on screen with the held one
+  // left out: a gap's band runs from the middle of the card above to the
+  // middle of the card below, across the column. The pointer's gap is drawn
+  // as a line between the cards; let go, the card has that status and the
+  // column that order.
   function board(tasks) {
     const columns = columnsOf(tasks);
-    const cardIn = (root, id) => root.querySelector(`[data-id="${id}"]`);
+    let line = null;
     const live = boardOf(columns, (t) => {
       const card = taskItem(t, itemCtx, labelsFor(t));
       const handle = document.createElement("span");
       handle.className = "drag";
       handle.textContent = "⠿";
       handle.onmousedown = (e) => {
-        const cards = new Map([...live.querySelectorAll(".task-item")].map((c) => [c.dataset.id, c]));
         const rest = new Map([...columns].map(([s, list]) => [s, list.filter((x) => x.id !== t.id)]));
-        const placed = ({ col, i }) => new Map([...rest].map(([s, list]) => [s, s === col ? [...list.slice(0, i), t, ...list.slice(i)] : list]));
+        const state = { col: t.task, i: columns.get(t.task).indexOf(t) }; // its gap, with itself left out
+        const same = (a, b) => a.col === b.col && a.i === b.i;
         return drag(e, {
           live,
-          state: { col: t.task, i: columns.get(t.task).indexOf(t) },
-          same: (a, b) => a.col === b.col && a.i === b.i,
-          pick: (p) => {
-            const col = boxAt([...live.querySelectorAll(":scope > .column")], p, "x");
-            const others = [...col.querySelectorAll(":scope > .task-item")].filter((c) => c.dataset.id !== t.id);
-            return { col: col.dataset.status, i: gapAt(others, p) };
+          held: card,
+          state,
+          same,
+          zones: () => {
+            const box = live.getBoundingClientRect();
+            const out = [];
+            for (const col of live.querySelectorAll(":scope > .column")) {
+              const r = col.getBoundingClientRect();
+              const cards = [...col.querySelectorAll(":scope > .task-item")].filter((c) => c !== card).map((c) => c.getBoundingClientRect());
+              const mid = (c) => (c.top + c.bottom) / 2;
+              for (let i = 0; i <= cards.length; i++) {
+                const band = { left: r.left, right: r.right, top: i ? mid(cards[i - 1]) : r.top, bottom: i < cards.length ? mid(cards[i]) : r.bottom };
+                const y = i < cards.length ? cards[i].top - 5 : cards.length ? cards[i - 1].bottom + 3 : col.querySelector("h3").getBoundingClientRect().bottom + 3;
+                out.push({ state: { col: col.dataset.status, i }, band: within(box, band), line: { left: r.left + 8 - box.left, top: y - box.top, width: r.width - 16 } });
+              }
+            }
+            return out;
           },
-          render: (s) => boardOf(placed(s), (x) => standin(cards.get(x.id))),
-          held: (root) => cardIn(root, t.id),
+          show: (z) => {
+            if (!z || same(z.state, state)) { line?.remove(); line = null; return; }
+            line ??= document.body.appendChild(Object.assign(document.createElement("span"), { className: "drag-line" }));
+            const box = live.getBoundingClientRect();
+            Object.assign(line.style, { left: `${box.left + z.line.left}px`, top: `${box.top + z.line.top}px`, width: `${z.line.width}px` });
+          },
           onDrop: ({ col, i }) => {
             const order = { ...(v.order ?? {}) };
             for (const s of STATUSES) if (order[s]) order[s] = order[s].filter((id) => id !== t.id);
-            order[col] = placed({ col, i }).get(col).map((x) => x.id);
+            const list = rest.get(col);
+            order[col] = [...list.slice(0, i), t, ...list.slice(i)].map((x) => x.id);
             v.order = order;
             persist();
             if (col !== t.task) updateBlockAttrs(t.id, (a) => withTask(a, col));

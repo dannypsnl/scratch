@@ -371,9 +371,13 @@ body.block-dragging { user-select: none; -webkit-user-select: none; }
 .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 860px) { .board { grid-template-columns: 1fr; } }
 .column { background: var(--panel); border-radius: 10px; padding: 0 8px 8px; min-height: 120px; }
-/* a card dragged by its handle (dragspec.js): faded where it would land in
-   the column the pointer picked, a copy of it under the pointer */
+/* a card dragged by its handle (dragspec.js): faded where it is, a copy of
+   it under the pointer, a line at the gap it would go to (the board) or the
+   day it would go to lit (the agenda) */
 .drag-held { opacity: .35; }
+.drag-shield { position: fixed; inset: 0; z-index: 49; cursor: grabbing; }
+.drag-line { position: fixed; z-index: 50; pointer-events: none; height: 2px; background: var(--accent); border-radius: 1px; }
+.agenda .day.drop { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 8px; }
 .drag-card {
   position: fixed; z-index: 51; pointer-events: none; box-sizing: border-box;
   border-radius: 8px;

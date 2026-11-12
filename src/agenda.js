@@ -2,18 +2,16 @@ import { allTasks, moveBlockToPage, isDate } from "./store.js";
 import { taskItem } from "./taskitem.js";
 import { today, addDays, weekStart, md, weekday } from "./dates.js";
 import { t as tr } from "./i18n.js";
-import { drag, standin, boxAt } from "./dragspec.js";
+import { drag, within } from "./dragspec.js";
 
 // org-mode style agenda for one week. A task shows on the day it was written
 // and on its DEADLINE; today also lists every overdue deadline.
 //
 // A task dragged by its handle to another day is moved there: the block, with
 // its children, goes to the end of that day's journal page (dragspec.js). The
-// states are the week's days and the page the block is on now; each is the
-// week drawn with the task on that page, out of stand-ins for the cards as
-// they are. The pointer picks the day it is over on screen (the day the card
-// was taken from stands for the page it is on), and the week shows that
-// outcome before the card is let go.
+// places are the week's days as they are on screen; the day the card is
+// taken from stands for the page it is on. The day the pointer is over is
+// highlighted; let go, the block is there.
 
 export function renderAgenda(root, ctx) {
   const start = weekStart(ctx.state.week ?? today());
@@ -44,7 +42,7 @@ export function renderAgenda(root, ctx) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
   // The week: a section per day, each task on it a card drawn by `card`
-  // (with the labels it has there, on that day).
+  // (with the labels it has there).
   function weekOf(tasks, card) {
     const el = document.createElement("div");
     el.className = "days";
@@ -72,39 +70,34 @@ export function renderAgenda(root, ctx) {
       }
       const order = { doing: 0, todo: 1, done: 2 };
       rows.sort((a, b) => order[a[0].task] - order[b[0].task]);
-      for (const [t, labels] of rows) sec.append(card(t, labels, day));
+      for (const [t, labels] of rows) sec.append(card(t, labels));
       if (!rows.length) sec.insertAdjacentHTML("beforeend", `<p class="empty">—</p>`);
       el.append(sec);
     }
     return el;
   }
 
-  // a task's card in a drawing, on a day: there when it is, else wherever
-  // it is listed (its deadline, overdue today)
-  const cardIn = (root, t, page) => root.querySelector(`.day[data-day="${page}"] [data-id="${t.id}"]`) ?? root.querySelector(`[data-id="${t.id}"]`);
+  let lit = null; // the day highlighted as the drop
   const live = weekOf(tasks, (t, labels) => {
     const card = taskItem(t, itemCtx, labels);
     const handle = document.createElement("span");
     handle.className = "drag";
     handle.textContent = "⠿";
     handle.onmousedown = (e) => {
-      // the live cards, found once, by day and id and by id alone: the
-      // drawings stand in for them
-      const cards = new Map();
-      for (const c of live.querySelectorAll(".task-item")) {
-        cards.set(`${c.closest(".day").dataset.day} ${c.dataset.id}`, c);
-        if (!cards.has(c.dataset.id)) cards.set(c.dataset.id, c);
-      }
       const home = card.closest(".day").dataset.day; // where it is taken from
       return drag(e, {
         live,
+        held: card,
         state: t.page,
-        pick: (p) => {
-          const day = boxAt([...live.querySelectorAll(":scope > .day")], p, "y").dataset.day;
-          return day === home ? t.page : day;
+        zones: () => {
+          const box = live.getBoundingClientRect();
+          return [...live.querySelectorAll(":scope > .day")].map((sec) => ({ state: sec.dataset.day === home ? t.page : sec.dataset.day, band: within(box, sec.getBoundingClientRect()), sec }));
         },
-        render: (p) => weekOf(tasks.map((x) => (x.id === t.id ? { ...x, page: p, date: isDate(p) ? p : null } : x)), (x, _, day) => standin(cards.get(`${day} ${x.id}`) ?? cards.get(x.id))),
-        held: (root, p) => cardIn(root, t, p),
+        show: (z) => {
+          lit?.classList.remove("drop");
+          lit = z && z.state !== t.page ? z.sec : null;
+          lit?.classList.add("drop");
+        },
         onDrop: (p) => { moveBlockToPage(t.id, p); ctx.render(); },
       });
     };
