@@ -363,6 +363,20 @@ export function replaceBlock(id, blocks) {
   savePage(at.page, tr.doc);
 }
 
+// Move the block `id`, with its children, to the end of `page` (agenda: a
+// task dragged to a day). A journal day not written on yet is made; the page
+// it leaves keeps an empty block when it was the last one there.
+export function moveBlockToPage(id, page) {
+  const at = locate(id);
+  if (!at || at.page === page) return false;
+  const dest = getPage(page) ?? (isDate(page) ? emptyDoc() : null);
+  if (!dest) return false;
+  const left = at.doc.childCount === 1 && at.doc.firstChild === at.node ? emptyDoc() : new Transform(at.doc).delete(at.pos, at.pos + at.node.nodeSize).doc;
+  savePage(at.page, left);
+  savePage(page, isEmpty(dest) ? schema.nodes.doc.create(null, at.node) : new Transform(dest).insert(dest.content.size, at.node).doc);
+  return true;
+}
+
 export function updateBlockAttrs(id, fn) {
   const at = locate(id);
   if (!at) return;

@@ -6,6 +6,7 @@ import { md, weekday, today } from "./dates.js";
 import { pageLabel } from "./taskitem.js";
 import { place } from "./popover.js";
 import { t as tr } from "./i18n.js";
+import { drag } from "./dragspec.js";
 
 // Saved views over all tasks, after GitHub Projects: each view is a filter,
 // a grouping and a layout (list or board).
@@ -17,6 +18,7 @@ const defaultViews = () => [
 ];
 
 const STATUS_ORDER = ["doing", "todo", "done"];
+const STATUSES = ["todo", "doing", "done"]; // the board's columns
 const STATUS_NAME = { todo: "TODO", doing: "DOING", done: "DONE" };
 
 const byDeadlineThenDate = (a, b) =>
@@ -156,35 +158,50 @@ export function renderTasks(root, ctx) {
     if (!tasks.length) bodyEl.innerHTML = `<p class="empty">${tr("views.empty")}</p>`;
   }
 
-  function board(tasks) {
+  // The board: a column per status, each task a card drawn by `card`.
+  function boardOf(tasks, card) {
     const cols = document.createElement("div");
     cols.className = "board";
-    for (const s of ["todo", "doing", "done"]) {
+    for (const s of STATUSES) {
       const col = document.createElement("section");
       col.className = `column col-${s}`;
       const list = tasks.filter((t) => t.task === s);
       col.innerHTML = `<h3>${STATUS_NAME[s]}<span class="count">${list.length}</span></h3>`;
-      for (const t of list) {
-        const card = taskItem(t, itemCtx, labelsFor(t));
-        const handle = document.createElement("span");
-        handle.className = "drag";
-        handle.textContent = "⠿";
-        handle.draggable = true;
-        handle.ondragstart = (e) => { e.dataTransfer.setData("text/task-id", t.id); };
-        card.prepend(handle);
-        col.append(card);
-      }
-      col.ondragover = (e) => { e.preventDefault(); col.classList.add("over"); };
-      col.ondragleave = () => col.classList.remove("over");
-      col.ondrop = (e) => {
-        e.preventDefault();
-        const id = e.dataTransfer.getData("text/task-id");
-        if (id) updateBlockAttrs(id, (a) => (a.task === s ? a : withTask(a, s)));
-        body();
-      };
+      for (const t of list) col.append(card(t));
       cols.append(col);
     }
-    bodyEl.append(cols);
+    return cols;
+  }
+
+  // A card dragged by its handle moves to another column (dragspec.js): the
+  // states are the statuses it can have; each is the board drawn with the
+  // task in that column, out of copies of the cards as they are now, so the
+  // pointer picks a column by where the card would land in it and the board
+  // shows that outcome, counts and all, before the card is let go.
+  function board(tasks) {
+    const cardIn = (root, id) => root.querySelector(`.task-item[data-id="${id}"]`);
+    const copy = (t) => {
+      const c = cardIn(live, t.id).cloneNode(true);
+      c.querySelectorAll("[contenteditable]").forEach((e) => e.removeAttribute("contenteditable"));
+      return c;
+    };
+    const live = boardOf(tasks, (t) => {
+      const card = taskItem(t, itemCtx, labelsFor(t));
+      const handle = document.createElement("span");
+      handle.className = "drag";
+      handle.textContent = "⠿";
+      handle.onmousedown = (e) => drag(e, {
+        live,
+        state: t.task,
+        states: STATUSES,
+        render: (s) => boardOf(tasks.map((x) => (x.id === t.id ? { ...x, task: s } : x)), copy),
+        held: (root) => cardIn(root, t.id),
+        onDrop: (s) => { updateBlockAttrs(t.id, (a) => withTask(a, s)); body(); },
+      });
+      card.prepend(handle);
+      return card;
+    });
+    bodyEl.append(live);
   }
 
   body();

@@ -331,8 +331,9 @@ body.block-dragging { user-select: none; -webkit-user-select: none; }
 .task-item .task-meta .tag { margin-left: 0; cursor: default; }
 .task-item .trail::before { content: "↳ "; }
 .task-item .drag { cursor: grab; color: var(--muted); font-size: 14px; grid-row: 1; }
-.board .task-item { grid-template-columns: auto minmax(0, 1fr); background: var(--bg); border: 1px solid var(--line); margin-bottom: 8px; }
-.board .task-item .task-meta { grid-column: 2; }
+.task-item:has(> .drag) { grid-template-columns: auto minmax(0, 1fr); } /* the handle beside the block */
+.task-item:has(> .drag) .task-meta { grid-column: 2; }
+.board .task-item { background: var(--bg); border: 1px solid var(--line); margin-bottom: 8px; }
 
 .group h3, .column h3, .day h3 { font: 600 13px system-ui, sans-serif; color: var(--muted); margin: 20px 0 6px; display: flex; gap: 8px; align-items: center; }
 .count { font-weight: normal; background: var(--panel); border-radius: 8px; padding: 0 6px; }
@@ -370,7 +371,16 @@ body.block-dragging { user-select: none; -webkit-user-select: none; }
 .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 860px) { .board { grid-template-columns: 1fr; } }
 .column { background: var(--panel); border-radius: 10px; padding: 0 8px 8px; min-height: 120px; }
-.column.over { outline: 2px dashed var(--accent); }
+/* a card dragged by its handle (dragspec.js): faded where it would land in
+   the column the pointer picked, a copy of it under the pointer */
+.drag-held { opacity: .35; }
+.drag-card {
+  position: fixed; z-index: 51; pointer-events: none; box-sizing: border-box;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .14), 0 1px 3px rgba(0, 0, 0, .08);
+}
+.drag-card > .task-item { margin: 0; background: var(--bg); }
+.drag-measure .task-item { content-visibility: visible; } /* every card laid out, to measure */
 
 .agenda .day { border-top: 1px solid var(--line); padding-bottom: 6px; }
 .agenda .day.today h3 a { color: var(--accent); }
