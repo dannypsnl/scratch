@@ -6,7 +6,7 @@ import { md, weekday, today } from "./dates.js";
 import { pageLabel } from "./taskitem.js";
 import { place } from "./popover.js";
 import { t as tr } from "./i18n.js";
-import { drag } from "./dragspec.js";
+import { drag, standin } from "./dragspec.js";
 
 // Saved views over all tasks, after GitHub Projects: each view is a filter,
 // a grouping and a layout (list or board).
@@ -175,29 +175,28 @@ export function renderTasks(root, ctx) {
 
   // A card dragged by its handle moves to another column (dragspec.js): the
   // states are the statuses it can have; each is the board drawn with the
-  // task in that column, out of copies of the cards as they are now, so the
-  // pointer picks a column by where the card would land in it and the board
-  // shows that outcome, counts and all, before the card is let go.
+  // task in that column, out of stand-ins for the cards as they are now, so
+  // the pointer picks a column by where the card would land in it and the
+  // board shows that outcome, counts and all, before the card is let go.
   function board(tasks) {
-    const cardIn = (root, id) => root.querySelector(`.task-item[data-id="${id}"]`);
-    const copy = (t) => {
-      const c = cardIn(live, t.id).cloneNode(true);
-      c.querySelectorAll("[contenteditable]").forEach((e) => e.removeAttribute("contenteditable"));
-      return c;
-    };
+    const cardIn = (root, id) => root.querySelector(`[data-id="${id}"]`);
     const live = boardOf(tasks, (t) => {
       const card = taskItem(t, itemCtx, labelsFor(t));
       const handle = document.createElement("span");
       handle.className = "drag";
       handle.textContent = "⠿";
-      handle.onmousedown = (e) => drag(e, {
-        live,
-        state: t.task,
-        states: STATUSES,
-        render: (s) => boardOf(tasks.map((x) => (x.id === t.id ? { ...x, task: s } : x)), copy),
-        held: (root) => cardIn(root, t.id),
-        onDrop: (s) => { updateBlockAttrs(t.id, (a) => withTask(a, s)); body(); },
-      });
+      handle.onmousedown = (e) => {
+        // the live cards by id, found once: the drawings stand in for them
+        const cards = new Map([...live.querySelectorAll(".task-item")].map((c) => [c.dataset.id, c]));
+        return drag(e, {
+          live,
+          state: t.task,
+          states: STATUSES,
+          render: (s) => boardOf(tasks.map((x) => (x.id === t.id ? { ...x, task: s } : x)), (x) => standin(cards.get(x.id))),
+          held: (root) => cardIn(root, t.id),
+          onDrop: (s) => { updateBlockAttrs(t.id, (a) => withTask(a, s)); body(); },
+        });
+      };
       card.prepend(handle);
       return card;
     });
