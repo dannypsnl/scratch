@@ -1,10 +1,10 @@
 // The task board in WebKit (the engine the app runs in): a card dragged by
-// its handle to another column (dragspec.js). While it is held, the board
-// shows the state it would be in — the card faded where it would land, the
-// counts of that state — and a copy of the card follows the pointer; let go,
-// the task has that status; Escape, or a drop back where it was, changes
-// nothing. Starts its own Vite server; needs the WebKit build:
-// npx playwright-core install webkit
+// its handle to a gap in a column (dragspec.js). While it is held, the board
+// shows the state it would be in — the card faded in that gap, the counts of
+// that state — and a copy of the card follows the pointer; let go, the task
+// has that status and the column that order, which the view keeps; Escape,
+// or a drop back where it was, changes nothing. Starts its own Vite server;
+// needs the WebKit build: npx playwright-core install webkit
 //
 //   npm run test:ui
 import { createServer } from "vite";
@@ -50,7 +50,11 @@ await pg.evaluate(async ({ day, lines }) => {
 }, { day: DAY, lines: PAGE });
 await pg.click('.tabs [data-tab="tasks"]');
 await pg.click(".view-tabs .vtab:nth-child(2) button"); // the default board view: every task
+// cards drawn with content-visibility: auto take a frame before what is in
+// them can be hit, so the board is given a moment after each render
+const settle = () => pg.waitForTimeout(100);
 await pg.waitForSelector(".board .task-item");
+await settle();
 
 const H = (fn, ...args) => pg.evaluate(([fn, args]) => window.__h[fn](...args), [fn, args]);
 const pause = (ms) => pg.waitForTimeout(ms);
@@ -70,57 +74,70 @@ async function drag(text, x, y, { escape = false } = {}) {
   const seen = { board: await H("board"), card: await H("card") };
   if (escape) await pg.keyboard.press("Escape");
   await pg.mouse.up();
-  await pause(60);
+  await settle();
   return seen;
 }
 
 {
   const b = await H("board");
-  check(texts(b, "todo") === "late,early,loose" && texts(b, "doing") === "busy" && texts(b, "done") === "over", "the board starts as the page says", b);
+  check(texts(b, "todo") === "late,early,loose" && texts(b, "doing") === "busy" && texts(b, "done") === "over", "the board starts as the page says, each column by deadline", b);
   check(await H("editable") > 0, "the live cards are editable");
 }
 
-// into the middle of the doing column: it lands there, by its deadline, first
+// within a column: the last TODO card to the top
+{
+  const W = await H("where");
+  const seen = await drag("loose", W.cards.late.hx, W.cards.late.top + 4);
+  check(texts(seen.board, "todo") === "loose,late,early" && seen.board.todo.cards[0].held, "held above the first card, it is shown first, faded", seen.board);
+  check(texts(await H("board"), "todo") === "loose,late,early", "let go, the column keeps that order");
+  await pg.click('.tabs [data-tab="journal"]');
+  await pg.click('.tabs [data-tab="tasks"]');
+  await pg.waitForSelector(".board .task-item");
+  await settle();
+  check(texts(await H("board"), "todo") === "loose,late,early", "…and still after the view is drawn again");
+}
+
+// into the middle of the DOING column: below its one card
 {
   const W = await H("where"), col = W.cols.doing;
   const seen = await drag("early", (col.left + col.right) / 2, (col.top + col.bottom) / 2);
-  check(texts(seen.board, "doing") === "early,busy" && seen.board.doing.count === 2, "held over DOING, the board shows the card there, counted", seen.board);
-  check(texts(seen.board, "todo") === "late,loose" && seen.board.todo.count === 2, "…and gone from TODO", seen.board);
-  check(seen.board.doing.cards[0].held && !seen.board.doing.cards[1].held, "the card where it would land is faded", seen.board);
+  check(texts(seen.board, "doing") === "busy,early" && seen.board.doing.count === 2, "held over DOING below its card, the board shows the card there, counted", seen.board);
+  check(texts(seen.board, "todo") === "loose,late" && seen.board.todo.count === 2, "…and gone from TODO", seen.board);
+  check(!seen.board.doing.cards[0].held && seen.board.doing.cards[1].held, "the card in its gap is faded", seen.board);
   check(seen.card?.text.includes("early"), "a copy of the card follows the pointer", seen.card);
   check(await H("status", "early") === "doing", "let go, the task is DOING");
   const after = await H("board");
-  check(texts(after, "doing") === "early,busy" && !after.doing.cards.some((c) => c.held), "the board is redrawn in that state, nothing faded", after);
+  check(texts(after, "doing") === "busy,early" && !after.doing.cards.some((c) => c.held), "the board is redrawn in that state, nothing faded", after);
   check(!(await H("card")), "no card left on screen");
   check(await H("editable") > 0, "the redrawn cards are editable");
 }
 
-// pointing at the far bottom of DONE, under every card: still DONE
+// pointing at the far bottom of DONE, under every card: last there
 {
   const W = await H("where"), col = W.cols.done;
   await drag("loose", col.right - 20, col.bottom - 10);
   check(await H("status", "loose") === "done", "dropped below the last card of DONE, the task is DONE");
-  check(texts(await H("board"), "done") === "loose,over", "…listed where it sorts", await H("board"));
+  check(texts(await H("board"), "done") === "over,loose", "…listed last", await H("board"));
 }
 
 // Escape: nothing changes, the live board is back
 {
-  const W = await H("where"), col = W.cols.todo;
-  const seen = await drag("busy", (col.left + col.right) / 2, W.cards.late.top + 4, { escape: true });
-  check(texts(seen.board, "todo") === "late,busy" && texts(seen.board, "doing") === "early", "held over TODO, shown there", seen.board);
+  const W = await H("where");
+  const seen = await drag("busy", W.cards.late.hx, W.cards.late.top + 4, { escape: true });
+  check(texts(seen.board, "todo") === "busy,late" && texts(seen.board, "doing") === "early", "held over TODO above its card, shown there", seen.board);
   check(await H("status", "busy") === "doing", "Escape: the task keeps its status");
   const after = await H("board");
-  check(texts(after, "doing") === "early,busy" && texts(after, "todo") === "late" && !after.doing.cards.some((c) => c.held) && !(await H("card")), "…and the board is as it was", after);
+  check(texts(after, "doing") === "busy,early" && texts(after, "todo") === "late" && !after.doing.cards.some((c) => c.held) && !(await H("card")), "…and the board is as it was", after);
   check(await H("editable") > 0, "…still editable");
 }
 
 // back where it came from: nothing changes
 {
   const W = await H("where"), c = W.cards.busy;
-  const seen = await drag("busy", c.hx + 10, c.hy + 30);
+  const seen = await drag("busy", c.hx + 10, c.hy + 10);
   const busy = (b) => b.doing.cards.find((c) => c.text === "busy");
-  check(busy(seen.board)?.held, "held near its own place, it is faded there", seen.board);
-  check(await H("status", "busy") === "doing" && !busy(await H("board")).held, "dropped where it was: unchanged, not faded");
+  check(busy(seen.board)?.held && texts(seen.board, "doing") === "busy,early", "held near its own place, it is faded there", seen.board);
+  check(await H("status", "busy") === "doing" && texts(await H("board"), "doing") === "busy,early" && !busy(await H("board")).held, "dropped where it was: unchanged, not faded");
 }
 
 // a click on the handle does nothing
@@ -131,9 +148,7 @@ async function drag(text, x, y, { escape = false } = {}) {
   check(await H("status", "busy") === "doing" && !(await H("card")), "a click on the handle changes nothing");
 }
 
-// a long DONE column, where the card would sort to the very bottom: pointed
-// at the top of the column it still goes to DONE (the column is the target,
-// not the spot the card would land at)
+// a long DONE column: pointed at its top, the card goes first there
 {
   await pg.evaluate(async ({ day }) => {
     const store = await import("/src/store.js");
@@ -144,11 +159,11 @@ async function drag(text, x, y, { escape = false } = {}) {
   await pg.click('.tabs [data-tab="journal"]');
   await pg.click('.tabs [data-tab="tasks"]');
   await pg.waitForSelector(".board .task-item");
+  await settle();
   const W = await H("where"), col = W.cols.done;
   const seen = await drag("late", col.left + 40, col.top + 30);
-  const at = seen.board.done.cards.findIndex((c) => c.text === "late");
-  check(at === 30 && seen.board.done.cards[at].held, "held at the top of a long DONE column, the card is shown at its place far down (after every old task)", seen.board);
-  check(await H("status", "late") === "done", "…and let go there, the task is DONE");
+  check(seen.board.done.cards[0]?.text === "late" && seen.board.done.cards[0].held, "held at the top of a long DONE column, the card is shown first there", seen.board);
+  check(await H("status", "late") === "done" && (await H("board")).done.cards[0].text === "late", "…and let go there, the task is DONE, first in the column");
 }
 
 console.log(`\n${fails.length} failures`);

@@ -6,7 +6,7 @@ import { md, weekday, today } from "./dates.js";
 import { pageLabel } from "./taskitem.js";
 import { place } from "./popover.js";
 import { t as tr } from "./i18n.js";
-import { drag, standin } from "./dragspec.js";
+import { drag, standin, boxAt, gapAt } from "./dragspec.js";
 
 // Saved views over all tasks, after GitHub Projects: each view is a filter,
 // a grouping and a layout (list or board).
@@ -158,14 +158,16 @@ export function renderTasks(root, ctx) {
     if (!tasks.length) bodyEl.innerHTML = `<p class="empty">${tr("views.empty")}</p>`;
   }
 
-  // The board: a column per status, each task a card drawn by `card`.
-  function boardOf(tasks, card) {
+  // The board: a column per status, each a vertical list of cards, drawn
+  // by `card`. columns: status -> its tasks, in order.
+  function boardOf(columns, card) {
     const cols = document.createElement("div");
     cols.className = "board";
     for (const s of STATUSES) {
       const col = document.createElement("section");
       col.className = `column col-${s}`;
-      const list = tasks.filter((t) => t.task === s);
+      col.dataset.status = s;
+      const list = columns.get(s);
       col.innerHTML = `<h3>${STATUS_NAME[s]}<span class="count">${list.length}</span></h3>`;
       for (const t of list) col.append(card(t));
       cols.append(col);
@@ -173,28 +175,52 @@ export function renderTasks(root, ctx) {
     return cols;
   }
 
-  // A card dragged by its handle moves to another column (dragspec.js): the
-  // states are the statuses it can have; each is the board drawn with the
-  // task in that column, out of stand-ins for the cards as they are now, so
-  // the pointer picks a column by where the card would land in it and the
-  // board shows that outcome, counts and all, before the card is let go.
+  // A column's order is the view's own, kept as it is dragged into
+  // (v.order[status]: ids); tasks not placed yet follow, by deadline.
+  const columnsOf = (tasks) => new Map(STATUSES.map((s) => {
+    const rank = new Map((v.order?.[s] ?? []).map((id, k) => [id, k]));
+    const at = (t) => rank.get(t.id) ?? rank.size;
+    return [s, tasks.filter((t) => t.task === s).sort((a, b) => at(a) - at(b) || byDeadlineThenDate(a, b))];
+  }));
+
+  // A card dragged by its handle goes anywhere on the board (dragspec.js):
+  // the states are the places it can be put, a gap in a column (status,
+  // index); each is the board drawn with the card there, out of stand-ins
+  // for the cards as they are now. The pointer picks the column it is over
+  // and the gap it is level with, among the cards on screen; let go, the
+  // card has that status and the column that order.
   function board(tasks) {
+    const columns = columnsOf(tasks);
     const cardIn = (root, id) => root.querySelector(`[data-id="${id}"]`);
-    const live = boardOf(tasks, (t) => {
+    const live = boardOf(columns, (t) => {
       const card = taskItem(t, itemCtx, labelsFor(t));
       const handle = document.createElement("span");
       handle.className = "drag";
       handle.textContent = "⠿";
       handle.onmousedown = (e) => {
-        // the live cards by id, found once: the drawings stand in for them
         const cards = new Map([...live.querySelectorAll(".task-item")].map((c) => [c.dataset.id, c]));
+        const rest = new Map([...columns].map(([s, list]) => [s, list.filter((x) => x.id !== t.id)]));
+        const placed = ({ col, i }) => new Map([...rest].map(([s, list]) => [s, s === col ? [...list.slice(0, i), t, ...list.slice(i)] : list]));
         return drag(e, {
           live,
-          state: t.task,
-          states: STATUSES,
-          render: (s) => boardOf(tasks.map((x) => (x.id === t.id ? { ...x, task: s } : x)), (x) => standin(cards.get(x.id))),
+          state: { col: t.task, i: columns.get(t.task).indexOf(t) },
+          same: (a, b) => a.col === b.col && a.i === b.i,
+          pick: (p) => {
+            const col = boxAt([...live.querySelectorAll(":scope > .column")], p, "x");
+            const others = [...col.querySelectorAll(":scope > .task-item")].filter((c) => c.dataset.id !== t.id);
+            return { col: col.dataset.status, i: gapAt(others, p) };
+          },
+          render: (s) => boardOf(placed(s), (x) => standin(cards.get(x.id))),
           held: (root) => cardIn(root, t.id),
-          onDrop: (s) => { updateBlockAttrs(t.id, (a) => withTask(a, s)); body(); },
+          onDrop: ({ col, i }) => {
+            const order = { ...(v.order ?? {}) };
+            for (const s of STATUSES) if (order[s]) order[s] = order[s].filter((id) => id !== t.id);
+            order[col] = placed({ col, i }).get(col).map((x) => x.id);
+            v.order = order;
+            persist();
+            if (col !== t.task) updateBlockAttrs(t.id, (a) => withTask(a, col));
+            body();
+          },
         });
       };
       card.prepend(handle);

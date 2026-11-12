@@ -2,7 +2,7 @@ import { allTasks, moveBlockToPage, isDate } from "./store.js";
 import { taskItem } from "./taskitem.js";
 import { today, addDays, weekStart, md, weekday } from "./dates.js";
 import { t as tr } from "./i18n.js";
-import { drag, standin } from "./dragspec.js";
+import { drag, standin, boxAt } from "./dragspec.js";
 
 // org-mode style agenda for one week. A task shows on the day it was written
 // and on its DEADLINE; today also lists every overdue deadline.
@@ -11,8 +11,9 @@ import { drag, standin } from "./dragspec.js";
 // its children, goes to the end of that day's journal page (dragspec.js). The
 // states are the week's days and the page the block is on now; each is the
 // week drawn with the task on that page, out of stand-ins for the cards as
-// they are, so the pointer picks a day by where the card would land in it
-// and the week shows that outcome before the card is let go.
+// they are. The pointer picks the day it is over on screen (the day the card
+// was taken from stands for the page it is on), and the week shows that
+// outcome before the card is let go.
 
 export function renderAgenda(root, ctx) {
   const start = weekStart(ctx.state.week ?? today());
@@ -94,10 +95,14 @@ export function renderAgenda(root, ctx) {
         cards.set(`${c.closest(".day").dataset.day} ${c.dataset.id}`, c);
         if (!cards.has(c.dataset.id)) cards.set(c.dataset.id, c);
       }
+      const home = card.closest(".day").dataset.day; // where it is taken from
       return drag(e, {
         live,
         state: t.page,
-        states: [...new Set([t.page, ...days])],
+        pick: (p) => {
+          const day = boxAt([...live.querySelectorAll(":scope > .day")], p, "y").dataset.day;
+          return day === home ? t.page : day;
+        },
         render: (p) => weekOf(tasks.map((x) => (x.id === t.id ? { ...x, page: p, date: isDate(p) ? p : null } : x)), (x, _, day) => standin(cards.get(`${day} ${x.id}`) ?? cards.get(x.id))),
         held: (root, p) => cardIn(root, t, p),
         onDrop: (p) => { moveBlockToPage(t.id, p); ctx.render(); },
