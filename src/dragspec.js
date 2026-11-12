@@ -8,11 +8,11 @@
 // element can be dropped — { state, band } each, the band a rectangle
 // relative to the live element's box — worked out once from what is on
 // screen with the held element taken out of its list as a hole, and kept
-// for the whole drag: nothing on screen is rearranged while the button is
-// down, so the zones stay true and a move costs a lookup. The pointer picks
-// the zone whose band holds it (else the nearest band); `show(zone)` draws
-// what a drop there would do (a line between cards, a highlighted day);
-// letting go commits the zone's state through `onDrop`. Escape, or a drop
+// for the whole drag: nothing is laid out again while the button is down,
+// so the zones stay true and a move costs a lookup. The pointer picks the
+// zone whose band holds it (else the nearest band); `show(zone)` draws what
+// a drop there would do (cards making room, with transforms; a highlighted
+// day); letting go commits the zone's state through `onDrop`. Escape, or a drop
 // in the state the drag began in, does nothing. The held element is faded
 // where it is while a copy of it floats under the pointer. A press that
 // does not move is a click and does nothing here.
@@ -22,8 +22,12 @@ const THRESHOLD = 4; // px the pointer moves before a press becomes a drag
 const inRect = (r, p) => p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom;
 const toRect = (r, p) => Math.hypot(Math.max(r.left - p.x, 0, p.x - r.right), Math.max(r.top - p.y, 0, p.y - r.bottom));
 
-// The zone the point p (relative to the live element's box) picks.
-export function pick(zones, p) {
+// The zone the point p (relative to the live element's box) picks: the one
+// picked now while p stays in its `hold` (the band it covers once it is
+// drawn, when drawing it makes room), else the zone whose band holds p,
+// else the nearest band.
+export function pick(zones, p, picked = null) {
+  if (picked && inRect(picked.hold ?? picked.band, p)) return picked;
   let best = null, dist = Infinity;
   for (const z of zones) {
     const d = inRect(z.band, p) ? 0 : toRect(z.band, p);
@@ -89,7 +93,7 @@ export function drag(ev, { live, held, state, zones, show, onDrop, same = Object
     else if (e.clientY > innerHeight - edge) scroll.scrollBy(0, 12);
     place(e);
     const box = live.getBoundingClientRect();
-    const z = pick(all, { x: e.clientX - box.left, y: e.clientY - box.top });
+    const z = pick(all, { x: e.clientX - box.left, y: e.clientY - box.top }, picked);
     if (z !== picked) { picked = z; show(z); }
   };
   const end = (drop) => {

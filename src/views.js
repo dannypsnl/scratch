@@ -185,14 +185,15 @@ export function renderTasks(root, ctx) {
 
   // A card dragged by its handle goes anywhere on the board (dragspec.js):
   // the places are the gaps of every column (status, index), worked out
-  // once when the drag starts, from the cards on screen with the held one
-  // left out: a gap's band runs from the middle of the card above to the
-  // middle of the card below, across the column. The pointer's gap is drawn
-  // as a line between the cards; let go, the card has that status and the
-  // column that order.
+  // once when the drag starts from the cards on screen with the held one
+  // taken out as a hole (the cards under it closing up): a gap's band runs
+  // from the middle of the card above to the middle of the card below,
+  // across the column. The pointer's gap is shown by the cards making room
+  // for it and a faded copy of the held card in that room, all by transform
+  // (nothing is laid out again, so the gaps stay true); let go, the card
+  // has that status and the column that order.
   function board(tasks) {
     const columns = columnsOf(tasks);
-    let line = null;
     const live = boardOf(columns, (t) => {
       const card = taskItem(t, itemCtx, labelsFor(t));
       const handle = document.createElement("span");
@@ -202,6 +203,11 @@ export function renderTasks(root, ctx) {
         const rest = new Map([...columns].map(([s, list]) => [s, list.filter((x) => x.id !== t.id)]));
         const state = { col: t.task, i: columns.get(t.task).indexOf(t) }; // its gap, with itself left out
         const same = (a, b) => a.col === b.col && a.i === b.i;
+        let cols = null; // per column: { status, cards: [{ el, top (static), shift (closing the hole) }], ... }
+        let held = null; // the held card's box and room (height with its margin)
+        const shown = new Map(); // element -> the transform it has now
+        const put = (el, tf) => { if (shown.get(el) !== tf) { shown.set(el, tf); el.style.transform = tf; } };
+        const px = (n) => Math.round(n * 2) / 2 || 0; // to half a pixel; a hole closed and opened again is no move
         return drag(e, {
           live,
           held: card,
@@ -209,24 +215,35 @@ export function renderTasks(root, ctx) {
           same,
           zones: () => {
             const box = live.getBoundingClientRect();
+            const h = card.getBoundingClientRect();
+            held = { colLeft: card.closest(".column").getBoundingClientRect().left, top: h.top, room: h.height + parseFloat(getComputedStyle(card).marginBottom) };
             const out = [];
-            for (const col of live.querySelectorAll(":scope > .column")) {
+            cols = [...live.querySelectorAll(":scope > .column")].map((col) => {
               const r = col.getBoundingClientRect();
-              const cards = [...col.querySelectorAll(":scope > .task-item")].filter((c) => c !== card).map((c) => c.getBoundingClientRect());
-              const mid = (c) => (c.top + c.bottom) / 2;
+              let below = false; // past the hole, in its column
+              const cards = [...col.querySelectorAll(":scope > .task-item")].flatMap((el) => {
+                if (el === card) { below = true; return []; }
+                const b = el.getBoundingClientRect(), shift = below ? -held.room : 0;
+                return [{ el, top: b.top + shift, mid: (b.top + b.bottom) / 2 + shift, bottom: b.bottom + shift, shift }];
+              });
+              const c = { status: col.dataset.status, el: col, left: r.left, cards };
+              const head = col.querySelector("h3").getBoundingClientRect().bottom + 3;
               for (let i = 0; i <= cards.length; i++) {
-                const band = { left: r.left, right: r.right, top: i ? mid(cards[i - 1]) : r.top, bottom: i < cards.length ? mid(cards[i]) : r.bottom };
-                const y = i < cards.length ? cards[i].top - 5 : cards.length ? cards[i - 1].bottom + 3 : col.querySelector("h3").getBoundingClientRect().bottom + 3;
-                out.push({ state: { col: col.dataset.status, i }, band: within(box, band), line: { left: r.left + 8 - box.left, top: y - box.top, width: r.width - 16 } });
+                const band = { left: r.left, right: r.right, top: i ? cards[i - 1].mid : r.top, bottom: i < cards.length ? cards[i].mid : r.bottom };
+                const land = i < cards.length ? cards[i].top : cards.length ? cards[i - 1].bottom + (held.room - h.height) : head;
+                out.push({ state: { col: c.status, i }, band: within(box, band), hold: within(box, { ...band, bottom: band.bottom + held.room }), col: c, i, land });
               }
-            }
+              return c;
+            });
             return out;
           },
           show: (z) => {
-            if (!z || same(z.state, state)) { line?.remove(); line = null; return; }
-            line ??= document.body.appendChild(Object.assign(document.createElement("span"), { className: "drag-line" }));
-            const box = live.getBoundingClientRect();
-            Object.assign(line.style, { left: `${box.left + z.line.left}px`, top: `${box.top + z.line.top}px`, width: `${z.line.width}px` });
+            for (const c of cols) {
+              c.cards.forEach(({ el, shift }, k) => { const dy = px(z ? shift + (c === z.col && k >= z.i ? held.room : 0) : 0); put(el, dy ? `translateY(${dy}px)` : ""); });
+              c.el.style.paddingBottom = z && c === z.col && c.status !== t.task ? `${held.room + 8}px` : ""; // the column grows to hold the room (its cards only move)
+            }
+            const dx = px(z ? z.col.left - held.colLeft : 0), dy = px(z ? z.land - held.top : 0);
+            put(card, dx || dy ? `translate(${dx}px, ${dy}px)` : "");
           },
           onDrop: ({ col, i }) => {
             const order = { ...(v.order ?? {}) };

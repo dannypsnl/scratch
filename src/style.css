@@ -233,8 +233,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
    rings at their bullets' places, the one it will land at larger, a line
    from it */
 .pm-bullet { cursor: grab; }
-body.block-dragging, body.block-dragging * { cursor: grabbing !important; }
-body.block-dragging { user-select: none; -webkit-user-select: none; }
 .pm-block.pm-dragged { opacity: .35; }
 .block-slots { position: fixed; inset: 0; z-index: 52; pointer-events: none; }
 .block-drop { position: fixed; z-index: 50; pointer-events: none; height: 2px; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 1px; }
@@ -371,12 +369,16 @@ body.block-dragging { user-select: none; -webkit-user-select: none; }
 .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 860px) { .board { grid-template-columns: 1fr; } }
 .column { background: var(--panel); border-radius: 10px; padding: 0 8px 8px; min-height: 120px; }
-/* a card dragged by its handle (dragspec.js): faded where it is, a copy of
-   it under the pointer, a line at the gap it would go to (the board) or the
-   day it would go to lit (the agenda) */
+/* a card dragged by its handle (dragspec.js): a copy of it under the
+   pointer; on the board the cards make room at the gap it would go to and
+   a faded copy sits there, on the agenda the day it would go to is lit */
 .drag-held { opacity: .35; }
-.drag-shield { position: fixed; inset: 0; z-index: 49; cursor: grabbing; }
-.drag-line { position: fixed; z-index: 50; pointer-events: none; height: 2px; background: var(--accent); border-radius: 1px; }
+/* while anything is dragged (drag.js, dragspec.js): the cursor over the whole
+   page, from one element over it rather than a rule on every element */
+.drag-shield { position: fixed; inset: 0; z-index: 49; cursor: grabbing; user-select: none; -webkit-user-select: none; }
+.board .task-item { transition: transform .12s ease; } /* making room for a dragged card */
+.column { transition: padding-bottom .12s ease; }
+.board .task-item.drag-held { position: relative; z-index: 1; }
 .agenda .day.drop { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 8px; }
 .drag-card {
   position: fixed; z-index: 51; pointer-events: none; box-sizing: border-box;

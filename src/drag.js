@@ -184,7 +184,7 @@ function startDrag(view, ev) {
   const pressed = blockPos(view, bullet.parentElement);
   const pressedId = view.state.doc.nodeAt(pressed).attrs.id;
   const ids = heldIds(view, pressed);
-  let dragging = false, done = false, slot = null, marks = null, card = null;
+  let dragging = false, done = false, slot = null, marks = null, card = null, shield = null;
   // positions of the held blocks, in document order (null once one is gone)
   const held = () => {
     const ps = ids.map((id) => findBlock(view.state.doc, id));
@@ -252,7 +252,8 @@ function startDrag(view, ev) {
     if (!dragging) {
       if (Math.hypot(e.clientX - x0, e.clientY - y0) < THRESHOLD) return;
       dragging = true;
-      document.body.classList.add("block-dragging");
+      // the cursor over everything, without touching everything's style
+      shield = document.body.appendChild(Object.assign(document.createElement("div"), { className: "drag-shield" }));
       makeCard(ps);
       view.dispatch(view.state.tr.setMeta(key, { ids, dragging }));
     }
@@ -271,7 +272,7 @@ function startDrag(view, ev) {
     removeEventListener("mousemove", move, true);
     removeEventListener("mouseup", up, true);
     removeEventListener("keydown", onKey, true);
-    document.body.classList.remove("block-dragging");
+    shield?.remove();
     const picked = slot;
     show(null);
     card?.remove();
