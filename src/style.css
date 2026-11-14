@@ -1080,6 +1080,10 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 /* with the caret at it, it reads as typed: `…`, the backticks drawn (not in the text) */
 .pm-icode:has(> .code-raw) { font: inherit; background: none; padding: 0; }
 .pm-icode:has(> .code-raw)::before, .pm-icode:has(> .code-raw)::after { content: "`"; color: var(--muted); }
+/* a little room between each backtick and the code, for the caret just
+   inside it (drawn from the edge rightward, it covered the closing one) */
+.pm-icode:has(> .code-raw)::before { margin-right: .15em; }
+.pm-icode:has(> .code-raw)::after { margin-left: .15em; }
 .pm-code { position: relative; margin: 2px 0; padding: 8px 12px; background: var(--slot); border-radius: 6px; font-family: var(--mono); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
 .pm-code code { font: inherit; }
 .pm-code[data-lang]:not([data-lang=""]) { padding-right: 3.5em; }
