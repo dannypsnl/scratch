@@ -4,8 +4,6 @@ import { newId } from "./outline-io.js";
 import { longDate, md } from "./dates.js";
 import { t } from "./i18n.js";
 
-// Fields are defined on a tag page: { id, name, type, options }.
-// type: "select" (one of options), "text", "url", "date" (YYYY-MM-DD).
 export const FIELD_TYPES = ["select", "text", "url", "date"];
 
 export function displayValue(field, value) {
@@ -22,7 +20,6 @@ function popover(anchor, cls) {
   const box = document.createElement("div");
   box.className = `palette field-pop ${cls}`;
   document.body.append(box);
-  place(box, anchor.getBoundingClientRect());
   const close = () => { box.remove(); document.removeEventListener("mousedown", away); };
   const away = (e) => { if (!box.contains(e.target) && !anchor.contains(e.target)) close(); };
   setTimeout(() => document.addEventListener("mousedown", away));
@@ -30,7 +27,6 @@ function popover(anchor, cls) {
   return { box, close };
 }
 
-// Add or edit a field definition. onSave(field); onDelete() when editing.
 export function openFieldEditor(anchor, field, { onSave, onDelete }) {
   const { box, close } = popover(anchor, "field-def");
   const f = field ? { ...field, options: [...(field.options ?? [])] } : { id: "f-" + newId(), name: "", type: "select", options: [] };
@@ -60,7 +56,6 @@ export function openFieldEditor(anchor, field, { onSave, onDelete }) {
       return chip;
     }));
   };
-  // Enter in the option box adds what was typed; on an empty box it saves
   const addOption = () => {
     const o = optNew.value.trim();
     if (!o) return false;
@@ -96,12 +91,10 @@ export function openFieldEditor(anchor, field, { onSave, onDelete }) {
   optNew.addEventListener("keydown", (e) => {
     if (e.key === "Backspace" && !optNew.value && f.options.length) { f.options.pop(); drawOptions(); }
   });
+  place(box, anchor.getBoundingClientRect());
   name.focus();
 }
 
-// Pick or type a value for one field. onSave(value) — null clears it.
-// For a select, typing a name that is not an option yet adds it through
-// onAddOption(name) and picks it.
 export function openValueEditor(anchor, field, value, onSave, onAddOption) {
   const { box, close } = popover(anchor, "field-value");
   const done = (v) => { close(); onSave(v); };
@@ -153,4 +146,5 @@ export function openValueEditor(anchor, field, value, onSave, onAddOption) {
     clear.onclick = () => done(null);
     box.append(clear);
   }
+  place(box, anchor.getBoundingClientRect());
 }

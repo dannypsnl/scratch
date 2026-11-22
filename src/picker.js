@@ -1,14 +1,9 @@
 import { place } from "./popover.js";
 
-// Search menu at the caret, shared by [[ / # (pages) and (( (blocks).
-// search(q) -> [{ label, sub, value }]; onPick(item, q);
-// hint(q) -> a line under the list, or null (what a half-typed query still needs);
-// onCancel(q, how): how is "escape", "backspace" (on an empty query) or "blur".
 export function openPicker(view, { placeholder, initial = "", search, hint = () => null, onPick, onCancel }) {
   const coords = view.coordsAtPos(view.state.selection.from);
   const box = document.createElement("div");
   box.className = "palette picker";
-  place(box, coords);
   const input = document.createElement("input");
   input.placeholder = placeholder;
   input.value = initial;
@@ -69,5 +64,6 @@ export function openPicker(view, { placeholder, initial = "", search, hint = () 
     if (document.hasFocus() && document.activeElement !== input) finish(() => onCancel(input.value, "blur"));
   }));
   render();
+  place(box, coords);
   input.focus();
 }

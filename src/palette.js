@@ -5,25 +5,19 @@ import { place } from "./popover.js";
 import { selectionActions, applyNotation } from "./notation.js";
 import { t } from "./i18n.js";
 
-// "\" inside a formula opens this. Everything structural is summoned here,
-// including commands the spec table does not know (the last entry).
-
 export const ENTRIES = [
   ...Object.entries(STRUCTS).map(([name, s]) => ({ name, kind: "struct", arity: s.arity, tex: s.example, note: t("palette.slots", s.arity) })),
   ...Object.entries(SYMBOLS).map(([name, s]) => ({ name, kind: "sym", tex: s.preview ?? "\\" + name,
     rank: s.rank, ams: s.ams, family: Object.keys(FAMILIES).find((f) => FAMILIES[f](s.char)) })),
-  // \xrightarrow and kin: an \overset over the arrow (nav.js insertStruct)
   ...Object.keys(X_ARROWS).map((name) => ({ name, kind: "struct", arity: 1, tex: `\\${name}{f}`, note: t("palette.slots", 2), family: "arrow" })),
 ];
 
-// Rendered preview of what the entry inserts.
 const previews = new Map();
 export function preview(tex) {
   if (!previews.has(tex)) previews.set(tex, katex.renderToString(tex, { throwOnError: false }));
   return previews.get(tex);
 }
 
-// subsequence match on the name; lower is better, null = no match
 function score(name, q) {
   if (!q) return 0;
   if (name === q) return -2;
@@ -35,9 +29,6 @@ function score(name, q) {
   return i === q.length ? gaps + name.length / 100 : null;
 }
 
-// A family's name ("arrow") matches every member too: the common ones
-// (specs.js COMMON) first in their order, then those whose names match, then
-// the rest, KaTeX's own before the AMS ones.
 function rank(e, q) {
   const s = score(e.name, q);
   if (e.family !== q) return s;
@@ -45,25 +36,20 @@ function rank(e, q) {
   return s ?? 50 + (e.ams ? 1 : 0);
 }
 
-// The entries the menu lists for a query, best first: the first 8, or every
-// match when the query names a family (the list scrolls).
 export function ranked(entries, q) {
   const all = entries.map((e) => ({ e, s: rank(e, q) })).filter((x) => x.s !== null).sort((a, b) => a.s - b.s).map((x) => x.e);
   return FAMILIES[q] ? all : all.slice(0, 8);
 }
 
-// The \ menu of commands; or, actionsOnly, the menu Space opens on a
-// selection: what can be done with it (they are not in the \ menu)
 export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
   const offered = actionsOnly ? selectionActions(view.state) : [];
   if (actionsOnly && !offered.length) return;
   const coords = view.coordsAtPos(view.state.selection.from);
   const box = document.createElement("div");
   box.className = "palette";
-  place(box, coords);
   const input = document.createElement("input");
   input.placeholder = "\\command";
-  if (actionsOnly) input.className = "hidden-input"; // ↑ ↓ Enter only
+  if (actionsOnly) input.className = "hidden-input";
   input.value = initial;
   const list = document.createElement("ul");
   box.append(input, list);
@@ -79,7 +65,7 @@ export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
     else insertEntry(view, item);
   };
 
-  function render() {
+  function draw() {
     const q = input.value.replace(/^\\/, "");
     items = ranked(actionsOnly ? actions : [...actions, ...ENTRIES], q);
     if (!actionsOnly && !FAMILIES[q] && /^[a-zA-Z]+$/.test(q) && !items.some((e) => e.name === q)) {
@@ -90,17 +76,14 @@ export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
       const li = document.createElement("li");
       li.className = k === active ? "active" : "";
       li.innerHTML = `<span class="cmd"></span><span class="pv">${it.tex ? preview(it.tex) : ""}</span><span class="note"></span>`;
-      // an action is named by what it does; a command by its \\name
       li.querySelector(".cmd").textContent = it.kind === "action" ? it.note : "\\" + it.name;
-      // (a Nerdamer action shows its answer, and is not a change of notation)
       li.querySelector(".note").textContent = it.kind === "action" ? (it.action.input ? "" : t("notation.note")) : it.note ?? "";
-      // an action with a key of its own in a formula (^ _) takes it here too
       if (it.action?.key) li.querySelector(".note").prepend(Object.assign(document.createElement("kbd"), { textContent: it.action.key }), " ");
       li.onmousedown = (ev) => { ev.preventDefault(); run(it); };
       return li;
     }));
-    list.children[active]?.scrollIntoView({ block: "nearest" });
   }
+  const render = () => { draw(); list.children[active]?.scrollIntoView({ block: "nearest" }); };
 
   input.addEventListener("input", () => { active = 0; render(); });
   input.addEventListener("keydown", (ev) => {
@@ -111,23 +94,22 @@ export function openPalette(view, initial = "", { actionsOnly = false } = {}) {
     else if (actionsOnly && actions.some((a) => a.action.key === ev.key)) { run(actions.find((a) => a.action.key === ev.key)); ev.preventDefault(); }
   });
   closeOnBlur(input, box);
-  render();
+  draw();
+  place(box, coords);
   input.focus();
 }
 
-// What an entry inserts, at the caret (or around the selection)
 export function insertEntry(view, item) {
   if (item.kind === "sym") insertSym(view.state, view.dispatch, item.name);
   else if (item.kind === "struct" && STRUCTS[item.name]?.letter && view.state.selection.empty) openLetter(view, item.name);
   else if (item.kind === "struct") insertStruct(view.state, view.dispatch, item.name, item.arity);
-  else if (item.kind === "generic") openArity(view, item.name); // second stage: how many argument slots
+  else if (item.kind === "generic") openArity(view, item.name);
 }
 
 function openArity(view, name) {
   const coords = view.coordsAtPos(view.state.selection.from);
   const box = document.createElement("div");
   box.className = "palette";
-  place(box, coords);
   box.innerHTML = `<div class="ask">${t("palette.arity", name)}</div>`;
   const input = document.createElement("input");
   input.className = "hidden-input";
@@ -140,25 +122,22 @@ function openArity(view, name) {
     else if (ev.key === "Escape") close();
   });
   closeOnBlur(input, box);
+  place(box, coords);
   input.focus();
 }
 
-// Close when focus moves elsewhere in the page, but survive switching windows.
 function closeOnBlur(input, box) {
   input.addEventListener("blur", () => setTimeout(() => {
     if (document.hasFocus() && document.activeElement !== input && box.isConnected) box.remove();
   }));
 }
 
-// \mathbb, \mathcal: the next letter typed is the argument. Common letters
-// are offered too: Tab / Shift-Tab (or ← →) to choose, Enter to insert.
 const COMMON = { mathbb: "NZQRCFPA", mathcal: "CDFOLAH" };
 
 function openLetter(view, name) {
   const coords = view.coordsAtPos(view.state.selection.from);
   const box = document.createElement("div");
   box.className = "palette letter-picker";
-  place(box, coords);
   const letters = [...(COMMON[name] ?? "")];
   box.innerHTML = `<div class="ask">${t("palette.letter", name)}</div><div class="choices"></div>`;
   const choices = box.querySelector(".choices");
@@ -192,5 +171,6 @@ function openLetter(view, name) {
     else if (ev.key === "Escape" || ev.key === "Backspace") close();
   });
   closeOnBlur(input, box);
+  place(box, coords);
   input.focus();
 }
