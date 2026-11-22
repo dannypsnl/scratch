@@ -1,6 +1,4 @@
-/* Themes: data-theme on <html> (settings, ⌘,). "auto" follows the system. */
 :root, [data-theme="ink"], [data-theme="auto"] {
-  /* ink: neutral greys, one quiet accent */
   --bg: #ffffff;
   --fg: #1f1f1f;
   --muted: #8a8a8a;
@@ -15,7 +13,6 @@
   --hot: #d93025;
 }
 [data-theme="paper"] {
-  /* paper: warm off-white, printed-matter accent */
   --bg: #f7f3ea;
   --fg: #2b2620;
   --muted: #8b8274;
@@ -67,11 +64,7 @@ body {
   font: 18px/1.7 "Iowan Old Style", "Songti TC", serif;
 }
 
-/* hidden means hidden, whatever display a class sets (a .notation-hint with
-   display: flex stayed on screen with hidden set) */
 [hidden] { display: none !important; }
-
-/* ---------- shell: sidebar + main column ---------- */
 
 .app { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
 .app.side-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
@@ -123,15 +116,12 @@ body {
 .side-foot button { background: none; border: 0; cursor: pointer; color: var(--muted); font: 12px system-ui, sans-serif; padding: 4px 8px; border-radius: 6px; }
 .side-foot button:hover { background: var(--slot); }
 
-/* main column: left-aligned beside the sidebar. Its own width (not the
-   window's) decides extra columns, so collapsing the sidebar can make room. */
 main { margin: 0; padding: 16px 40px 80px 56px; box-sizing: border-box; width: 100%; container-type: inline-size; }
 main > :not(.journal-grid) { max-width: 860px; }
-/* the journal fills the main column: its text takes what the calendar (on
-   the right edge) leaves */
+
 .journal-grid { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 40px; align-items: start; }
 .journal-side { display: none; }
-/* 1000px: a full-screen 1440px window with the sidebar open qualifies */
+
 @container (min-width: 1000px) {
   .journal-grid { grid-template-columns: minmax(0, 1fr) 232px; }
   .journal-side { display: block; position: sticky; top: 16px; font: 13px system-ui, sans-serif; padding-top: 4px; }
@@ -139,7 +129,6 @@ main > :not(.journal-grid) { max-width: 860px; }
   .journal-grid .today-group .cal-btn { display: none; }
 }
 
-/* narrow windows: the sidebar floats over the page when opened */
 @media (max-width: 860px) {
   .app, .app.side-collapsed { grid-template-columns: minmax(0, 1fr); }
   .sidebar { position: fixed; left: 0; z-index: 30; width: 240px; box-shadow: 0 8px 28px #0003; }
@@ -159,16 +148,15 @@ button { font: 13px system-ui, sans-serif; color: var(--fg); }
 }
 .datebar button:disabled { opacity: .4; cursor: default; }
 
-
 .ProseMirror {
   outline: none;
   white-space: pre-wrap;
 }
 .journal .ProseMirror { min-height: 6em; }
-.ProseMirror { caret-color: transparent; } /* the caret is drawn (decorations.js) */
+.ProseMirror { caret-color: transparent; }
 
 .help-panel {
-  position: fixed; /* its button sits in the sticky sidebar */
+  position: fixed;
   overscroll-behavior: contain;
   z-index: 40;
   width: 440px;
@@ -206,19 +194,13 @@ button { font: 13px system-ui, sans-serif; color: var(--fg); }
 }
 kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
 
-/* ---------- outline ---------- */
-
-/* one colour for what is selected, text or whole blocks (blockselect.js);
-   a formula's own (.pm-math, further down) is red, as its caret is */
 .ProseMirror { --select: color-mix(in srgb, var(--accent) 16%, transparent); }
 .ProseMirror ::selection, .ProseMirror::selection { background: var(--select); }
 
-/* bullet and first line share a baseline, however tall the line (fractions) */
 .pm-block { display: grid; grid-template-columns: 1.2em minmax(0, 1fr); align-items: baseline; }
 .pm-bullet { color: var(--muted); text-align: center; user-select: none; }
 .pm-bullet::before { content: "•"; }
 
-/* folding: click a bullet that has children; folded bullets get a halo */
 .pm-block { position: relative; }
 .pm-block:has(> .pm-body > .pm-block) > .pm-bullet { cursor: pointer; }
 .pm-block:has(> .pm-body > .pm-block) > .pm-bullet:hover { color: var(--fg); }
@@ -228,10 +210,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   background: var(--line);
   box-shadow: 0 0 0 .12em var(--line);
 }
-/* dragging a bullet moves its block (drag.js): the block fades and follows
-   the pointer as a card; the depths it can land at in the gap it is over are
-   rings at their bullets' places, the one it will land at larger, a line
-   from it */
+
 .pm-bullet { cursor: grab; }
 .pm-block.pm-dragged { opacity: .35; }
 .block-slots { position: fixed; inset: 0; z-index: 52; pointer-events: none; }
@@ -246,7 +225,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   opacity: 1;
 }
 .block-card > .pm-block > .pm-bullet { color: var(--accent); }
-/* selected blocks (blockselect.js): tinted, each with its children */
+
 .pm-block.pm-block-selected { --sel-radius: 5px; background: var(--select); }
 .pm-block-selected .pm-block-selected { background: none; }
 .pm-body > .pm-block { position: relative; }
@@ -258,16 +237,15 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   bottom: 0;
   border-left: 1px solid var(--line);
 }
-/* one row: [task icon] line [deadline], children wrap below */
+
 .pm-body { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; }
 .pm-body > .pm-line { flex: 0 1 auto; min-width: 2em; min-height: 1.7em; }
 .pm-body > .pm-block { flex: 0 0 100%; }
 .pm-body > .task-icon, .pm-body > .deadline { flex: none; }
 .pm-body > .task-icon { position: relative; top: .14em; }
-/* a long line wraps beside its task icon, not onto a row of its own */
+
 .pm-body > .task-icon + .pm-line { max-width: calc(100% - 1.35em); }
-/* deadline: a metadata line under the text, aligned with it (past the
-   task icon), not a pill beside it */
+
 .pm-body > .deadline {
   flex-basis: 100%;
   margin: -2px 0 2px;
@@ -310,16 +288,12 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .tag.completed { color: var(--muted); }
 .tag.due { color: var(--warn); border-color: var(--warn); }
 
-/* ---------- task lists ---------- */
-
 .task-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   column-gap: 4px;
   padding: 6px 8px;
   border-radius: 8px;
-  /* a list can hold thousands: those off screen are not laid out or drawn
-     (the size they last had stands in for them) */
   content-visibility: auto;
   contain-intrinsic-size: auto 52px;
 }
@@ -329,14 +303,13 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .task-item .task-meta .tag { margin-left: 0; cursor: default; }
 .task-item .trail::before { content: "↳ "; }
 .task-item .drag { cursor: grab; color: var(--muted); font-size: 14px; grid-row: 1; }
-.task-item:has(> .drag) { grid-template-columns: auto minmax(0, 1fr); } /* the handle beside the block */
+.task-item:has(> .drag) { grid-template-columns: auto minmax(0, 1fr); }
 .task-item:has(> .drag) .task-meta { grid-column: 2; }
 .board .task-item { background: var(--bg); border: 1px solid var(--line); margin-bottom: 8px; }
 
 .group h3, .column h3, .day h3 { font: 600 13px system-ui, sans-serif; color: var(--muted); margin: 20px 0 6px; display: flex; gap: 8px; align-items: center; }
 .count { font-weight: normal; background: var(--panel); border-radius: 8px; padding: 0 6px; }
 
-/* task views: underlined text tabs, one slim toolbar */
 .view-tabs { display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
 .vtab { display: flex; align-items: center; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .vtab.active { border-bottom-color: var(--accent); }
@@ -369,14 +342,11 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 860px) { .board { grid-template-columns: 1fr; } }
 .column { background: var(--panel); border-radius: 10px; padding: 0 8px 8px; min-height: 120px; }
-/* a card dragged by its handle (dragspec.js): a copy of it under the
-   pointer; on the board the cards make room at the gap it would go to and
-   a faded copy sits there, on the agenda the day it would go to is lit */
+
 .drag-held { opacity: .35; }
-/* while anything is dragged (drag.js, dragspec.js): the cursor over the whole
-   page, from one element over it rather than a rule on every element */
+
 .drag-shield { position: fixed; inset: 0; z-index: 49; cursor: grabbing; user-select: none; -webkit-user-select: none; }
-.board .task-item { transition: transform .12s ease; } /* making room for a dragged card */
+.board .task-item { transition: transform .12s ease; }
 .column { transition: padding-bottom .12s ease; }
 .board .task-item.drag-held { position: relative; z-index: 1; }
 .agenda .day.drop { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 8px; }
@@ -390,8 +360,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .agenda .day { border-top: 1px solid var(--line); padding-bottom: 6px; }
 .agenda .day.today h3 a { color: var(--accent); }
 .agenda .day h3 a { color: inherit; text-decoration: none; font-size: 14px; }
-
-/* ---------- calendar ---------- */
 
 .calendar {
   position: absolute;
@@ -409,7 +377,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .cal-grid span { color: var(--muted); font-size: 11px; }
 .cal-grid button { position: relative; background: none; border: 0; border-radius: 6px; height: 2.2em; cursor: pointer; }
 .cal-grid button:hover { background: var(--panel); }
-.cal-grid .other { visibility: hidden; } /* other months' days: blank cells */
+.cal-grid .other { visibility: hidden; }
 .cal-grid .today { color: var(--accent); font-weight: 600; }
 .cal-grid .base { box-shadow: inset 0 0 0 1px var(--line); }
 .cal-grid .selected { background: var(--slot); }
@@ -425,12 +393,10 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .deadline-picker .row button { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 3px 10px; cursor: pointer; }
 
 .cjk-gap { margin-left: .25em; }
-/* the gap before inline code goes on its box, not inside it */
+
 .pm-icode > .cjk-gap { margin-left: 0; }
 .pm-icode:has(> .cjk-gap) { margin-left: .25em; }
 .no-cjk-gap .cjk-gap, .no-cjk-gap .pm-icode:has(> .cjk-gap) { margin-left: 0; }
-
-/* ---------- formulas ---------- */
 
 .pm-math {
   font-family: KaTeX_Math, serif;
@@ -440,59 +406,50 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   border-radius: 3px;
   white-space: nowrap;
 }
-/* the formula being edited keeps a quiet tint; the red caret marks it */
+
 .pm-math.pm-active { background: var(--slot); }
 .pm-math .pm-here { outline: 1px dashed color-mix(in srgb, var(--fg) 45%, transparent); outline-offset: 1px; border-radius: 1px; }
 .pm-math ::selection, .pm-math::selection { background: color-mix(in srgb, var(--hot) 30%, transparent); }
-/* (a selected structure, symbol or script: marked as a whole, decorations.js) */
+
 .pm-math .pm-selected { background: color-mix(in srgb, var(--hot) 30%, transparent); border-radius: 2px; }
 .pm-math .pm-selected ::selection, .pm-math .pm-selected::selection { background: transparent; }
 .pm-upright, .pm-sym, .pm-deco { font-family: KaTeX_Main, serif; font-style: normal; }
 .pm-sym.pm-italic { font-family: KaTeX_Math, serif; font-style: italic; }
 .pm-sym.pm-bb, .pm-sym.pm-ams { font-family: KaTeX_AMS, serif; }
-/* a glyph drawn as one over another (⇸: the AMS short bar, in a box of no width, moved to the middle of \to) */
+
 .pm-sym.pm-drawn .pm-over { display: inline-block; width: 0; position: relative; left: .36em; font-family: KaTeX_AMS, serif; }
-/* large operators as TeX draws them in display style: the larger glyph,
-   centred on the axis */
+
 .pm-sym.pm-op { font-family: KaTeX_Size2, KaTeX_Main, serif; vertical-align: -.25em; margin-right: .167em; }
-.pm-sym.pm-op:has(+ :is(.pm-sup, .pm-sub)) { margin-right: 0; } /* (the space comes after its scripts: stack.js) */
+.pm-sym.pm-op:has(+ :is(.pm-sup, .pm-sub)) { margin-right: 0; }
 :is(.pm-sup, .pm-sub) .pm-sym.pm-op { font-family: KaTeX_Size1, KaTeX_Main, serif; vertical-align: 0; }
-/* a limit over or under its operator (stack.js places it) */
+
 .pm-limit { position: relative; left: var(--lx, 0px); }
 .pm-unknown { color: var(--muted); font-size: .8em; }
-/* an operator name (\sin, \operatorname{Ob}) has a thin space beside it,
-   as TeX sets Op by Ord; none next to a bracket or before a comma, sin(x),
-   (sin x), Ob(P), and none beside a relation or an operator, whose own
-   space is all TeX puts there: f : Ob(P), x + sin y */
+
 .pm-sym.pm-opname, .layout-opname { margin: 0 .17em; }
-:is(.pm-sym.pm-opname, .layout-opname):is(:has(+ :is(.pm-open, .pm-close, .pm-punct, .pm-rel, .pm-bin)), :last-child) { margin-right: 0; }
-:is(.pm-open, .pm-rel, .pm-bin) + :is(.pm-sym.pm-opname, .layout-opname), :is(.pm-sym.pm-opname, .layout-opname):first-child { margin-left: 0; }
+:is(.pm-sym.pm-opname, .layout-opname).pm-flush-left { margin-left: 0; }
+:is(.pm-sym.pm-opname, .layout-opname).pm-flush-right { margin-right: 0; }
 .pm-bin { margin: 0 .22em; }
-.pm-math .pm-sym.pm-bin.pm-unary { margin: 0; } /* -x, (-x): an ordinary symbol (decorations.js) */
-/* a binary operator with a script, used as a large one (\sqcup_y): the
-   operator's thin space comes after its last script (decorations.js) */
+.pm-math .pm-sym.pm-bin.pm-unary { margin: 0; }
+
 .pm-asop + :is(.pm-sup, .pm-sub) { margin-right: .167em; }
 .pm-asop + :is(.pm-sup, .pm-sub):has(+ :is(.pm-sup, .pm-sub)) { margin-right: 0; }
 .pm-asop + :is(.pm-sup, .pm-sub) + :is(.pm-sup, .pm-sub) { margin-right: .167em; }
-/* a typed - is drawn as the minus KaTeX writes for it (the document and the
-   LaTeX keep -): the minus glyph laid over the hyphen, which turns invisible
-   and takes the minus's .778em (letter-spacing), so the caret goes on either
-   side of the minus */
+
 .pm-minus { -webkit-text-fill-color: transparent; letter-spacing: .445em; }
 .pm-minus::before { content: "\2212"; -webkit-text-fill-color: currentColor; letter-spacing: 0; margin-right: -.778em; }
-/* in small type (scripts, labels, a root's index) TeX puts no space around
-   relations, operators or commas: n\mapsto(n,0), not n ↦ (n, 0) */
+
 :is(.pm-sup, .pm-sub, .layout-overset > .pm-slot:first-child, .layout-underset > .pm-slot:first-child,
   .layout-overbrace > .pm-slot:first-child, .layout-underbrace > .pm-slot:last-child, .layout-root > .pm-slot:first-child)
   :is(.pm-rel, .pm-bin, .pm-punct) { margin-left: 0; margin-right: 0; }
 .pm-rel { margin: 0 .28em; }
 .pm-punct { margin-right: .17em; }
-/* := is one relation: no space inside it (decorations.js) */
+
 .pm-rel.pm-coloneq { margin-right: 0; }
 .pm-coloneq + .pm-rel { margin-left: 0; }
 
 .pm-sup, .pm-sub { font-size: .7em; display: inline-block; }
-/* --shift: further out, on a structure taller than a letter (stack.js) */
+
 .pm-sup { vertical-align: calc(.55em + var(--shift, 0px)); }
 .pm-sub { vertical-align: calc(-.3em - var(--shift, 0px)); }
 
@@ -501,7 +458,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .pm-args { display: inline-flex; align-items: baseline; }
 .pm-slot { display: inline-block; text-align: center; min-width: .2em; }
 
-/* fraction: numerator baseline is the box baseline, lift so the bar sits on the math axis */
 .layout-fraction {
   flex-direction: column;
   align-items: stretch;
@@ -512,15 +468,11 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-fraction > .pm-slot { padding: 0 .15em; }
 .layout-fraction > .pm-slot:first-child { border-bottom: .06em solid currentColor; padding-bottom: .08em; }
 .layout-fraction > .pm-slot:last-child { padding-top: .05em; }
-/* a fraction in a fraction is smaller, as in TeX: .7 of the one around it,
-   then .5 of the outermost, and no smaller */
+
 .layout-fraction .layout-fraction > .pm-slot { font-size: .7em; }
 .layout-fraction .layout-fraction .layout-fraction > .pm-slot { font-size: .714em; }
 .layout-fraction .layout-fraction .layout-fraction .layout-fraction > .pm-slot { font-size: 1em; }
 
-/* \left( … \right): the delimiters are borders as tall as the content, a (
-   the left half of an ellipse whose border thins to nothing at its ends */
-/* (an inner atom: a thin space before it, as after f in f\left(x\right); none in small type) */
 .layout-delim { position: relative; display: inline-block; padding: 0 .42em; margin-left: .167em; }
 :is(.pm-sup, .pm-sub) .layout-delim { margin-left: 0; }
 .layout-delim > .pm-deco { position: absolute; top: .08em; bottom: .02em; width: .3em; box-sizing: border-box; border: 0 solid currentColor; }
@@ -539,10 +491,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-radical .pm-args { border-top: .06em solid currentColor; padding: .05em .1em 0; }
 .layout-radical > .pm-deco { font-size: 1.1em; }
 
-/* the small slot stays in flow and as wide as its content: absolutely
-   positioned, WebKit put the caret at its stretched left edge. The base keeps
-   the text baseline: an inline-block takes its last line's, a flex column its
-   first item's in `order` */
 .layout-overset, .layout-underset { margin: 0 .15em; text-align: center; }
 .layout-overset { display: inline-block; }
 .layout-overset > .pm-slot { display: block; width: fit-content; margin: 0 auto; }
@@ -551,40 +499,31 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-overset > .pm-slot:first-child { margin-bottom: -.3em; }
 .layout-underset > .pm-slot:first-child { order: 1; margin-top: -.15em; }
 
-/* stretchy shapes: KaTeX's own SVG pieces as mask layers (katex-stretchy.css,
-   generated), filled with the text colour.
-   A label over (or under) a lone arrow: the arrow as wide as its label. The
-   arrow symbol stays in the box (to be selected, retyped), unpainted; the
-   shape is drawn across the whole box, centred on the axis as KaTeX does. */
-.pm-xarrow, .pm-xarrow-over { margin: 0 .28em; } /* a relation's spacing, which the arrow gives up */
+.pm-xarrow, .pm-xarrow-over { margin: 0 .28em; }
 .pm-xarrow-over .pm-xarrow { margin: 0; }
-/* KaTeX's label padding (.5em of the label's size) and nearness: its
-   baseline .62em above the main one, a label below .61em under it */
+
 .pm-xarrow > .pm-slot:first-child, .pm-xarrow-over > .pm-slot:first-child { padding: 0 .5em; }
 .layout-overset.pm-xarrow > .pm-slot:first-child, .pm-xarrow-over > .pm-slot:first-child { margin-bottom: -.62em; }
 .layout-underset.pm-xarrow > .pm-slot:first-child { margin-top: -.4em; }
 .pm-xarrow > .pm-slot:last-child, .pm-xarrow-over > .pm-slot:last-child { width: auto; align-self: stretch; }
-/* (left-aligned: the shape and the symbol overlap, so the line is as wide as
-   the symbol alone, and centring would push the shape to the right) */
+
 .pm-xarrow > .pm-slot:last-child > .pm-sym { display: block; margin: 0; min-width: var(--st-min); -webkit-text-fill-color: transparent; white-space: nowrap; text-align: left; }
 .pm-xarrow > .pm-slot:last-child > .pm-sym::before {
   content: ""; display: inline-block; width: 100%; margin-right: -100%; height: var(--st-h); vertical-align: var(--st-y);
   background-color: currentColor; -webkit-mask: var(--st-mask); mask: var(--st-mask);
 }
-/* \xrightarrow[below]{above}: the \underset of the arrow fills the \overset */
+
 .pm-xarrow-over > .pm-slot:last-child > .layout-underset { display: flex; margin: 0; }
 
-/* stretchy accents over the argument, and under it */
 .layout-accent.pm-st, .layout-accent-under, .layout-overbrace, .layout-underbrace { min-width: var(--st-min); }
 .layout-accent.pm-st > .pm-deco, .layout-accent-under > .pm-deco {
   height: var(--st-h); line-height: 0; background-color: currentColor; -webkit-mask: var(--st-mask); mask: var(--st-mask);
 }
 .layout-accent.pm-st > .pm-deco { margin-bottom: -.2em; }
-.layout-accent-under { flex-direction: column; align-items: stretch; } /* the argument first: its baseline */
+.layout-accent-under { flex-direction: column; align-items: stretch; }
 .layout-accent-under > .pm-args { display: block; text-align: center; }
 .layout-accent-under > .pm-deco { display: block; margin-top: -.12em; }
 
-/* \overbrace{x+y}^{n}: the label, the brace, the argument; \underbrace the other way */
 .layout-overbrace { display: inline-block; text-align: center; }
 .layout-overbrace > .pm-slot { display: block; }
 .layout-overbrace > .pm-slot:first-child, .layout-underbrace > .pm-slot:last-child { width: fit-content; margin: 0 auto; font-size: .7em; line-height: 1; }
@@ -595,7 +534,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-underbrace { flex-direction: column; align-items: stretch; text-align: center; }
 .layout-underbrace > .pm-slot:first-child::after { margin: .1em 0 .05em; }
 
-/* \sqrt[n]{x}: the index small and raised before the radical */
 .layout-root { align-items: baseline; margin: 0 .1em; }
 .layout-root > .pm-slot:first-child { font-size: .55em; vertical-align: .9em; position: relative; bottom: .9em; margin-right: -.45em; }
 .layout-root > .pm-slot:last-child { border-top: .06em solid currentColor; padding: .05em .1em 0; margin-left: .75em; position: relative; }
@@ -613,27 +551,22 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .layout-font-scr > .pm-slot { font-family: KaTeX_Script, serif; font-style: normal; }
 .layout-font-normal > .pm-slot { font-family: KaTeX_Math, serif; font-style: italic; }
 .layout-font-bsym > .pm-slot { font-family: KaTeX_Math, serif; font-style: italic; font-weight: bold; }
-/* \text keeps its spaces */
+
 [class*="layout-font-"] > .pm-slot { white-space: pre; }
 .layout-underline > .pm-slot { border-bottom: .06em solid currentColor; }
 .layout-boxed > .pm-slot { border: .06em solid currentColor; padding: 0 .2em; }
 
-/* \tfrac: text-style, smaller */
 .layout-fraction.pm-small { font-size: .75em; }
 
-/* accents: the mark over the argument, the argument's line the baseline */
 .layout-accent { display: inline-block; text-align: center; }
 .layout-accent > .pm-args { display: block; }
-/* the mark's foot about .7em above the baseline: clear of capitals, a little
-   high over lowercase (KaTeX fits it to each letter; this does not measure) */
+
 .layout-accent > .pm-deco { display: block; height: .4em; line-height: .8; margin-bottom: -.31em; }
 .pm-accent-vec > .pm-deco { font-size: .65em; margin-bottom: -.3em; }
 
-/* unknown command: label + boxed slots, still fully structural */
 .layout-generic > .pm-deco { font: .65em ui-monospace, Menlo, monospace; color: var(--muted); align-self: center; margin-right: .15em; }
 .layout-generic .pm-slot { border: 1px solid var(--line); border-radius: 3px; padding: 0 .15em; margin-right: .1em; }
 
-/* empty containers get a placeholder box */
 .pm-empty::after {
   content: "";
   display: inline-block;
@@ -652,20 +585,15 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   border-left: 2px solid var(--fg);
   pointer-events: none;
 }
-/* in a formula or in code (inline or a block) the caret is red: what is
-   typed next is not prose; the two are told apart by their boxes */
+
 .pm-caret:is(.in-math, .in-code) { border-left-color: var(--hot); }
 .pm-caret.blink { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { border-color: transparent; } }
 
 .ProseMirror-selectednode { outline: 1.5px solid var(--accent); border-radius: 2px; }
-/* a selection that is not text (an image, selected blocks) is drawn by its
-   own marks, never by the browser's tint (ProseMirror's own stylesheet,
-   which is not loaded, has this) */
+
 .ProseMirror-hideselection *::selection { background: transparent; }
 .ProseMirror-hideselection { caret-color: transparent; }
-
-/* ---------- palette ---------- */
 
 .palette {
   position: absolute;
@@ -689,7 +617,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   outline: none;
 }
 .palette input.hidden-input { position: absolute; opacity: 0; height: 0; border: 0; padding: 0; }
-.palette ul { list-style: none; margin: 0; padding: 4px 0; max-height: calc(18em + 54px); overflow-y: auto; } /* 9 rows (the padding is outside); a family's list scrolls */
+.palette ul { list-style: none; margin: 0; padding: 4px 0; max-height: calc(18em + 54px); overflow-y: auto; }
 .palette li { display: grid; grid-template-columns: 1fr auto 4.5em; align-items: center; gap: 12px; padding: 3px 8px; cursor: pointer; min-height: 2em; }
 .palette .pv { font-size: 15px; color: var(--fg); }
 .palette .note { color: var(--muted); text-align: right; font-size: 11px; }
@@ -697,7 +625,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .palette .ask { padding: 8px; }
 .palette .hint { padding: 4px 8px 6px; color: var(--muted); font-size: 12px; }
 
-/* what the selection in a formula can be rewritten as (notation.js) */
 .notation-hint {
   position: absolute;
   z-index: 9;
@@ -719,7 +646,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .notation-hint button.equals + button.equals { position: relative; }
 .notation-hint button.equals + button.equals::before { content: ""; position: absolute; left: -4px; top: 6px; bottom: 6px; border-left: 1px solid var(--line); }
 
-/* over a selection of text: one button per mark, pressed when all of it has it */
 .format-bar {
   position: absolute;
   z-index: 20;
@@ -749,17 +675,14 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .letter-picker .choice { padding: 2px 7px; border-radius: 5px; cursor: pointer; }
 .letter-picker .choice.active { background: var(--slot); outline: 1px solid var(--accent); }
 
-/* ---------- links ---------- */
-
 .pm-link { color: var(--accent); cursor: pointer; border-radius: 3px; }
 .pm-link:hover { background: var(--slot); }
 .pm-link:not(.pm-tag)::before { content: "[["; color: var(--muted); }
 .pm-link:not(.pm-tag)::after { content: "]]"; color: var(--muted); }
-/* Tags are shown at the right end of their block's row (outline.js draws
-   them there, in order); inside the line they take no space. */
+
 .pm-tag { font-size: .92em; }
 .pm-body > .tag-row { flex: none; margin-left: auto; padding-left: 12px; display: flex; gap: 6px; align-self: baseline; }
-/* the × floats at the chip's corner on hover, so it never pads the chip */
+
 .tag-row .chip { font-size: 12px; padding: 0 7px; position: relative; }
 .tag-row .chip a { cursor: pointer; }
 .tag-row .chip-x {
@@ -783,8 +706,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .pm-ref { border-bottom: 1px dashed var(--muted); cursor: pointer; padding: 0 2px; background: var(--panel); border-radius: 3px; }
 .pm-ref .pm-math { background: none; }
 
-/* page references outside the editor all look the same: a chip with the
-   page's title; helper text uses the interface font */
 .chip {
   display: inline-block;
   font: 13px system-ui, sans-serif;
@@ -794,14 +715,13 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   border: 1px solid var(--line);
   border-radius: 10px;
   white-space: nowrap;
-  /* its own ground: still a chip over a tinted (selected) block */
   background: var(--bg);
 }
 .chip:hover { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
 .empty { font: 13px system-ui, sans-serif; color: var(--muted); }
 
 .outgoing { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 20px; }
-/* with no backlinks section above, the outgoing row takes its divider */
+
 .backlinks[hidden] + .outgoing:not(:empty) { margin-top: 40px; border-top: 1px solid var(--line); padding-top: 16px; }
 .outgoing .label, .backlinks h3 { font: 600 13px system-ui, sans-serif; color: var(--muted); margin: 0 6px 0 0; display: flex; gap: 8px; align-items: center; }
 .due-here { margin-top: 28px; }
@@ -835,13 +755,10 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .page-list a { color: var(--fg); text-decoration: none; }
 .page-list a:hover { color: var(--accent); }
 
-/* ---------- journal week strip ---------- */
-
-/* stays at the top while the day scrolls, so days are a click away */
 .weekbar {
   position: sticky;
   top: 0;
-  z-index: 6; /* above the formula caret */
+  z-index: 6;
   background: var(--bg);
   display: flex;
   align-items: center;
@@ -882,14 +799,14 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .week .dn { font-weight: 600; }
 .week .dot { flex: none; width: 5px; height: 5px; border-radius: 50%; background: transparent; }
 .week .has .dot { background: var(--accent); }
-/* a dot: written; a ring: a task open; red when its deadline passed (journal.js) */
+
 .week .todo .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); width: 6px; height: 6px; }
 .week .overdue .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--bad); width: 6px; height: 6px; }
 .week .selected.todo .dot, .week .selected.overdue .dot { box-shadow: inset 0 0 0 1.5px var(--bg); }
 .week .is-today .dn, .week .is-today .wd { color: var(--accent); }
-.week .selected, .week .selected:hover { background: var(--accent); } /* hover must not wash out the selected day */
+.week .selected, .week .selected:hover { background: var(--accent); }
 .week .selected .wd, .week .selected .dn { color: var(--bg); }
-.week .selected.has:not(.todo, .overdue) .dot { background: var(--bg); } /* a ring stays a ring */
+.week .selected.has:not(.todo, .overdue) .dot { background: var(--bg); }
 .today-group { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; margin-left: auto; }
 .today-group .today-btn { font-size: 14px; padding: 5px 12px; border-radius: 0; }
 .today-group .cal-btn { font-size: 14px; padding: 5px 9px; border-left: 1px solid var(--line); border-radius: 0; }
@@ -903,8 +820,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   .week .wd { display: none; }
 }
 
-/* ---------- sync ---------- */
-
 .sync-status { white-space: nowrap; }
 .sync-status::before { content: "●"; margin-right: 5px; color: var(--muted); }
 .sync-status[data-state="synced"]::before { color: var(--ok); }
@@ -913,7 +828,7 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .sync-status[data-state="unauthorized"] { color: var(--bad); }
 .sync-panel .warn { margin: 0 0 4px; max-width: 18em; color: var(--bad); font-size: 12px; line-height: 1.5; }
 .sync-panel {
-  position: fixed; /* its button sits in the sticky sidebar */
+  position: fixed;
   z-index: 40;
   display: grid;
   gap: 8px;
@@ -929,8 +844,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .sync-panel input { font: 13px ui-monospace, Menlo, monospace; padding: 5px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--fg); }
 .sync-panel .row { display: flex; gap: 6px; justify-content: flex-end; }
 .sync-panel button { padding: 4px 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); cursor: pointer; }
-
-/* ---------- settings (⌘,) ---------- */
 
 .settings-backdrop { position: fixed; inset: 0; z-index: 30; background: #0003; display: grid; place-items: start center; padding-top: 12vh; }
 .settings {
@@ -970,7 +883,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .web-link { color: var(--accent); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 2px; cursor: text; }
 .web-link:hover { text-decoration-color: var(--accent); }
 
-/* YouTube player: below the line, inside the block (children follow) */
 .pm-body > .yt-preview { flex: 0 0 100%; margin: 6px 0 8px; }
 .yt-preview iframe {
   display: block;
@@ -981,22 +893,17 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
   background: var(--panel);
 }
 
-/* images: one per block, full width of the column */
-/* inline-block, top-aligned: ProseMirror keeps an empty caret spot on each
-   side of the image, and a block-level image would push those onto lines of
-   their own */
 .pm-image { display: inline-block; position: relative; vertical-align: top; max-width: 100%; margin: 4px 0; line-height: 0; }
 .pm-image img { display: block; max-width: 100%; max-height: 70vh; border-radius: 6px; }
-/* a width chosen by hand: drawn at it, however tall */
+
 .pm-image.sized img { max-height: none; height: auto; }
 .pm-image.missing { width: 12em; height: 6em; background: var(--panel); border: 1px dashed var(--line); border-radius: 6px; }
-/* an image is not text: a selection of text over it leaves it untinted */
+
 .pm-image, .pm-image img { -webkit-user-select: none; user-select: none; }
 .pm-image img::selection, .pm-image::selection { background: transparent; }
 .ProseMirror-selectednode.pm-image { outline: none; }
 .ProseMirror-selectednode.pm-image img { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* the handles on its sides that set its width (its height follows), shown
-   while it is hovered or selected */
+
 .pm-image-handle { display: none; position: absolute; top: 50%; width: 6px; height: min(48px, 40%); min-height: 16px; transform: translateY(-50%); border-radius: 3px; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); cursor: ew-resize; opacity: .85; }
 .pm-image-handle.left { left: 6px; }
 .pm-image-handle.right { right: 6px; }
@@ -1004,14 +911,12 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .pm-image:hover .pm-image-handle, .ProseMirror-selectednode.pm-image .pm-image-handle, .pm-image.resizing .pm-image-handle { display: block; }
 .block-card .pm-image-handle, .pm-image.missing .pm-image-handle { display: none !important; }
 
-/* delete: quiet until hovered, red once armed (second click deletes) */
 .page-del { background: none; border: 0; cursor: pointer; font: 12px system-ui, sans-serif; color: var(--muted); padding: 3px 8px; border-radius: 5px; white-space: nowrap; }
 .page-del:hover { color: var(--bad); background: var(--slot); }
 .page-del.armed { color: #fff; background: var(--bad); }
 .page-list li .page-del { margin-left: auto; margin-right: 8px; visibility: hidden; }
 .page-list li:hover .page-del, .page-list li .page-del.armed { visibility: visible; }
 
-/* named pages: the table of linked blocks leads; the page's notes sit below */
 .named-page { display: flex; flex-direction: column; }
 .named-page .page-head { order: 0; }
 .named-page .backlinks { order: 1; margin-top: 8px; border-top: 0; padding-top: 0; }
@@ -1034,7 +939,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .page-table .cell-due.overdue { color: var(--bad); }
 .page-table .pm-image img, .page-table img.pm-image { max-height: 120px; }
 
-/* fields: definitions as chips above the table, values editable in cells */
 .page-table th.col-add { width: 1%; text-align: center; font-size: 15px; font-weight: normal; padding: 4px 10px; }
 .page-table th.col-add:hover { color: var(--accent); }
 .page-table th.field-head:hover { color: var(--accent); }
@@ -1059,7 +963,6 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .field-value button { border-color: transparent; }
 .field-value button:hover { background: var(--slot); }
 
-/* a tagged block's fields: a metadata row under the line, like the deadline */
 .pm-body > .prop-row { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; margin: 1px 0 3px; }
 .pm-body > .task-icon ~ .prop-row { padding-left: 1.35em; }
 .prop { display: inline-flex; gap: 6px; align-items: baseline; background: none; border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; cursor: pointer; font: 12px system-ui, sans-serif; color: var(--fg); }
@@ -1068,28 +971,23 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .prop.empty .pval { color: var(--muted); }
 .prop:hover { border-color: var(--accent); }
 
-/* code: `inline` and ``` blocks */
 :root { --mono: ui-monospace, "SF Mono", Menlo, monospace; }
-/* Songti's bold barely differs from its regular at text sizes, so bold
-   CJK falls through to PingFang's semibold */
+
 .ProseMirror strong { font-family: "Iowan Old Style", "PingFang TC", sans-serif; font-weight: 600; }
 .ProseMirror mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
 .ProseMirror u { text-underline-offset: 0.18em; }
 .ProseMirror s { text-decoration-color: var(--muted); }
 .pm-icode { font-family: var(--mono); font-size: 0.88em; background: var(--slot); border-radius: 4px; padding: 1px 4px; }
-/* with the caret at it, it reads as typed: `…`, the backticks drawn (not in the text) */
+
 .pm-icode:has(> .code-raw) { font: inherit; background: none; padding: 0; }
 .pm-icode:has(> .code-raw)::before, .pm-icode:has(> .code-raw)::after { content: "`"; color: var(--muted); }
-/* a little room between each backtick and the code, for the caret just
-   inside it (drawn from the edge rightward, it covered the closing one) */
+
 .pm-icode:has(> .code-raw)::before { margin-right: .15em; }
 .pm-icode:has(> .code-raw)::after { margin-left: .15em; }
 .pm-code { position: relative; margin: 2px 0; padding: 8px 12px; background: var(--slot); border-radius: 6px; font-family: var(--mono); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
 .pm-code code { font: inherit; }
 .pm-code[data-lang]:not([data-lang=""]) { padding-right: 3.5em; }
 .pm-code[data-lang]:not([data-lang=""])::after { content: attr(data-lang); position: absolute; top: 4px; right: 8px; font: 11px system-ui, sans-serif; color: var(--muted); pointer-events: none; }
-
-/* ---------- search (⌘K; searchbox.js) ---------- */
 
 .side-search { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--muted); padding: 5px 8px 5px 10px; cursor: pointer; font: 13px system-ui, sans-serif; margin-top: -6px; }
 .side-search:hover { border-color: var(--accent); color: var(--fg); }
@@ -1108,9 +1006,8 @@ kbd { font: 12px ui-monospace, Menlo, monospace; border: 1px solid var(--line); 
 .search mark { background: var(--mark); color: inherit; border-radius: 2px; }
 .search .tex { font: 0.88em var(--mono); color: var(--accent); }
 .search-foot { display: flex; justify-content: space-between; gap: 12px; padding: 6px 16px; border-top: 1px solid var(--line); font: 11px system-ui, sans-serif; color: var(--muted); }
-/* the block arrived at, for a moment (page.js) */
+
 .pm-flash > .pm-body > .pm-line { animation: pm-flash 1.6s ease-out; border-radius: 3px; }
 @keyframes pm-flash { from { background: var(--mark); } to { background: transparent; } }
 
-/* a derivation's notes start at one column (chain.js) */
 .chain-gap { display: inline-block; }

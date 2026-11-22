@@ -6,8 +6,6 @@ import { X_ARROWS, ARROW_X, SYMBOLS, STRUCTS } from "./specs.js";
 import { MATH_ITALIC } from "./katex-symbols.js";
 import { inCode } from "./code.js";
 
-// Glyph classes for plain characters typed into a formula. + - * are done
-// below, with their neighbours (atomClasses).
 const CHAR_CLASSES = [
   [/[0-9.]+/g, "pm-upright"],
   [/[=<>]/g, "pm-upright pm-rel"],
@@ -15,32 +13,14 @@ const CHAR_CLASSES = [
   [/[,;]/g, "pm-upright pm-punct"],
 ];
 
-// TeX's atoms, for spacing: a binary operator is spaced as one only between
-// two things it can join; at the start, after an opening bracket, a comma, a
-// relation, another operator or a large operator (-x, (-x), x = -y), or before
-// a closing bracket, a comma or a relation, it is an ordinary symbol. One
-// with a script on it is used as a large operator (\sqcup_y, a coproduct):
-// spaced as \sum_y is, nothing beside it and a thin space after the script.
-// A bar | closes the bar before it when one is open and it does not come
-// right after an opening bracket (||x||), and opens one otherwise: |-|
-// and |x| are bracketed, as (x) is. Brackets are classed pm-open /
-// pm-close for the spacing beside them (style.css).
-// A colon is a relation, spaced evenly on both sides as = is (TeX's bare :):
-// the typing colon x : A, the bar of a set builder {x : x > 0}; := is one
-// relation (\coloneqq).
-// A math italic letter gets its italic correction after it, as TeX and
-// KaTeX give it (MATH_ITALIC, from KaTeX's font metrics): a ) or a : after
-// a P or an f clears the letter's overhang. Not before a subscript, which
-// sits under the overhang, and not in a structure that sets its text
-// upright (\mathrm, \text, \operatorname, …: UPRIGHT).
 const CHAR_ATOM = { "+": "bin", "-": "bin", "*": "bin", "=": "rel", "<": "rel", ">": "rel", "(": "open", "[": "open", "{": "open", ")": "close", "]": "close", "}": "close", ",": "punct", ";": "punct" };
 const SYM_ATOM = { rel: "rel", bin: "bin", op: "op", opname: "op", punct: "punct" };
 const BRACKET = { "(": "open", "[": "open", "{": "open", ")": "close", "]": "close", "}": "close" };
 const UPRIGHT = /^(font-(?!normal$|bsym$)|opname$)/;
 const italicCorrection = (from, to, c) => Decoration.inline(from, to, { style: `margin-right: ${MATH_ITALIC[c]}em` });
 function atomClasses(container, start, decos, upright) {
-  const atoms = []; // { kind, from, node }
-  const open = []; // the unclosed brackets so far, as their characters
+  const atoms = [];
+  const open = [];
   let pos = start;
   const bracket = (c) => { if (BRACKET[c] === "open") open.push(c); else if (BRACKET[c] === "close") open.pop(); };
   container.forEach((n, _, index) => {
@@ -56,21 +36,32 @@ function atomClasses(container, start, decos, upright) {
       pos++;
     });
     else {
-      // a script belongs to what it is on
       if (n.type.name !== "sup" && n.type.name !== "sub") {
         const kind = n.type.name === "sym" ? SYM_ATOM[SYMBOLS[n.attrs.name]?.cls] ?? "ord" : "ord";
         const asOp = kind === "bin" && beforeScript;
-        atoms.push({ kind: asOp ? "op" : kind, asOp, from: pos, node: n });
+        const opname = n.type.name === "sym" ? SYMBOLS[n.attrs.name]?.cls === "opname" : STRUCTS[n.attrs.name]?.layout === "opname";
+        atoms.push({ kind: asOp ? "op" : kind, asOp, opname, from: pos, node: n });
       }
       if (n.type.name === "sym") {
         const sym = SYMBOLS[n.attrs.name];
-        bracket(sym?.char); // \{ \}
+        bracket(sym?.char);
         if (sym?.italic && MATH_ITALIC[sym.char] && !beforeSub) decos.push(Decoration.node(pos, pos + n.nodeSize, { style: `margin-right: ${MATH_ITALIC[sym.char]}em` }));
       }
       pos += n.nodeSize;
     }
   });
+  const unaryAt = (k) => {
+    const prev = atoms[k - 1]?.kind, next = atoms[k + 1]?.kind;
+    return !prev || ["bin", "rel", "open", "punct", "op"].includes(prev) || !next || ["rel", "close", "punct"].includes(next);
+  };
+  const spacingKind = (k) => atoms[k] && (atoms[k].kind === "bin" && unaryAt(k) ? "ord" : atoms[k].kind);
   atoms.forEach((a, k) => {
+    if (a.opname) {
+      const prev = spacingKind(k - 1), next = spacingKind(k + 1);
+      const flush = [!prev || ["open", "rel", "bin"].includes(prev) ? "pm-flush-left" : "", !next || ["open", "close", "punct", "rel", "bin"].includes(next) ? "pm-flush-right" : ""].filter(Boolean).join(" ");
+      if (flush) decos.push(Decoration.node(a.from, a.from + a.node.nodeSize, { class: flush }));
+      return;
+    }
     if (a.asOp) { decos.push(Decoration.node(a.from, a.from + 1, { class: "pm-unary pm-asop" })); return; }
     if (a.char && (a.kind === "open" || a.kind === "close")) decos.push(Decoration.inline(a.from, a.from + 1, { class: `pm-${a.kind}` }));
     if (a.char === ":") {
@@ -79,18 +70,13 @@ function atomClasses(container, start, decos, upright) {
       return;
     }
     if (a.kind !== "bin") return;
-    const prev = atoms[k - 1]?.kind, next = atoms[k + 1]?.kind;
-    const unary = !prev || ["bin", "rel", "open", "punct", "op"].includes(prev) || !next || ["rel", "close", "punct"].includes(next);
+    const unary = unaryAt(k);
     const minus = a.char === "-" ? " pm-minus" : "";
     if (a.node) { if (unary) decos.push(Decoration.node(a.from, a.from + 1, { class: "pm-unary" })); }
     else decos.push(Decoration.inline(a.from, a.from + 1, { class: `pm-upright${unary ? "" : " pm-bin"}${minus}` }));
   });
 }
 
-// A label over (or under) a lone arrow: the arrow is drawn stretched to the
-// label with KaTeX's own shape for the \xrightarrow it is written as
-// (katex-stretchy.css); one over an \underset of an arrow lets that
-// \underset take its whole width.
 function xArrowOf(slot) {
   const n = slot.childCount === 1 ? slot.firstChild : null;
   return n?.type.name === "sym" && ARROW_X[n.attrs.name] ? ARROW_X[n.attrs.name] : null;
@@ -104,11 +90,6 @@ function labelledArrow(node) {
   return null;
 }
 
-// CJK auto-spacing: a quarter-em gap where CJK meets Latin letters, digits,
-// a formula or inline code, drawn as a margin (no space characters in the
-// text). The gap sits on the right-hand item of each pair. Inline code is
-// one item, as a formula is (its text is as written, with no gaps inside),
-// and a gap before it goes on its box (style.css).
 const CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/;
 const LATIN = /[A-Za-z0-9]/;
 const kind = (ch) => (CJK.test(ch) ? "cjk" : LATIN.test(ch) ? "latin" : null);
@@ -140,8 +121,6 @@ function cjkSpacing(line, start, decos) {
   });
 }
 
-// Web addresses in text are drawn as links (the text itself is unchanged,
-// so they export as written); ⌘-click opens them (editor.js).
 export const URL_RE = /https?:\/\/[^\s<>"'）」，。]+[^\s<>"'）」，。.,;:!?)\]]/g;
 
 function webLinks(node, pos, decos) {
@@ -152,8 +131,6 @@ function webLinks(node, pos, decos) {
   }
 }
 
-// Every decoration here lies within one line and depends on that line alone:
-// a change draws again only the lines it touched (updateStaticDecos).
 function staticDecos(doc) {
   const decos = [];
   doc.descendants((node, pos) => {
@@ -167,7 +144,7 @@ function staticDecos(doc) {
 function updateStaticDecos(set, tr) {
   const doc = tr.doc;
   set = set.map(tr.mapping, doc);
-  const lines = new Map(); // position -> line, for every line a step touched
+  const lines = new Map();
   tr.mapping.maps.forEach((map, i) => {
     const after = tr.mapping.slice(i + 1);
     map.forEach((_from, _to, from, to) => {
@@ -187,10 +164,9 @@ function updateStaticDecos(set, tr) {
   return set;
 }
 
-// The decorations of the line whose content starts at `start`.
 function lineDecos(line, start, decos) {
   cjkSpacing(line, start, decos);
-  const uprightEnds = []; // where the structures setting their text upright end (innermost last)
+  const uprightEnds = [];
   line.descendants((node, offset, parent) => {
     const pos = start + offset;
     while (uprightEnds.length && uprightEnds.at(-1) <= pos) uprightEnds.pop();
@@ -212,13 +188,6 @@ function lineDecos(line, start, decos) {
   });
 }
 
-// The native caret is unreliable around formulas (nested inline spans, and
-// WebKit snapping it into them), so the editor never shows it: one caret is
-// drawn for every collapsed selection, the same everywhere. It floats above
-// the page (absolutely positioned) instead of being a widget in the text: an
-// extra element inside the line can leave WebKit nowhere to put the real
-// caret, and then typing is refused. While an input method is composing,
-// the drawn caret steps aside for the composition's own.
 const wantsCaret = (view) => view.hasFocus() && view.state.selection.empty && !view.composing;
 
 function fontSizeAt(view, pos) {
@@ -227,12 +196,8 @@ function fontSizeAt(view, pos) {
   return parseFloat(getComputedStyle(node).fontSize) || 16;
 }
 
-// sits on the line it is in, not raised or lowered like scripts and fractions
-// (a large operator is drawn larger and lower: not on the caret's level)
 const onLevel = (n) => n && !["math", "struct", "sup", "sub"].includes(n.type.name) && !(n.type.name === "sym" && SYMBOLS[n.attrs.name]?.cls === "op");
 
-// One caret for the whole app, drawn by the editor that wants it (the
-// focused one); an editor that does not want it hides it only if it was its.
 let caretEl = null, caretOwner = null, last = "";
 function caretOverlay(view) {
   const place = () => {
@@ -248,21 +213,12 @@ function caretOverlay(view) {
     caretOwner = view;
     el.hidden = false;
     const $h = view.state.selection.$head;
-    // (at a line's start in a code block, the \n before it is on the line above)
     const before = $h.nodeBefore;
     const atLineStart = before?.isText && before.text.endsWith("\n");
     let c = view.coordsAtPos($h.pos, before && !atLineStart ? -1 : 1);
-    // (and WKWebView measures that \n even asked for the side after it: the
-    // caret drawn past the end of the line above)
     if (atLineStart) c = codeLineStart(view, $h.pos) ?? c;
-    // beside a script, fraction or formula its box sits higher or lower than
-    // the caret's own line: x from beside it, height from something on the
-    // caret's level and on its row: the neighbour after it, else the nearest
-    // before (measured at its end), else the nearest after. On a line that
-    // wraps, text on the caret's level may sit on another row (its start,
-    // for a caret after a formula ending the second row), and is no use.
     if (!onLevel($h.nodeBefore) && $h.parent.inlineContent) {
-      const refs = []; // [pos, side]
+      const refs = [];
       const parent = $h.parent, start = $h.start(), index = $h.index();
       if (onLevel($h.nodeAfter)) refs.push([$h.pos, 1]);
       for (let i = index - 1, off = $h.parentOffset; i >= 0; i--) {
@@ -282,7 +238,6 @@ function caretOverlay(view) {
         if (onRow(r)) { c = { left: c.left, top: r.top, bottom: r.bottom }; break; }
       }
     }
-    // at an edge of inline code: inside its drawn backtick or outside it
     const isCode = (n) => n?.marks.some((m) => m.type.name === "code");
     const end = isCode(before) && !isCode($h.nodeAfter), start = isCode($h.nodeAfter) && !isCode(before);
     if ((end || start) && !inCode(view.state)) {
@@ -293,13 +248,10 @@ function caretOverlay(view) {
       if (r) c = { left: end ? r.right : r.left, top: c.top, bottom: c.bottom };
     } else if (start) c = view.coordsAtPos($h.pos, 1);
     if (!c.top && !c.bottom) {
-      // nothing measurable around: the line's left edge
       const line = view.domAtPos($h.start()).node;
       const r = (line.nodeType === 1 ? line : line.parentElement).getBoundingClientRect();
       c = { left: r.left, top: r.top, bottom: r.top + r.height };
     }
-    // WebKit can report nonsense for text in an absolutely positioned slot
-    // (\overset's upper argument): keep the caret inside the box it is in
     if (inMath($h)) {
       let el = view.domAtPos($h.pos).node;
       if (el.nodeType !== 1) el = el.parentElement;
@@ -308,25 +260,20 @@ function caretOverlay(view) {
         c = { left: $h.parentOffset === 0 ? box.left : box.right, top: box.top, bottom: box.bottom };
       }
     }
-    // height from the font size at the caret (smaller in scripts), centred
-    // on the glyph box, so it does not jump with line heights or tall formulas
     const h = Math.round(fontSizeAt(view, $h.pos) * 1.15);
     const mid = (c.top + c.bottom) / 2;
     const key = `${c.left},${mid},${h}`;
     el.style.left = `${c.left + window.scrollX}px`;
     el.style.top = `${mid - h / 2 + window.scrollY}px`;
     el.style.height = `${h}px`;
-    el.classList.toggle("in-math", inMath($h)); // formula mode at a glance
+    el.classList.toggle("in-math", inMath($h));
     el.classList.toggle("in-code", inCode(view.state));
-    // a caret that moved starts its blink over (without a forced layout)
     if (key !== last) {
       el.classList.add("blink");
       for (const a of el.getAnimations?.() ?? []) a.currentTime = 0;
     }
     last = key;
   };
-  // layout settles a frame later (script stacking), so place again then,
-  // once a frame however many updates came
   let frame = 0;
   const update = () => {
     place();
@@ -343,16 +290,9 @@ function caretOverlay(view) {
     },
   };
 }
-// on resize only the caret's own editor has anything to place
 const caretUpdates = new WeakMap();
 if (typeof window !== "undefined") window.addEventListener("resize", () => { if (caretOwner) caretUpdates.get(caretOwner)?.(); });
 
-// The place just outside a formula and the formula's own edge are one place
-// to the DOM, and an input method composes at whichever the browser picks
-// (注音 typed after $m_2$ went into the subscript). So for a caret at either,
-// the other side is shut to the browser (contenteditable false) while it is
-// there: the formula, for a caret in text beside it; the neighbour outside,
-// for a caret at the formula's edge within.
 function shutDecos(state) {
   const { $head: $h, empty } = state.selection;
   if (!empty) return [];
@@ -380,10 +320,6 @@ function shutDecos(state) {
   ];
 }
 
-// What is selected in a formula is marked by the editor, a whole structure,
-// symbol or script at a time: the browser's own highlight paints text only,
-// and leaves out what is drawn (growing parentheses, a fraction's bar, a
-// root's sign) and, next to such things, sometimes the text as well.
 function selected(state) {
   const { $from, $to, empty } = state.selection;
   if (empty || !$from.sameParent($to) || !isMathContainer($from.parent.type)) return [];
@@ -396,18 +332,12 @@ function selected(state) {
   return out;
 }
 
-// where a composition began, when that was the start of a line before a formula
 const lineStart = new WeakMap();
 
 export const mathDecorations = new Plugin({
   state: {
     init: (_, state) => ({ set: staticDecos(state.doc), shut: DecorationSet.create(state.doc, shutDecos(state)), composing: false }),
     apply: (tr, old, _, state) => {
-      // while an input method composes (from its first change until a while
-      // after it ends: WebKit commits by deleting the composition and then
-      // inserting the result), what is shut stays shut: the caret moves
-      // with the composition, and opening the formula beside it lets the
-      // commit land inside
       const composing = tr.getMeta(mathDecorations) === "composed" ? false : old.composing || !!tr.getMeta("composition");
       return {
         set: tr.docChanged ? updateStaticDecos(old.set, tr) : old.set,
@@ -428,9 +358,6 @@ export const mathDecorations = new Plugin({
         setTimeout(() => {
           if (view.composing || view.isDestroyed) return;
           const tr = view.state.tr.setMeta(mathDecorations, "composed");
-          // composing at the start of a line, before a formula that starts
-          // with a structure, WebKit leaves a placeholder space after what it
-          // commits: it goes
           const at = lineStart.get(view), word = ev.data ?? "";
           const $p = at == null ? null : tr.doc.resolve(at);
           const text = $p?.nodeAfter, next = $p?.parent.maybeChild($p.index() + 1);
@@ -445,11 +372,7 @@ export const mathDecorations = new Plugin({
       const $h = state.selection.$head;
       const d = mathDepth($h);
       if (d < 0) return set.add(state.doc, shut.find());
-      // the formula being edited gets a tint; the box the caret is in (a
-      // slot, a script) a dashed frame, as TeXmacs does, so the end of a box
-      // and the place just after it look different
       const decos = [Decoration.node($h.before(d), $h.after(d), { class: "pm-active" })];
-      // (an empty box shows itself already, as a dashed placeholder)
       if ($h.depth > d && $h.parent.content.size) decos.push(Decoration.node($h.before(), $h.after(), { class: "pm-here" }));
       return set.add(state.doc, [...decos, ...selected(state), ...shut.find()]);
     },
