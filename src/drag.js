@@ -4,47 +4,19 @@ import { Fragment } from "prosemirror-model";
 import { closeHistory } from "prosemirror-history";
 import { schema } from "./schema.js";
 import { toggleFoldAt } from "./outline.js";
-import { BlockSelection } from "./blockselect.js";
-
-// Dragging a block by its bullet: it moves with its children, in one
-// undoable step. Selected blocks (blockselect.js) are dragged together by
-// any of their bullets. A press that does not move is a click: it folds /
-// unfolds.
-//
-// Declarative, after Horowitz, Blinn & Heer's "Declarative Dragging": rather
-// than working out from the pointer what a drop would do, every outline the
-// drag can end in is laid out first, as a slot: a gap between two rows and a
-// depth. The gap below a row and above the next takes every depth from the
-// next row's (it must stay where it is in the tree) to one deeper than the
-// row's (its first child). The pointer picks the gap by its height and the
-// depth by where the held bullet is; the slots of that gap are drawn as
-// rings at their bullets' places, the one picked larger. The gap the blocks
-// came from has its slots too: held and moved sideways, a block is indented
-// or outdented where it is. The held blocks follow the pointer as a card.
+import { BlockSelection, heldIds, findBlock } from "./blockselect.js";
+import { dayAt, moveToDay } from "./daymove.js";
 
 const T = schema.nodes;
 const key = new PluginKey("blockDrag");
-const THRESHOLD = 4; // px the pointer moves before a press becomes a drag
+const THRESHOLD = 4;
 
 const blockPos = (view, el) => view.posAtDOM(el.querySelector(":scope > .pm-body"), 0) - 1;
 
-function findBlock(doc, id) {
-  let at = null;
-  doc.descendants((n, p) => {
-    if (at !== null || n.type !== T.block) return false;
-    if (n.attrs.id === id) at = p;
-    return at === null;
-  });
-  return at;
-}
-
-// Every block on screen, top to bottom, with its depth. Its row is its own
-// line (with the widgets beside and under it), down to where its first
-// visible child starts. Rows inside a held block are marked held.
 function rows(view, held) {
   const out = [];
   for (const el of view.dom.querySelectorAll(".pm-block")) {
-    if (!el.getClientRects().length) continue; // inside a folded block
+    if (!el.getClientRects().length) continue;
     const pos = blockPos(view, el);
     const bullet = el.querySelector(":scope > .pm-bullet").getBoundingClientRect();
     const body = el.querySelector(":scope > .pm-body").getBoundingClientRect();
@@ -58,16 +30,12 @@ function rows(view, held) {
       rowBottom: child ? child.getBoundingClientRect().top : box.bottom,
       bottom: box.bottom,
       left: bullet.left,
-      step: body.left - bullet.left, // one level of indentation
+      step: body.left - bullet.left,
     });
   }
   return out;
 }
 
-// The slots a drag of the blocks `held` ([from, to) each) can drop into:
-// one gap per place between the rows not held, each with its depths.
-// A gap: { above, below (rows, null at the ends), y (its line), lo, hi
-// (depths), x(d) (where the bullet of a block at depth d is) }.
 export function gaps(view, held) {
   const all = rows(view, held);
   const free = all.filter((r) => !r.held);
@@ -77,8 +45,6 @@ export function gaps(view, held) {
   const out = [];
   for (let i = 0; i <= free.length; i++) {
     const above = free[i - 1] ?? null, below = free[i] ?? null;
-    // the line is at the top of whatever comes after the row above: the held
-    // blocks, when it is the gap they came from
     const k = above ? all.indexOf(above) + 1 : 0;
     const y = k < all.length ? all[k].top : Math.max(...all.map((r) => r.bottom));
     const lo = below ? below.depth : 0;
@@ -88,9 +54,6 @@ export function gaps(view, held) {
   return out;
 }
 
-// The slot for the held bullet at (x, y): the gap whose band holds y (from
-// the middle of the row above to the middle of the row below), the depth
-// whose bullet is nearest x.
 export function pick(gs, x, y) {
   if (!gs.length) return null;
   const mid = (r) => (r.top + r.rowBottom) / 2;
@@ -105,19 +68,14 @@ export function pick(gs, x, y) {
   return { gap: g, depth };
 }
 
-// A slot as a place in the document: { pos, where } with where "before" /
-// "after" / "child" (first child) of the block at pos.
 export function placeOf(doc, { gap, depth }) {
   const { above, below } = gap;
   if (!above) return { pos: below.pos, where: "before" };
   if (depth === above.depth + 1) return { pos: above.pos, where: "child" };
-  // after the row above's ancestor at that depth (the row itself at its own)
   const $a = doc.resolve(above.pos);
   return { pos: depth === above.depth ? above.pos : $a.before(depth + 1), where: "after" };
 }
 
-// Move the blocks at `froms` (positions, in document order, none inside
-// another) to `where` of the block at `target`, one after another.
 export function moveBlocks(state, dispatch, froms, target, where) {
   const { doc } = state;
   const nodes = froms.map((p) => doc.nodeAt(p));
@@ -127,21 +85,17 @@ export function moveBlocks(state, dispatch, froms, target, where) {
   const at = where === "before" ? target : where === "after" ? target + t.nodeSize : target + 1 + t.firstChild.nodeSize;
   const sel = state.selection;
   const tr = state.tr;
-  // a child dropped into a folded block shows up there
   if (where === "child" && t.attrs.folded) tr.setNodeMarkup(target, null, { ...t.attrs, folded: false });
   for (let i = froms.length - 1; i >= 0; i--) tr.delete(froms[i], froms[i] + nodes[i].nodeSize);
   const dest = tr.mapping.map(at);
   tr.insert(dest, Fragment.fromArray(nodes));
-  if (tr.doc.eq(doc)) return false; // where they already are
+  if (tr.doc.eq(doc)) return false;
   if (!dispatch) return true;
-  // where each block went
   const landed = [];
   nodes.reduce((p, n) => { landed.push(p); return p + n.nodeSize; }, dest);
   if (sel instanceof BlockSelection) {
-    // still selected
     tr.setSelection(BlockSelection.blocks(tr.doc, landed[0], landed[landed.length - 1]));
   } else if (sel instanceof TextSelection) {
-    // a caret in a moved block goes with it
     const i = froms.findIndex((p, k) => sel.from >= p && sel.to <= p + nodes[k].nodeSize);
     if (i >= 0) tr.setSelection(TextSelection.create(tr.doc, landed[i] + (sel.anchor - froms[i]), landed[i] + (sel.head - froms[i])));
   }
@@ -149,10 +103,8 @@ export function moveBlocks(state, dispatch, froms, target, where) {
   return true;
 }
 
-// one block: what the outline tests and other callers use
 export const moveBlock = (state, dispatch, from, target, where) => moveBlocks(state, dispatch, [from], target, where);
 
-// The scrolling box around the editor (the page itself when there is none).
 function scroller(el) {
   for (let e = el.parentElement; e; e = e.parentElement) {
     const o = getComputedStyle(e).overflowY;
@@ -161,31 +113,17 @@ function scroller(el) {
   return document.scrollingElement;
 }
 
-// the held blocks, by id: the pressed one, or every selected root when it is
-// among the selected blocks
-function heldIds(view, pos) {
-  const sel = view.state.selection, { doc } = view.state;
-  if (sel instanceof BlockSelection && sel.ranges.some(({ $from, $to }) => pos >= $from.pos && pos < $to.pos)) {
-    return sel.roots.map((p) => doc.nodeAt(p).attrs.id);
-  }
-  return [doc.nodeAt(pos).attrs.id];
-}
-
-// The held blocks are kept by id: their DOM may be redrawn, and the outline
-// changed (sync), while the button is down.
 function startDrag(view, ev) {
   const bullet = ev.button === 0 && ev.target.closest?.(".pm-bullet");
   if (!bullet || !view.dom.contains(bullet)) return false;
   ev.preventDefault();
   const x0 = ev.clientX, y0 = ev.clientY;
   const b0 = bullet.getBoundingClientRect();
-  // where in the bullet it was pressed: the card's bullet stays under the pointer
   const grab = { x: x0 - b0.left, y: y0 - b0.top };
   const pressed = blockPos(view, bullet.parentElement);
   const pressedId = view.state.doc.nodeAt(pressed).attrs.id;
-  const ids = heldIds(view, pressed);
-  let dragging = false, done = false, slot = null, marks = null, card = null, shield = null;
-  // positions of the held blocks, in document order (null once one is gone)
+  const ids = heldIds(view.state, pressed);
+  let dragging = false, done = false, slot = null, marks = null, card = null, shield = null, day = null;
   const held = () => {
     const ps = ids.map((id) => findBlock(view.state.doc, id));
     return ps.includes(null) ? null : ps.sort((a, b) => a - b);
@@ -193,7 +131,6 @@ function startDrag(view, ev) {
   const ranges = (ps) => ps.map((p) => [p, p + view.state.doc.nodeAt(p).nodeSize]);
   view.dispatch(view.state.tr.setMeta(key, { ids, dragging }));
 
-  // the held blocks as a card under the pointer, drawn as they are now
   const makeCard = (ps) => {
     card = document.body.appendChild(Object.assign(document.createElement("div"), { className: "block-card" }));
     const first = view.nodeDOM(ps[0]);
@@ -207,7 +144,6 @@ function startDrag(view, ev) {
       copy.querySelectorAll("[contenteditable]").forEach((e) => e.removeAttribute("contenteditable"));
       card.append(copy);
     }
-    // the card's first bullet, relative to the card
     card.dataset.dx = String(bl.left - box.left);
     card.dataset.dy = String(bl.top - box.top);
   };
@@ -217,12 +153,9 @@ function startDrag(view, ev) {
     const left = e.clientX - grab.x - dx;
     card.style.left = `${left}px`;
     card.style.top = `${e.clientY - grab.y - dy}px`;
-    // no further right than the editor
     card.style.maxWidth = `${Math.max(160, view.dom.getBoundingClientRect().right + 12 - left)}px`;
   };
 
-  // the slots of the picked gap: a ring at each depth's bullet, the picked
-  // one larger, over the card; a line from it, under the card
   let line = null;
   const show = (s) => {
     slot = s;
@@ -252,19 +185,28 @@ function startDrag(view, ev) {
     if (!dragging) {
       if (Math.hypot(e.clientX - x0, e.clientY - y0) < THRESHOLD) return;
       dragging = true;
-      // the cursor over everything, without touching everything's style
       shield = document.body.appendChild(Object.assign(document.createElement("div"), { className: "drag-shield" }));
       makeCard(ps);
       view.dispatch(view.state.tr.setMeta(key, { ids, dragging }));
     }
     e.preventDefault();
+    place(e);
+    light(dayAt(view.state, e.clientX, e.clientY));
+    if (day) {
+      card.style.top = `${day.getBoundingClientRect().bottom + 6}px`;
+      return show(null);
+    }
     const s = scroller(view.dom), edge = 40;
     if (e.clientY < edge) s.scrollBy(0, -12);
     else if (e.clientY > innerHeight - edge) s.scrollBy(0, 12);
-    place(e);
-    // the held bullet's middle, as the card has it
     const bx = e.clientX - grab.x + b0.width / 2, by = e.clientY - grab.y + b0.height / 2;
     show(pick(gaps(view, ranges(ps)), bx, by));
+  };
+  const light = (el) => {
+    if (el === day) return;
+    day?.classList.remove("drop");
+    day = el;
+    day?.classList.add("drop");
   };
   const end = (drop) => {
     if (done) return;
@@ -273,25 +215,27 @@ function startDrag(view, ev) {
     removeEventListener("mouseup", up, true);
     removeEventListener("keydown", onKey, true);
     shield?.remove();
-    const picked = slot;
+    const picked = slot, toDay = day?.dataset.dropDay;
     show(null);
+    light(null);
     card?.remove();
     if (view.isDestroyed) return;
     const ps = held();
     view.dispatch(view.state.tr.setMeta(key, null));
     if (!ps) return;
-    if (!dragging) { // a click
+    if (!dragging) {
       const p = findBlock(view.state.doc, pressedId);
       if (p != null) toggleFoldAt(view, p);
       return;
     }
+    if (drop && toDay) return moveToDay(view.state).move(ids, toDay);
     if (drop && picked) {
       const { pos, where } = placeOf(view.state.doc, picked);
       moveBlocks(view.state, view.dispatch, ps, pos, where);
     }
   };
   const up = (e) => {
-    if (dragging) { e.preventDefault(); move(e); } // the slot as the outline is now
+    if (dragging) { e.preventDefault(); move(e); }
     end(true);
   };
   const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); end(false); } };
@@ -301,8 +245,6 @@ function startDrag(view, ev) {
   return true;
 }
 
-// The pressed blocks ({ ids, dragging }, null when none), drawn faded once
-// they are being dragged.
 export const blockDrag = new Plugin({
   key,
   state: {

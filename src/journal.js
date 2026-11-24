@@ -5,17 +5,8 @@ import { today, addDays, weekStart, longDate } from "./dates.js";
 import { mountOutline } from "./page.js";
 import { t } from "./i18n.js";
 
-// Heptabase-style journal: a week strip on top, one day below it; ‹ › move a
-// week (› to its Monday, ‹ to its Sunday), Today plus a calendar dropdown.
-//
-// What a day holds, marked under it: a dot, something written; a ring, a
-// TODO / DOING task still open (written that day, or due that day); a red
-// ring, a deadline that passed with its task still open.
-// The week strip and both calendars mark days the same way.
-
 const dow = (d) => new Date(d + "T00:00").getDay();
 
-// anything written in a day's page (a formula or an image counts)
 const hasContent = (doc) => {
   if (!doc) return false;
   let found = false;
@@ -26,12 +17,9 @@ const hasContent = (doc) => {
 export function renderJournal(root, ctx) {
   const date = ctx.state.date ?? today();
   const now = today();
-  const open = new Map(); // day -> "todo" | "overdue"
+  const open = new Map();
   const rank = { todo: 0, overdue: 1 };
   const put = (day, m) => { if (!(rank[open.get(day)] >= rank[m])) open.set(day, m); };
-  // an overdue task is marked red on the day it is written, where a click
-  // finds it; its deadline day is marked only while it is still ahead (that
-  // day lists it under Due), or when the task is on no day at all
   for (const t of allTasks()) {
     if (t.task === "done") continue;
     const late = !!t.deadline && t.deadline < now;
@@ -51,7 +39,7 @@ export function renderJournal(root, ctx) {
       <button class="wk-prev" title="${t("week.prev")}">‹</button>
       <div class="week">
         ${days.map((day) => `
-          <button data-day="${day}" class="${[day === date && "selected", day === now && "is-today", mark(day) && "has", mark(day) === "todo" && "todo", mark(day) === "overdue" && "overdue"].filter(Boolean).join(" ")}">
+          <button data-day="${day}" data-drop-day="${day}" class="${[day === date && "selected", day === now && "is-today", mark(day) && "has", mark(day) === "todo" && "todo", mark(day) === "overdue" && "overdue"].filter(Boolean).join(" ")}">
             <span class="dot"></span><span class="wd">${t("weekday.short")[dow(day)]}</span><span class="dn">${Number(day.slice(8))}</span>
           </button>`).join("")}
       </div>
@@ -77,23 +65,17 @@ export function renderJournal(root, ctx) {
 
   const go = (day) => ctx.openPage(day);
   root.querySelectorAll(".week [data-day]").forEach((b) => { b.onclick = () => go(b.dataset.day); });
-  // moving a week lands on the day nearest the one left, not the same
-  // weekday: › opens next week's Monday, ‹ last week's Sunday
   root.querySelector(".wk-prev").onclick = () => go(addDays(start, -1));
   root.querySelector(".wk-next").onclick = () => go(addDays(start, 7));
   root.querySelector(".today-btn").onclick = () => go(now);
   const calBtn = root.querySelector(".cal-btn");
   calBtn.onclick = () => openCalendar(calBtn, date, mark, go);
-  // with room to spare (see .journal-grid in style.css) the calendar is
-  // always shown on the right and the dropdown button hides
   monthGrid(root.querySelector(".journal-side"), { selected: date, mark, onPick: go });
 
   mountOutline(root, date, ctx);
   renderDue(root.querySelector(".due-here"), date, ctx);
 }
 
-// Unfinished tasks written elsewhere and due on this day (what its dot also
-// counts), editable in place. Hidden when there are none.
 function renderDue(el, date, ctx) {
   const due = allTasks().filter((t) => t.deadline === date && t.task !== "done" && t.page !== date);
   el.hidden = !due.length;

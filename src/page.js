@@ -1,19 +1,16 @@
 import { TextSelection, Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
-import { getPage, savePage, titleOf, renamePage, namedPages, backlinks, backlinkCounts, getFields, findPage, deletePage, onRemote } from "./store.js";
+import { getPage, savePage, titleOf, renamePage, namedPages, backlinks, backlinkCounts, getFields, findPage, deletePage, onRemote, moveBlockToPage } from "./store.js";
+import { dayMove } from "./daymove.js";
 import { createEditor } from "./editor.js";
 import { emptyDoc } from "./outline-io.js";
 import { renderBacklinks, renderOutgoing } from "./backlinks.js";
 import { renderPageTable } from "./pagetable.js";
 import { t } from "./i18n.js";
 
-// Shared by journal days and named pages: the outline editor, its export
-// the linked references underneath.
-
 function replaceDoc(view, next) {
   const { state } = view;
   if (state.doc.eq(next)) return;
-  // remember the caret as (block id, offset in its line)
   const $h = state.selection.$head;
   let id = null, offset = 0;
   for (let d = $h.depth; d > 0; d--) {
@@ -29,8 +26,6 @@ function replaceDoc(view, next) {
   view.dispatch(tr);
 }
 
-// The block just arrived at (from search or a block reference), marked for a
-// moment: meta with its position, or null to clear.
 const flashKey = new PluginKey("flash");
 const flash = new Plugin({
   key: flashKey,
@@ -45,7 +40,6 @@ const flash = new Plugin({
   props: { decorations: (s) => flashKey.getState(s) },
 });
 
-// A delete button that asks once more before acting.
 export function deleteButton(onDelete) {
   const b = document.createElement("button");
   b.type = "button";
@@ -64,13 +58,7 @@ export function deleteButton(onDelete) {
   return b;
 }
 
-// root must contain .editor and .backlinks.
-// options.table: linked blocks as a table (named pages) instead of the
-// grouped list (journal days); options.focus: put the caret in the editor.
 export function mountOutline(root, page, ctx, { table = false, focus = true } = {}) {
-  // The linked blocks are drawn again when another device changed one of
-  // them (a block kept as it was keeps its node), a page title or this
-  // page's fields; their editors with them.
   let linkedViews = [], linkedNodes = null, linkedKey = null;
   const linkedCtx = { ...ctx, track: (v) => linkedViews.push(v) };
   const renderLinked = () => {
@@ -86,7 +74,10 @@ export function mountOutline(root, page, ctx, { table = false, focus = true } = 
   };
   ctx.track({ destroy: () => { for (const v of linkedViews) v.destroy(); linkedViews = []; } });
   const view = createEditor(root.querySelector(".editor"), getPage(page) ?? emptyDoc(), {
-    plugins: [flash],
+    plugins: [flash, dayMove(page, (ids, day) => {
+      for (const id of ids) moveBlockToPage(id, day);
+      ctx.render();
+    })],
     onUpdate(v, _prev, tr) {
       if (tr.docChanged && !tr.getMeta("remote")) savePage(page, v.state.doc);
       if (tr.docChanged) renderOutgoing(outgoingEl, page, v.state.doc);
@@ -99,17 +90,12 @@ export function mountOutline(root, page, ctx, { table = false, focus = true } = 
   renderOutgoing(outgoingEl, page, view.state.doc);
   renderLinked();
 
-  // another device changed this page: swap the content in, keep the caret
-  // on the same block; backlinks may have changed from any page
   const off = onRemote((changed) => {
     if (changed.has(page)) replaceDoc(view, getPage(page) ?? emptyDoc());
     if (!backlinksEl.contains(document.activeElement)) renderLinked();
   });
   ctx.track({ destroy: off });
 
-  // arriving from search or a block reference: the caret at the end of that
-  // block's line, folded blocks around it opened, the block in the middle of
-  // the window and marked for a moment
   let at = null;
   if (ctx.state.focusBlock) {
     view.state.doc.descendants((n, pos) => {
@@ -131,14 +117,12 @@ export function mountOutline(root, page, ctx, { table = false, focus = true } = 
     setTimeout(() => { if (!view.isDestroyed) view.dispatch(view.state.tr.setMeta(flashKey, null)); }, 1600);
   }
   if (focus || at !== null) view.focus();
-  window.view = view; // for poking at it from devtools
+  window.view = view;
   return view;
 }
 
 export function renderPage(root, ctx) {
   const page = ctx.state.page;
-  // the table leads; the page's own notes sit below it (an empty page shows
-  // one empty bullet, which is invitation enough)
   const doc = getPage(page);
   const hasNotes = doc && !(doc.childCount === 1 && doc.firstChild.childCount === 1 && doc.firstChild.firstChild.content.size === 0);
   root.innerHTML = `
@@ -159,16 +143,13 @@ export function renderPage(root, ctx) {
   title.onchange = () => {
     const t = title.value.trim();
     const other = findPage(t);
-    if (!t || (other && other !== page)) { title.value = titleOf(page); return; } // no empty or duplicate titles
+    if (!t || (other && other !== page)) { title.value = titleOf(page); return; }
     renamePage(page, t);
   };
   title.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); title.blur(); } };
   mountOutline(root, page, ctx, { table: true, focus: hasNotes });
 }
 
-// The Pages tab: every named page with how often it is linked. The box at
-// the top filters the list; ↵ opens the first page left. Pages are created
-// by linking them ([[ or # in any line), not here.
 let pagesFilter = "";
 export function renderPages(root, ctx) {
   const counts = backlinkCounts();

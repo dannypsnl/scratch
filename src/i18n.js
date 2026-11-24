@@ -1,6 +1,3 @@
-// Interface strings. Notes themselves are never translated.
-// t(key, ...args): a string, or a function of args for strings with values.
-
 const zh = {
   "app.name": "隨筆",
   "tab.journal": "Journal",
@@ -38,6 +35,7 @@ const zh = {
   "week.this": "本週",
   "today": "今天",
   "calendar": "日曆",
+  "block.moveToDay": "移到某天…",
 
   "agenda.due": "期限",
   "agenda.overdueDays": (n) => `逾期 ${n} 天`,
@@ -239,6 +237,7 @@ const en = {
   "week.this": "This week",
   "today": "Today",
   "calendar": "Calendar",
+  "block.moveToDay": "Move to day…",
 
   "agenda.due": "Due",
   "agenda.overdueDays": (n) => `${n} day${n === 1 ? "" : "s"} overdue`,
@@ -414,12 +413,10 @@ export function setLang(id) {
   strings = found.strings;
   document.documentElement.lang = lang;
   document.title = t("app.name");
-  // static labels in index.html
   for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
 }
 
-// Traditional Chinese unless chosen otherwise in settings (⌘,).
 export const defaultLang = () => "zh-TW";
 
 export function t(key, ...args) {

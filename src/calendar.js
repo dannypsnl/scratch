@@ -45,7 +45,7 @@ export function monthGrid(el, { selected, base = today(), mark = () => false, on
   };
 }
 
-export function openCalendar(anchor, selected, mark, onPick) {
+export function openCalendar(anchor, selected, mark, onPick, { align = "end" } = {}) {
   const open = document.querySelector(".calendar");
   if (open) {
     open.close();
@@ -59,7 +59,7 @@ export function openCalendar(anchor, selected, mark, onPick) {
   box.anchor = anchor;
   box.close = close;
   monthGrid(box, { selected, mark, onPick: (day) => { close(); onPick(day); } });
-  place(box, r, { align: "end" });
-  const away = (e) => { if (!box.contains(e.target) && !anchor.contains(e.target)) close(); };
+  place(box, r, { align });
+  const away = (e) => { const path = e.composedPath(); if (!path.includes(box) && !path.includes(anchor)) close(); };
   setTimeout(() => document.addEventListener("mousedown", away));
 }
